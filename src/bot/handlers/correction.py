@@ -12,7 +12,7 @@ from src.bot.keyboards.menus import correction_entries_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
 from src.bot.services.analysis_errors import ANALYSIS_UNAVAILABLE
 from src.bot.services.entry_service import EntryService
-from src.bot.services.formatting import format_analysis_result
+from src.bot.services.formatting import format_activity_result, format_analysis_result
 from src.bot.services.messaging import (
     answer_ephemeral,
     edit_ephemeral,
@@ -39,6 +39,14 @@ def _format_current_items(items: list[dict] | None) -> str:
         name = escape(str(item.get("name", "компонент")))
         quantity = escape(str(item.get("quantity") or "вес не указан"))
         lines.append(f"• {name}: {quantity}")
+    return "\n".join(lines)
+
+
+def _format_current_activity(entry) -> str:
+    lines = [f"Текущая активность: {escape(entry.title)}"]
+    lines.append(f"Сожжено: {entry.calories:.0f} ккал")
+    if entry.duration_minutes:
+        lines.append(f"Длительность: {entry.duration_minutes} мин")
     return "\n".join(lines)
 
 
@@ -107,7 +115,7 @@ async def edit_meal_card(
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type != EntryType.MEAL:
+    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -117,11 +125,19 @@ async def edit_meal_card(
         card_chat_id=callback.message.chat.id,
         card_message_id=callback.message.message_id,
     )
-    prompt_message = await callback.message.answer(
-        f"{_format_current_items(entry.items)}\n\n"
-        "Отправьте исправленный состав и граммовки одним сообщением.\n"
-        "Например: «рис 180 г, курица 120 г, соус 30 г»."
-    )
+    if entry.entry_type == EntryType.ACTIVITY:
+        prompt_text = (
+            f"{_format_current_activity(entry)}\n\n"
+            "Отправьте исправленное описание активности одним сообщением.\n"
+            "Например: «пробежка 45 минут» или «ходьба 60 мин, легкий темп»."
+        )
+    else:
+        prompt_text = (
+            f"{_format_current_items(entry.items)}\n\n"
+            "Отправьте исправленный состав и граммовки одним сообщением.\n"
+            "Например: «рис 180 г, курица 120 г, соус 30 г»."
+        )
+    prompt_message = await callback.message.answer(prompt_text)
     schedule_bot_message(cleanup, prompt_message)
     await state.update_data(
         prompt_chat_id=prompt_message.chat.id,
@@ -136,7 +152,7 @@ async def delete_meal_card(callback: CallbackQuery, state: FSMContext, session) 
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type != EntryType.MEAL:
+    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -144,7 +160,10 @@ async def delete_meal_card(callback: CallbackQuery, state: FSMContext, session) 
     try:
         await callback.message.delete()
     except Exception:
-        deleted_text = "Запись удалена. Калории и БЖУ убраны из статистики."
+        if entry.entry_type == EntryType.ACTIVITY:
+            deleted_text = "Запись удалена. Сожженные калории убраны из статистики."
+        else:
+            deleted_text = "Запись удалена. Калории и БЖУ убраны из статистики."
         try:
             await callback.message.edit_caption(caption=deleted_text, reply_markup=None)
         except Exception:
@@ -174,7 +193,7 @@ async def apply_correction(
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type != EntryType.MEAL:
+    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
         await state.clear()
         await answer_ephemeral(message, cleanup, "Запись не найдена.", track_user=False)
         schedule_user_message(cleanup, message)
@@ -196,9 +215,10 @@ async def apply_correction(
         "Пересчитываю с учетом исправления...",
         track_user=False,
     )
+    analysis_mode = "activity" if entry.entry_type == EntryType.ACTIVITY else "meal"
     try:
         raw, result = await ai_client.analyze_text(
-            mode="meal",
+            mode=analysis_mode,
             text=message.text,
             previous_result=previous,
         )
@@ -214,14 +234,26 @@ async def apply_correction(
         return
 
     service = EntryService(session)
-    balance = await service.update_meal_from_correction(
-        user=user,
-        entry=entry,
-        correction_text=message.text,
-        raw_response=raw,
-        result=result,
-        image_path=None,
-    )
+    if entry.entry_type == EntryType.ACTIVITY:
+        balance = await service.update_activity_from_correction(
+            user=user,
+            entry=entry,
+            correction_text=message.text,
+            raw_response=raw,
+            result=result,
+            image_path=None,
+        )
+        result_text = format_activity_result(result, balance)
+    else:
+        balance = await service.update_meal_from_correction(
+            user=user,
+            entry=entry,
+            correction_text=message.text,
+            raw_response=raw,
+            result=result,
+            image_path=None,
+        )
+        result_text = format_analysis_result(result, balance)
 
     await state.clear()
     messages_to_delete = [
@@ -241,7 +273,7 @@ async def apply_correction(
     await send_result_card(
         message,
         cleanup,
-        result_text=format_analysis_result(result, balance),
+        result_text=result_text,
         entry_id=entry.id,
         photo_file_id=photo_file_id,
         is_favorited=await repo.get_favorite_by_source_entry(user.id, entry.id) is not None,

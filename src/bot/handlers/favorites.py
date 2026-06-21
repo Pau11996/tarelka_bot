@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
@@ -7,6 +8,7 @@ from src.bot.handlers.food import send_result_card
 from src.bot.keyboards.menus import favorites_keyboard, meal_card_keyboard
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import (
+    format_activity_result,
     format_analysis_result,
     format_favorites_list,
 )
@@ -39,7 +41,13 @@ async def _update_meal_card_keyboard(
 
 @router.message(Command("favorites"))
 @router.message(F.text == "⭐ Избранное")
-async def show_favorites(message: Message, session, cleanup: MessageCleanupService) -> None:
+async def show_favorites(
+    message: Message,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
     profile = await repo.get_profile(user.id)
@@ -59,7 +67,7 @@ async def add_meal_to_favorites(callback: CallbackQuery, session) -> None:
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type != EntryType.MEAL:
+    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -86,10 +94,28 @@ async def add_favorite_to_today(callback: CallbackQuery, session, cleanup: Messa
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     favorite = await repo.get_favorite(favorite_id, user.id)
     if favorite is None:
-        await callback.answer("Блюдо не найдено", show_alert=True)
+        await callback.answer("Запись не найдена", show_alert=True)
         return
 
     service = EntryService(session)
+    if favorite.entry_type == EntryType.ACTIVITY:
+        entry, balance = await service.save_activity_from_favorite(user=user, favorite=favorite)
+        result = AnalysisResult(
+            type="activity",
+            title=favorite.title,
+            total_calories=favorite.calories,
+            duration_minutes=favorite.duration_minutes,
+        )
+        await send_result_card(
+            callback.message,
+            cleanup,
+            result_text=format_activity_result(result, balance),
+            entry_id=entry.id,
+            with_meal_actions=True,
+        )
+        await callback.answer("Добавлено в сегодня")
+        return
+
     entry, balance = await service.save_meal_from_favorite(user=user, favorite=favorite)
 
     items = [NutrientItem(**item) for item in (favorite.items or [])]
@@ -120,7 +146,7 @@ async def delete_favorite(callback: CallbackQuery, session, cleanup: MessageClea
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     favorite = await repo.get_favorite(favorite_id, user.id)
     if favorite is None:
-        await callback.answer("Блюдо не найдено", show_alert=True)
+        await callback.answer("Запись не найдена", show_alert=True)
         return
 
     source_entry_id = favorite.source_entry_id

@@ -30,29 +30,30 @@ jobs:
       - name: Run pytest
         run: pytest
 
-  deploy:
-    name: Deploy to VPS
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            cd "${{ secrets.VPS_DEPLOY_PATH }}"
-            git fetch origin master
-            git reset --hard origin/master
-            docker compose pull --ignore-buildable || true
-            docker compose up -d --build --remove-orphans
-            docker compose ps
-            docker image prune -f
+  # Auto-deploy temporarily disabled
+  # deploy:
+  #   name: Deploy to VPS
+  #   needs: test
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Deploy over SSH
+  #       uses: appleboy/ssh-action@v1.2.0
+  #       with:
+  #         host: ${{ secrets.VPS_HOST }}
+  #         username: ${{ secrets.VPS_USER }}
+  #         password: ${{ secrets.VPS_PASSWORD }}
+  #         port: ${{ secrets.VPS_PORT || 22 }}
+  #         script_stop: true
+  #         script: |
+  #           set -euo pipefail
+  #           cd "${{ secrets.VPS_DEPLOY_PATH }}"
+  #           git fetch origin master
+  #           git reset --hard origin/master
+  #           docker compose pull --ignore-buildable || true
+  #           docker compose up -d --build --remove-orphans
+  #           docker compose ps
+  #           docker image prune -f

@@ -167,8 +167,13 @@ class FavoriteMeal(Base):
     source_entry_id: Mapped[int | None] = mapped_column(
         ForeignKey("day_entries.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    entry_type: Mapped[EntryType] = mapped_column(
+        _pg_enum(EntryType, "entry_type_enum"),
+        default=EntryType.MEAL,
+    )
     title: Mapped[str] = mapped_column(String(255))
     calories: Mapped[float] = mapped_column(Float)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     protein_g: Mapped[float] = mapped_column(Float, default=0.0)
     fat_g: Mapped[float] = mapped_column(Float, default=0.0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0.0)

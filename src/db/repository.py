@@ -165,6 +165,7 @@ class UserRepository:
         micronutrients: dict[str, Any] | None,
         items: list[dict[str, Any]] | None,
         ai_analysis_id: int | None,
+        duration_minutes: int | None = None,
     ) -> DayEntry:
         entry.title = title
         entry.calories = calories
@@ -173,6 +174,7 @@ class UserRepository:
         entry.carbs_g = carbs_g
         entry.micronutrients = micronutrients
         entry.items = items
+        entry.duration_minutes = duration_minutes
         entry.ai_analysis_id = ai_analysis_id
         await self.session.commit()
         await self.session.refresh(entry)
@@ -209,6 +211,7 @@ class UserRepository:
         favorite = FavoriteMeal(
             user_id=entry.user_id,
             source_entry_id=entry.id,
+            entry_type=entry.entry_type,
             title=entry.title,
             calories=entry.calories,
             protein_g=entry.protein_g,
@@ -216,6 +219,7 @@ class UserRepository:
             carbs_g=entry.carbs_g,
             micronutrients=entry.micronutrients,
             items=entry.items,
+            duration_minutes=entry.duration_minutes,
         )
         self.session.add(favorite)
         await self.session.commit()

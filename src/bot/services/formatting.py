@@ -174,10 +174,14 @@ def format_favorite_meal(favorite: FavoriteMeal) -> str:
 
 def format_favorites_list(favorites: list[FavoriteMeal]) -> str:
     if not favorites:
-        return "⭐ Избранное пусто.\n\nДобавьте блюдо в избранное с карточки приема пищи."
+        return (
+            "⭐ Избранное пусто.\n\n"
+            "Добавьте блюдо или активность в избранное с карточки записи."
+        )
 
     lines = ["⭐ Избранное", ""]
     for index, favorite in enumerate(favorites, start=1):
-        lines.append(f"{index}. {escape(favorite.title)} — {favorite.calories:.0f} ккал")
-    lines.append("\nНажмите ➕, чтобы добавить блюдо в сегодняшний дневник.")
+        prefix = "🍽" if favorite.entry_type == EntryType.MEAL else "🏃"
+        lines.append(f"{index}. {prefix} {escape(favorite.title)} — {favorite.calories:.0f} ккал")
+    lines.append("\nНажмите ➕, чтобы добавить запись в сегодняшний дневник.")
     return "\n".join(lines)

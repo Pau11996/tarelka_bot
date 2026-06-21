@@ -196,6 +196,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             photo_file_id=photo_file_id,
             result_text=format_activity_result(result, balance),
             entry_id=entry.id,
+            with_meal_actions=True,
         )
         return
 
@@ -273,6 +274,7 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
             cleanup,
             result_text=format_activity_result(result, balance),
             entry_id=entry.id,
+            with_meal_actions=True,
         )
         return
 

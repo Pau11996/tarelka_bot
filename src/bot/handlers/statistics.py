@@ -24,8 +24,12 @@ router = Router()
 DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y")
 
 
+def _normalize_date_input(value: str) -> str:
+    return value.strip().strip(" .")
+
+
 def _parse_date(value: str) -> date | None:
-    value = value.strip()
+    value = _normalize_date_input(value)
     for date_format in DATE_FORMATS:
         try:
             return datetime.strptime(value, date_format).date()
@@ -66,7 +70,13 @@ def _format_month_caption(points: list[DailyCaloriesPoint], target: float) -> st
 
 @router.message(Command("stats"))
 @router.message(F.text == "📈 Статистика")
-async def show_statistics_menu(message: Message, session, cleanup: MessageCleanupService) -> None:
+async def show_statistics_menu(
+    message: Message,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
     profile = await repo.get_profile(user.id)
@@ -83,7 +93,13 @@ async def show_statistics_menu(message: Message, session, cleanup: MessageCleanu
 
 
 @router.callback_query(F.data == "stats:month")
-async def show_month_statistics(callback: CallbackQuery, session, cleanup: MessageCleanupService) -> None:
+async def show_month_statistics(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     profile = await repo.get_profile(user.id)
@@ -118,11 +134,12 @@ async def ask_statistics_date(callback: CallbackQuery, state: FSMContext, cleanu
 async def show_day_statistics(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     selected_date = _parse_date(message.text or "")
     if selected_date is None:
+        await state.clear()
         schedule_user_message(cleanup, message)
         await answer_ephemeral(
             message,
             cleanup,
-            "Не понял дату. Введите в формате ДД.ММ.ГГГГ, например: 18.06.2026.",
+            "Не понял дату. Можете продолжить пользоваться ботом или снова открыть «Статистика», чтобы выбрать день.",
             track_user=False,
         )
         return

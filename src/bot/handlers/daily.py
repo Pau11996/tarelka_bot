@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.bot.config import settings
@@ -15,7 +16,8 @@ router = Router()
 
 @router.message(Command("today"))
 @router.message(F.text == "📊 Сегодня")
-async def show_today(message: Message, session, cleanup: MessageCleanupService) -> None:
+async def show_today(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
+    await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
     profile = await repo.get_profile(user.id)

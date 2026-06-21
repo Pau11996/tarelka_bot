@@ -5,9 +5,10 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.db.models import Base
+from src.db.url import async_engine_kwargs, normalize_async_database_url
 
 config = context.config
 
@@ -18,10 +19,11 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return os.environ.get(
+    url = os.environ.get(
         "DATABASE_URL",
         "postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth",
     )
+    return normalize_async_database_url(url)
 
 
 def run_migrations_offline() -> None:
@@ -45,12 +47,11 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
+    url = get_url()
+    connectable = create_async_engine(
+        url,
         poolclass=pool.NullPool,
+        **async_engine_kwargs(url),
     )
 
     async with connectable.connect() as connection:

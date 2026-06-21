@@ -13,6 +13,7 @@ dependencies = [
     "pydantic==2.10.4",
     "pydantic-settings==2.7.1",
     "python-multipart==0.0.20",
+    "openai==1.59.6",
     "sqlalchemy[asyncio]==2.0.36",
     "uvicorn[standard]==0.34.0",
 ]

@@ -9,13 +9,14 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from src.ai_analyzer.cursor_runner import CursorRunner, save_upload
+from src.ai_analyzer.cursor_runner import save_upload
+from src.ai_analyzer.runner_factory import create_analysis_runner, use_openai_api
 from src.shared.schemas import AnalysisResult
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ТАРЕЛКА AI Analyzer")
-runner = CursorRunner()
+runner = create_analysis_runner()
 
 
 class TextAnalyzeRequest(BaseModel):
@@ -32,7 +33,8 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    backend = "openai" if use_openai_api() else "cursor"
+    return {"status": "ok", "backend": backend}
 
 
 @app.post("/analyze/text", response_model=AnalyzeResponse)

@@ -5,6 +5,6 @@ ANALYSIS_UNAVAILABLE = (
 
 ANALYSIS_UNAVAILABLE_WITH_HINT = (
     f"{ANALYSIS_UNAVAILABLE}\n\n"
-    "Если ошибка повторяется, проверьте доступ контейнера ai_analyzer к Cursor API "
-    "(CURSOR_API_KEY, прокси, HTTPS_PROXY)."
+    "Если ошибка повторяется, проверьте настройки ai_analyzer "
+    "(API=true: OPENAI_API_KEY, OPENAI_HTTP_PROXY; иначе CURSOR_API_KEY, прокси, HTTPS_PROXY)."
 )

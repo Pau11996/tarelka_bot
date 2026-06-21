@@ -2,7 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 
 from src.bot.services.links import feedback_chat_url
 
-MAIN_MENU_ANCHOR = "·"
+MAIN_MENU_ANCHOR = "Системное сообщение, бот работает корректно"
 
 
 def main_menu() -> ReplyKeyboardMarkup:

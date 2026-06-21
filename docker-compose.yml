@@ -21,6 +21,7 @@ services:
     volumes:
       - cursor_data:/root/.config/cursor
       - ai_uploads:/tmp/uploads
+      - ./logs:/opt/logs
     ports:
       - "8000:8000"
     healthcheck:
@@ -46,6 +47,8 @@ services:
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Europe/Moscow}
       MESSAGE_CLEANUP_TTL_SECONDS: ${MESSAGE_CLEANUP_TTL_SECONDS:-7200}
       DAILY_REQUEST_LIMIT: ${DAILY_REQUEST_LIMIT:-6}
+    volumes:
+      - ./logs:/opt/logs
     restart: unless-stopped
 
 #  landing:

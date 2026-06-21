@@ -10,6 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from src.ai_analyzer.cursor_runner import save_upload
+from src.shared.logging_config import setup_logging
 from src.ai_analyzer.runner_factory import create_analysis_runner, use_openai_api
 from src.shared.schemas import AnalysisResult
 
@@ -123,8 +124,8 @@ async def analyze_image(
 def main() -> None:
     import uvicorn
 
-    logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    setup_logging("ai_analyzer")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
 
 
 if __name__ == "__main__":

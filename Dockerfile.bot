@@ -13,4 +13,6 @@ COPY migrations ./migrations
 
 RUN pip install --no-cache-dir .
 
+RUN mkdir -p /opt/logs/bot
+
 CMD ["sh", "-c", "alembic upgrade head && python -m src.bot.main"]

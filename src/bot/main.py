@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.bot.config import settings
+from src.shared.logging_config import setup_logging
 from src.bot.handlers import correction, daily, favorites, feedback, food, profile, start, statistics
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.db.session import async_session_factory
@@ -62,7 +63,7 @@ async def create_dispatcher() -> Dispatcher:
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    setup_logging("bot")
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
     bot = Bot(

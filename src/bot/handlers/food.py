@@ -8,7 +8,7 @@ from aiogram.types import Message
 from src.bot.config import settings
 from src.bot.keyboards.menus import meal_card_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
-from src.bot.services.analysis_errors import ANALYSIS_UNAVAILABLE
+from src.bot.services.analysis_errors import ANALYSIS_DURATION_HINT, ANALYSIS_UNAVAILABLE
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import (
     format_activity_result,
@@ -152,7 +152,12 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     if not await ensure_request_allowed(message, repo, user, cleanup):
         return
 
-    status = await answer_ephemeral(message, cleanup, "Анализирую фото...", track_user=False)
+    status = await answer_ephemeral(
+        message,
+        cleanup,
+        f"Анализирую фото...\n\n{ANALYSIS_DURATION_HINT}",
+        track_user=False,
+    )
 
     photo = message.photo[-1]
     photo_file_id = photo.file_id
@@ -238,7 +243,12 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
     if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
         return
 
-    status = await answer_ephemeral(message, cleanup, "Анализирую описание...", track_user=False)
+    status = await answer_ephemeral(
+        message,
+        cleanup,
+        f"Анализирую описание...\n\n{ANALYSIS_DURATION_HINT}",
+        track_user=False,
+    )
 
     try:
         raw, result = await ai_client.analyze_text(

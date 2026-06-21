@@ -10,7 +10,7 @@ from src.bot.config import settings
 from src.bot.handlers.food import _delete_status_message, send_result_card
 from src.bot.keyboards.menus import correction_entries_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
-from src.bot.services.analysis_errors import ANALYSIS_UNAVAILABLE
+from src.bot.services.analysis_errors import ANALYSIS_DURATION_HINT, ANALYSIS_UNAVAILABLE
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import format_activity_result, format_analysis_result
 from src.bot.services.messaging import (
@@ -212,7 +212,7 @@ async def apply_correction(
     status_message = await answer_ephemeral(
         message,
         cleanup,
-        "Пересчитываю с учетом исправления...",
+        f"Пересчитываю с учетом исправления...\n\n{ANALYSIS_DURATION_HINT}",
         track_user=False,
     )
     analysis_mode = "activity" if entry.entry_type == EntryType.ACTIVITY else "meal"

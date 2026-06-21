@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-wellhealth}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wellhealth}
-      POSTGRES_DB: ${POSTGRES_DB:-wellhealth}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wellhealth}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   ai_analyzer:
     build:
       context: .
@@ -27,7 +11,7 @@ services:
       CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,ai_analyzer,bot}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}
       NODE_USE_ENV_PROXY: ${NODE_USE_ENV_PROXY:-1}
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     volumes:
@@ -45,15 +29,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.bot
+    env_file:
+      - .env
     depends_on:
-      postgres:
-        condition: service_healthy
       ai_analyzer:
         condition: service_healthy
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://wellhealth:wellhealth@postgres:5432/wellhealth}
+      DATABASE_URL: ${DATABASE_URL}
       AI_ANALYZER_URL: ${AI_ANALYZER_URL:-http://ai_analyzer:8000}
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Europe/Moscow}
       MESSAGE_CLEANUP_TTL_SECONDS: ${MESSAGE_CLEANUP_TTL_SECONDS:-7200}
@@ -78,7 +62,6 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
   cursor_data:
   ai_uploads:
 

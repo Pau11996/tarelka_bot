@@ -51,22 +51,22 @@ services:
       - ./logs:/opt/logs
     restart: unless-stopped
 
-#  landing:
-#    build:
-#      context: ./landing
-#      dockerfile: Dockerfile
-#    ports:
-#      - "${LANDING_PORT:-8080}:80"
-#    environment:
-#      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
-#      TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
-#      LANDING_TITLE: ${LANDING_TITLE:-ТАРЕЛКА}
-#    restart: unless-stopped
-#    healthcheck:
-#      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
-#      interval: 30s
-#      timeout: 5s
-#      retries: 3
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    ports:
+      - "${LANDING_PORT:-8080}:80"
+    environment:
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
+      TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
+      LANDING_TITLE: ${LANDING_TITLE:-ТАРЕЛКА}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   cursor_data:

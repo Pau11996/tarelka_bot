@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from src.db.models import (
     FavoriteMeal,
     Profile,
     User,
+    WeightHistory,
 )
 
 
@@ -42,15 +43,34 @@ class UserRepository:
 
     async def upsert_profile(self, user_id: int, **kwargs: Any) -> Profile:
         profile = await self.get_profile(user_id)
+        old_weight = profile.weight_kg if profile is not None else None
+        new_weight = kwargs.get("weight_kg", old_weight)
         if profile is None:
             profile = Profile(user_id=user_id, **kwargs)
             self.session.add(profile)
         else:
             for key, value in kwargs.items():
                 setattr(profile, key, value)
+        if new_weight is not None and (old_weight is None or old_weight != new_weight):
+            self.session.add(WeightHistory(user_id=user_id, weight_kg=new_weight))
         await self.session.commit()
         await self.session.refresh(profile)
         return profile
+
+    async def get_weight_history(
+        self,
+        user_id: int,
+        *,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> list[WeightHistory]:
+        query = select(WeightHistory).where(WeightHistory.user_id == user_id)
+        if start_at is not None:
+            query = query.where(WeightHistory.recorded_at >= start_at)
+        if end_at is not None:
+            query = query.where(WeightHistory.recorded_at <= end_at)
+        result = await self.session.execute(query.order_by(WeightHistory.recorded_at.asc()))
+        return list(result.scalars().all())
 
     async def create_analysis(
         self,

@@ -78,6 +78,7 @@ class User(Base):
     entries: Mapped[list[DayEntry]] = relationship(back_populates="user")
     favorites: Mapped[list[FavoriteMeal]] = relationship(back_populates="user")
     daily_request_usage: Mapped[list[DailyRequestUsage]] = relationship(back_populates="user")
+    weight_history: Mapped[list[WeightHistory]] = relationship(back_populates="user")
 
 
 class Profile(Base):
@@ -97,6 +98,19 @@ class Profile(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="profile")
+
+
+class WeightHistory(Base):
+    __tablename__ = "weight_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    weight_kg: Mapped[float] = mapped_column(Float)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    user: Mapped[User] = relationship(back_populates="weight_history")
 
 
 class DayEntry(Base):

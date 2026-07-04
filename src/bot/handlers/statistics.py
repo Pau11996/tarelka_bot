@@ -10,7 +10,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import statistics_keyboard
-from src.bot.services.charts import DailyCaloriesPoint, render_calories_chart_png
+from src.bot.services.charts import DailyCaloriesPoint, WeightPoint, render_calories_chart_png, render_weight_chart_png
 from src.bot.services.formatting import format_daily_balance, format_entry_list
 from src.bot.services.messaging import answer_ephemeral, schedule_bot_message, schedule_user_message
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -68,6 +68,30 @@ def _format_month_caption(points: list[DailyCaloriesPoint], target: float) -> st
     return caption
 
 
+def _weight_points(records) -> list[WeightPoint]:
+    return [WeightPoint(recorded_at=record.recorded_at, weight_kg=record.weight_kg) for record in records]
+
+
+def _format_weight_caption(points: list[WeightPoint], current_weight: float) -> str:
+    caption = f"⚖️ Динамика веса\nТекущий вес: {current_weight:g} кг"
+    if len(points) >= 2:
+        first = points[0]
+        last = points[-1]
+        delta = last.weight_kg - first.weight_kg
+        sign = "+" if delta > 0 else ""
+        caption += (
+            f"\nИзменение: {sign}{delta:g} кг"
+            f" ({first.weight_kg:g} → {last.weight_kg:g} кг)"
+        )
+        caption += (
+            f"\nПериод: {first.recorded_at.strftime('%d.%m.%Y')} — "
+            f"{last.recorded_at.strftime('%d.%m.%Y')}"
+        )
+    elif len(points) == 1:
+        caption += f"\nЗапись от {points[0].recorded_at.strftime('%d.%m.%Y')}"
+    return caption
+
+
 @router.message(Command("stats"))
 @router.message(F.text == "📈 Статистика")
 async def show_statistics_menu(
@@ -115,6 +139,36 @@ async def show_month_statistics(
     sent = await callback.message.answer_photo(
         BufferedInputFile(chart, filename="calories_last_30_days.png"),
         caption=_format_month_caption(points, profile.daily_calorie_target),
+    )
+    schedule_bot_message(cleanup, sent)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "stats:weight")
+async def show_weight_statistics(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.clear()
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    profile = await repo.get_profile(user.id)
+    if profile is None:
+        await callback.answer("Сначала заполните профиль: /profile", show_alert=True)
+        return
+
+    records = await repo.get_weight_history(user.id)
+    points = _weight_points(records)
+    if not points:
+        await callback.answer("Пока нет записей веса. Обновите вес в профиле.", show_alert=True)
+        return
+
+    chart = render_weight_chart_png(points)
+    sent = await callback.message.answer_photo(
+        BufferedInputFile(chart, filename="weight_history.png"),
+        caption=_format_weight_caption(points, profile.weight_kg),
     )
     schedule_bot_message(cleanup, sent)
     await callback.answer()

@@ -222,19 +222,24 @@ async def profile_activity(
     data = await state.get_data()
     sex = Sex(data["sex"])
     goal = Goal(data["goal"])
-    daily_target = calculate_daily_target(
-        weight_kg=data["weight_kg"],
-        height_cm=data["height_cm"],
-        age=data["age"],
-        sex=sex,
-        goal=goal,
-        activity_level=activity_level,
-    )
 
     repo = UserRepository(session)
     user = await repo.get_or_create_user(
         telegram_id=callback.from_user.id,
         timezone=settings.default_timezone,
+    )
+    current_profile = await repo.get_profile(user.id)
+    daily_target = (
+        current_profile.daily_calorie_target
+        if current_profile is not None
+        else calculate_daily_target(
+            weight_kg=data["weight_kg"],
+            height_cm=data["height_cm"],
+            age=data["age"],
+            sex=sex,
+            goal=goal,
+            activity_level=activity_level,
+        )
     )
     profile = await repo.upsert_profile(
         user.id,

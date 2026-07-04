@@ -97,6 +97,7 @@ def statistics_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📊 Общая статистика за месяц", callback_data="stats:month")],
+            [InlineKeyboardButton(text="⚖️ Вес", callback_data="stats:weight")],
             [InlineKeyboardButton(text="📅 Выбрать день", callback_data="stats:day")],
         ]
     )

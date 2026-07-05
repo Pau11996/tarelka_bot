@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.services.links import feedback_chat_url
+from src.bot.keyboards.menus import subscription_keyboard
+from src.bot.services.links import feedback_chat_url, subscription_offer_link
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.nutrition import local_today
@@ -13,35 +14,51 @@ from src.db.models import User
 from src.db.repository import UserRepository
 
 
+def has_active_subscription(user: User, *, now: datetime | None = None) -> bool:
+    if user.subscription_until is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    return user.subscription_until > current
+
+
 def effective_daily_request_limit(user: User) -> int:
     if user.daily_request_limit is not None:
         return user.daily_request_limit
+    if has_active_subscription(user):
+        return settings.subscription_daily_request_limit
     return settings.daily_request_limit
+
+
+def _increase_limit_hint() -> str:
+    price_part = (
+        f"{settings.subscription_daily_request_limit} запросов в день "
+        f"за {settings.subscription_price_stars}⭐"
+    )
+    offer = subscription_offer_link()
+    if offer:
+        subscription_part = f"{offer} — {price_part}"
+    else:
+        subscription_part = f"оформите подписку «⭐ Подписка» — {price_part}"
+    url = feedback_chat_url()
+    if url:
+        return (
+            f"Чтобы увеличить лимит, {subscription_part}, "
+            f"либо напишите в <a href=\"{url}\">чат поддержки</a>."
+        )
+    return f"Чтобы увеличить лимит, {subscription_part}."
 
 
 def format_limit_reached_message(user: User) -> str:
     limit = effective_daily_request_limit(user)
-    url = feedback_chat_url()
-    if url:
-        return (
-            f"Вы достигли дневного лимита запросов ({limit} в день).\n\n"
-            "Чтобы увеличить лимит, напишите в "
-            f'<a href="{url}">чат поддержки</a> с просьбой добавить лимит.'
-        )
-    return f"Вы достигли дневного лимита запросов ({limit} в день)."
+    return f"Вы достигли дневного лимита запросов ({limit} в день).\n\n{_increase_limit_hint()}"
 
 
 def limit_welcome_note(user: User) -> str:
     limit = effective_daily_request_limit(user)
-    url = feedback_chat_url()
-    if url:
-        return (
-            f"\n\nДоступно {limit} запросов в день "
-            "(фото, текст и исправления). "
-            "Чтобы увеличить лимит, напишите в "
-            f'<a href="{url}">чат поддержки</a>.\n\n'
-        )
-    return f"\n\nДоступно {limit} запросов в день (фото, текст и исправления).\n\n"
+    return (
+        f"\n\nДоступно {limit} запросов в день "
+        f"(фото, текст и исправления). {_increase_limit_hint()}\n\n"
+    )
 
 
 async def try_consume_daily_request(repo: UserRepository, user: User, usage_date: date | None = None) -> bool:
@@ -65,6 +82,7 @@ async def ensure_request_allowed(
         message,
         cleanup,
         format_limit_reached_message(user),
+        reply_markup=subscription_keyboard(is_active=has_active_subscription(user)),
         track_user=track_user,
     )
     return False

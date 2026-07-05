@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
+from src.bot.config import settings
 from src.bot.services.links import feedback_chat_url
 
 MAIN_MENU_ANCHOR = "Системное сообщение, бот работает корректно"
@@ -9,7 +10,7 @@ def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📊 Сегодня"), KeyboardButton(text="📈 Статистика")],
-            [KeyboardButton(text="⭐ Избранное")],
+            [KeyboardButton(text="⭐ Избранное"), KeyboardButton(text="⭐ Подписка")],
             [KeyboardButton(text="👤 Профиль")],
         ],
         resize_keyboard=True,
@@ -100,6 +101,17 @@ def statistics_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="⚖️ Вес", callback_data="stats:weight")],
             [InlineKeyboardButton(text="📅 Выбрать день", callback_data="stats:day")],
         ]
+    )
+
+
+def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
+    button_text = (
+        f"Продлить за {settings.subscription_price_stars}⭐"
+        if is_active
+        else f"Оформить за {settings.subscription_price_stars}⭐"
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=button_text, callback_data="sub:buy")]]
     )
 
 

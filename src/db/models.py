@@ -72,6 +72,10 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
     daily_request_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    subscription_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscription_last_notified_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profile: Mapped[Profile | None] = relationship(back_populates="user", uselist=False)
@@ -79,6 +83,7 @@ class User(Base):
     favorites: Mapped[list[FavoriteMeal]] = relationship(back_populates="user")
     daily_request_usage: Mapped[list[DailyRequestUsage]] = relationship(back_populates="user")
     weight_history: Mapped[list[WeightHistory]] = relationship(back_populates="user")
+    payments: Mapped[list[Payment]] = relationship(back_populates="user")
 
 
 class Profile(Base):
@@ -156,6 +161,19 @@ class AIAnalysis(Base):
 
     entry: Mapped[DayEntry | None] = relationship(back_populates="ai_analysis")
     previous_analysis: Mapped[AIAnalysis | None] = relationship(remote_side=[id])
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    telegram_payment_charge_id: Mapped[str] = mapped_column(String(255), unique=True)
+    stars_amount: Mapped[int] = mapped_column(Integer)
+    subscription_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="payments")
 
 
 class DailyRequestUsage(Base):

@@ -1,10 +1,11 @@
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import main_menu, profile_fill_keyboard
+from src.bot.handlers.subscription import show_subscription_screen
 from src.bot.services.links import feedback_welcome_note
 from src.bot.services.messaging import answer_ephemeral, answer_persistent
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -63,13 +64,22 @@ READY_TEXT = (
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
+async def cmd_start(
+    message: Message,
+    command: CommandObject,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(
         telegram_id=message.from_user.id,
         timezone=settings.default_timezone,
     )
+    if command.args == "premium":
+        await show_subscription_screen(message, user, cleanup)
+        return
     profile = await repo.get_profile(user.id)
     if profile is None:
         await answer_persistent(

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Awaitable, Callable
 
@@ -8,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.bot.config import settings
 from src.shared.logging_config import setup_logging
-from src.bot.handlers import correction, daily, favorites, feedback, food, profile, start, statistics
+from src.bot.handlers import correction, daily, favorites, feedback, food, profile, start, statistics, subscription
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.subscription_reminder import run_subscription_reminder_loop
 from src.db.session import async_session_factory
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ async def create_dispatcher() -> Dispatcher:
 
     dp.include_router(start.router)
     dp.include_router(profile.router)
+    dp.include_router(subscription.router)
     dp.include_router(feedback.router)
     dp.include_router(daily.router)
     dp.include_router(statistics.router)
@@ -72,6 +75,7 @@ async def main() -> None:
     )
     dp = await create_dispatcher()
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
+    asyncio.create_task(run_subscription_reminder_loop(bot))
     await dp.start_polling(bot)
 
 

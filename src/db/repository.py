@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
@@ -13,6 +13,7 @@ from src.db.models import (
     DayEntry,
     EntryType,
     FavoriteMeal,
+    Payment,
     Profile,
     User,
     WeightHistory,
@@ -280,3 +281,56 @@ class UserRepository:
         usage.request_count += 1
         await self.session.commit()
         return True
+
+    async def activate_subscription(
+        self,
+        user: User,
+        *,
+        duration_days: int,
+        charge_id: str,
+        stars_amount: int,
+        now: datetime | None = None,
+    ) -> User:
+        current = now or datetime.now(timezone.utc)
+        base = user.subscription_until if user.subscription_until and user.subscription_until > current else current
+        new_until = base + timedelta(days=duration_days)
+        user.subscription_until = new_until
+        user.subscription_last_notified_until = None
+        self.session.add(
+            Payment(
+                user_id=user.id,
+                telegram_payment_charge_id=charge_id,
+                stars_amount=stars_amount,
+                subscription_until=new_until,
+            )
+        )
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
+    async def get_users_needing_renewal_reminder(
+        self,
+        *,
+        now: datetime | None = None,
+        window: timedelta | None = None,
+    ) -> list[User]:
+        current = now or datetime.now(timezone.utc)
+        reminder_window = window or timedelta(days=1)
+        result = await self.session.execute(
+            select(User).where(
+                User.subscription_until.is_not(None),
+                User.subscription_until > current,
+                User.subscription_until <= current + reminder_window,
+                or_(
+                    User.subscription_last_notified_until.is_(None),
+                    User.subscription_last_notified_until != User.subscription_until,
+                ),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def mark_renewal_reminded(self, user: User) -> User:
+        user.subscription_last_notified_until = user.subscription_until
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user

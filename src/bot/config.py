@@ -12,8 +12,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
     telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
     telegram_feedback_chat: str = ""
     daily_request_limit: int = 6
+    subscription_price_stars: int = 150
+    subscription_daily_request_limit: int = 30
+    subscription_duration_days: int = 30
+    subscription_reminder_days_before: int = 2
+    subscription_reminder_interval_seconds: int = 3600
     database_url: str = "postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth"
     ai_analyzer_url: str = "http://localhost:8000"
 

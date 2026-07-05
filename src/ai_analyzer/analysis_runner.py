@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 import json
+import os
 
 from src.ai_analyzer.parsing import extract_json_payload, parse_analysis_response
 from src.ai_analyzer.prompts import (
     ACTIVITY_ANALYSIS_PROMPT,
+    COMBINED_ANALYSIS_PROMPT,
     CORRECTION_PROMPT,
     FOOD_ANALYSIS_PROMPT,
     GENERAL_ANALYSIS_PROMPT,
     NUTRITION_CALCULATION_PROMPT,
 )
 from src.shared.schemas import AnalysisResult
+
+_TRUTHY = {"true", "1", "yes", "on"}
+
+
+def single_call_enabled() -> bool:
+    return os.environ.get("AI_SINGLE_CALL", "true").strip().lower() in _TRUTHY
 
 
 class BaseAnalysisRunner:
@@ -66,6 +74,31 @@ class BaseAnalysisRunner:
         result.clarification_question = None
         return result
 
+    async def _analyze_single(
+        self,
+        *,
+        text: str | None,
+        image_path: str | None,
+        profile_context: dict | None,
+        input_label: str = "User input",
+        forced_type: str | None = None,
+    ) -> AnalysisResult:
+        context = self._build_context(
+            text=text,
+            profile_context=profile_context,
+            input_label=input_label,
+        )
+        raw = await self.run_prompt(
+            f"{COMBINED_ANALYSIS_PROMPT}\n{context}",
+            image_path=image_path,
+        )
+        result = parse_analysis_response(raw)
+        if forced_type:
+            result.type = forced_type
+        result.needs_clarification = False
+        result.clarification_question = None
+        return result
+
     async def analyze_food(
         self,
         *,
@@ -73,6 +106,14 @@ class BaseAnalysisRunner:
         image_path: str | None,
         profile_context: dict | None = None,
     ) -> AnalysisResult:
+        if single_call_enabled():
+            return await self._analyze_single(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="meal",
+            )
         identification = await self._identify(
             prompt=FOOD_ANALYSIS_PROMPT,
             text=text,
@@ -93,6 +134,12 @@ class BaseAnalysisRunner:
         image_path: str | None,
         profile_context: dict | None = None,
     ) -> AnalysisResult:
+        if single_call_enabled():
+            return await self._analyze_single(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+            )
         identification = await self._identify(
             prompt=GENERAL_ANALYSIS_PROMPT,
             text=text,
@@ -111,6 +158,14 @@ class BaseAnalysisRunner:
         image_path: str | None,
         profile_context: dict | None = None,
     ) -> AnalysisResult:
+        if single_call_enabled():
+            return await self._analyze_single(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="activity",
+            )
         identification = await self._identify(
             prompt=ACTIVITY_ANALYSIS_PROMPT,
             text=text,

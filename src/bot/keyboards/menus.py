@@ -118,6 +118,7 @@ def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
 def profile_card_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="Редактировать профиль", callback_data="profile:edit")],
+        [InlineKeyboardButton(text="Изменить вес", callback_data="profile:edit_weight")],
         [InlineKeyboardButton(text="Изменить норму калорий", callback_data="profile:edit_calories")],
     ]
     url = feedback_chat_url()

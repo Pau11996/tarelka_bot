@@ -90,6 +90,71 @@ async def edit_daily_calorie_target(
     await callback.answer()
 
 
+@router.callback_query(F.data == "profile:edit_weight")
+async def edit_weight(
+    callback: CallbackQuery,
+    state: FSMContext,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.set_state(ProfileStates.edit_weight)
+    await edit_ephemeral(
+        callback,
+        cleanup,
+        "Введите новый вес в кг, например: 75",
+    )
+    await callback.answer()
+
+
+@router.message(ProfileStates.edit_weight)
+async def save_weight(
+    message: Message,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    try:
+        weight = float(message.text.replace(",", "."))
+        if weight <= 0:
+            raise ValueError
+    except ValueError:
+        await answer_ephemeral(message, cleanup, "Введите корректный вес в кг.", track_user=False)
+        schedule_user_message(cleanup, message)
+        return
+
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(
+        telegram_id=message.from_user.id,
+        timezone=settings.default_timezone,
+    )
+    profile = await repo.get_profile(user.id)
+    if profile is None:
+        await state.clear()
+        await _start_profile_form(message, state, cleanup)
+        schedule_user_message(cleanup, message)
+        return
+
+    profile = await repo.upsert_profile(
+        user.id,
+        weight_kg=weight,
+        height_cm=profile.height_cm,
+        age=profile.age,
+        sex=profile.sex,
+        goal=profile.goal,
+        activity_level=profile.activity_level,
+        daily_calorie_target=profile.daily_calorie_target,
+    )
+
+    await state.clear()
+    schedule_user_message(cleanup, message)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        "Вес обновлен.\n\n" f"{format_profile_card(profile)}",
+        reply_markup=profile_card_keyboard(),
+        track_user=False,
+    )
+
+
 @router.message(ProfileStates.daily_calorie_target)
 async def save_daily_calorie_target(
     message: Message,

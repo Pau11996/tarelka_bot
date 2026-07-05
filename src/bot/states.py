@@ -9,6 +9,7 @@ class ProfileStates(StatesGroup):
     goal = State()
     activity_level = State()
     daily_calorie_target = State()
+    edit_weight = State()
 
 
 class CorrectionStates(StatesGroup):

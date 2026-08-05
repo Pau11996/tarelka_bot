@@ -7,11 +7,15 @@ services:
       - .env
     environment:
       API: ${API:-false}
+      DATABASE_URL: ${DATABASE_URL}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ADMIN_TOKEN_SECRET: ${ADMIN_TOKEN_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_TIMEOUT: ${OPENAI_TIMEOUT:-120}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
-      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5}
+      CURSOR_MODEL: ${CURSOR_MODEL:-cursor-grok-4.5-high-fast}
       CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
@@ -55,6 +59,9 @@ services:
     build:
       context: ./landing
       dockerfile: Dockerfile
+    depends_on:
+      ai_analyzer:
+        condition: service_healthy
     ports:
       - "${LANDING_PORT:-8080}:80"
     environment:

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистика — ТАРЕЛКА</title>
+    <meta name="robots" content="noindex,nofollow">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="admin-page">
+    <main class="admin-shell">
+        <section class="admin-login-card" id="login-panel">
+            <a class="logo admin-logo" href="/">
+                <span class="logo-mark" aria-hidden="true">🥗</span>
+                <span>ТАРЕЛКА</span>
+            </a>
+            <div>
+                <span class="eyebrow">Закрытая статистика</span>
+                <h1>Вход в дашборд</h1>
+                <p class="admin-muted">Введите логин и пароль, чтобы открыть метрики пользователей, подписок и заработка.</p>
+            </div>
+            <form class="admin-login-form" id="login-form">
+                <label>
+                    <span>Логин</span>
+                    <input name="username" type="text" autocomplete="username" required>
+                </label>
+                <label>
+                    <span>Пароль</span>
+                    <input name="password" type="password" autocomplete="current-password" required>
+                </label>
+                <button class="button button-primary" type="submit">Войти</button>
+                <p class="admin-error" id="login-error" role="alert"></p>
+            </form>
+        </section>
+
+        <section class="admin-dashboard" id="dashboard" hidden>
+            <header class="admin-dashboard-header">
+                <div>
+                    <a class="logo admin-logo" href="/">
+                        <span class="logo-mark" aria-hidden="true">🥗</span>
+                        <span>ТАРЕЛКА</span>
+                    </a>
+                    <h1>Статистика</h1>
+                    <p class="admin-muted">Пользователи, подписки и заработок в Telegram Stars.</p>
+                </div>
+                <div class="admin-actions">
+                    <label>
+                        <span>Период</span>
+                        <select id="period-select">
+                            <option value="7">7 дней</option>
+                            <option value="30" selected>30 дней</option>
+                            <option value="90">90 дней</option>
+                            <option value="365">365 дней</option>
+                        </select>
+                    </label>
+                    <button class="button button-secondary" id="logout-button" type="button">Выйти</button>
+                </div>
+            </header>
+
+            <div class="admin-summary-grid" aria-label="Общие показатели">
+                <article class="admin-summary-card">
+                    <span>Всего пользователей</span>
+                    <strong id="total-users">0</strong>
+                </article>
+                <article class="admin-summary-card">
+                    <span>Активных подписок</span>
+                    <strong id="active-subscriptions">0</strong>
+                </article>
+                <article class="admin-summary-card">
+                    <span>Заработок в звездах</span>
+                    <strong id="total-stars">0</strong>
+                </article>
+            </div>
+
+            <div class="admin-chart-grid">
+                <article class="admin-chart-card">
+                    <div>
+                        <h2>Пользователи</h2>
+                        <p class="admin-muted">Новые пользователи по дням.</p>
+                    </div>
+                    <canvas id="users-chart" width="720" height="320"></canvas>
+                </article>
+                <article class="admin-chart-card">
+                    <div>
+                        <h2>Подписки</h2>
+                        <p class="admin-muted">Покупки подписок по дням.</p>
+                    </div>
+                    <canvas id="subscriptions-chart" width="720" height="320"></canvas>
+                </article>
+            </div>
+
+            <p class="admin-error" id="dashboard-error" role="alert"></p>
+        </section>
+    </main>
+    <script src="/admin.js" defer></script>
+</body>
+</html>

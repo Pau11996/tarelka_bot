@@ -25,7 +25,7 @@ def test_effective_daily_request_limit_uses_default() -> None:
 
 
 def test_effective_daily_request_limit_uses_subscription() -> None:
-    now = datetime(2026, 7, 4, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     user = User(
         id=1,
         telegram_id=1,

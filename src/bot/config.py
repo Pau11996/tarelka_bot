@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
+    telegram_channel: str = ""
     telegram_feedback_chat: str = ""
     daily_request_limit: int = 6
     subscription_price_stars: int = 150

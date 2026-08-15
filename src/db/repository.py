@@ -34,6 +34,15 @@ class UserRepository:
             await self.session.refresh(user)
         return user
 
+    async def set_acquisition_source_if_empty(self, user: User, source: str) -> bool:
+        """First-touch: set acquisition_source only when it is still empty."""
+        if user.acquisition_source:
+            return False
+        user.acquisition_source = source
+        await self.session.commit()
+        await self.session.refresh(user)
+        return True
+
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
         result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
         return result.scalar_one_or_none()

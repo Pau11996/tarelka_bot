@@ -1,38 +1,213 @@
-docker compose up -d --build bot# ТАРЕЛКА
+# ТАРЕЛКА
 
-Telegram-бот для учета калорий, БЖУ и нутриентов с анализом через Cursor CLI.
+Telegram-бот для учёта калорий, БЖУ и нутриентов. Пользователь отправляет фото или текст — AI определяет еду или активность, пишет запись в дневник и обновляет дневной баланс.
+
+Стек: **aiogram 3** · **FastAPI** · **PostgreSQL** · **Alembic** · лендинг на **nginx**.
+
+## Возможности
+
+- Анализ фото и текста еды / активности (режим `auto`)
+- Профиль: вес, рост, возраст, пол, цель, активность, норма калорий
+- История веса и график в статистике
+- Дневной баланс (`/today`), статистика за месяц и по дню
+- Избранные блюда и активности
+- Правка и удаление записей (`/correct`)
+- Подписка через **Telegram Stars** (больше запросов в день)
+- Лендинг с CTA в Telegram
+- Админ-дашборд со статистикой пользователей и платежей
+
+## Архитектура
+
+```
+Telegram → bot (polling) → AI_ANALYZER_URL → ai_analyzer:8000
+                ↓
+           PostgreSQL (внешняя БД)
+landing:8080 → статика + proxy /admin/ → ai_analyzer
+```
+
+Сервисы в `docker-compose.yml`:
+
+| Сервис | Назначение |
+|--------|------------|
+| `bot` | Telegram-бот, миграции Alembic при старте |
+| `ai_analyzer` | HTTP API анализа (Cursor CLI или OpenAI) + admin API |
+| `landing` | Статический сайт и UI админки |
+
+PostgreSQL в compose **не входит**: укажите доступную БД в `DATABASE_URL` (отдельный контейнер, managed Postgres или локальный инстанс).
 
 ## Быстрый старт
 
-1. Скопируйте `.env.example` в `.env` и заполните переменные.
-2. Получите API-ключ Cursor: [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys.
-3. Добавьте в `.env`:
-
-```env
-CURSOR_API_KEY=your-cursor-api-key
-```
-
-Альтернатива — OAuth-логин в контейнере (если не хотите API key):
+1. Скопируйте окружение:
 
 ```bash
-docker compose run --rm -it ai_analyzer agent login
+cp .env.example .env
 ```
 
-4. Запустите сервисы:
+2. Обязательно заполните:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=taarelka_bot
+DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DB
+CURSOR_API_KEY=...   # если API=false (по умолчанию)
+```
+
+3. Поднимите сервисы:
 
 ```bash
 docker compose up --build
 ```
 
-5. Откройте бота в Telegram и выполните `/start`, затем `/profile`.
-6. Лендинг доступен на [http://localhost:8080](http://localhost:8080) (сервис `landing`).
+4. В Telegram: `/start` → заполните профиль → отправьте фото или описание еды.
+5. Лендинг: [http://localhost:8080](http://localhost:8080)  
+   Админка: [http://localhost:8080/admin.html](http://localhost:8080/admin.html)
+
+### AI-бэкенд
+
+По умолчанию анализ идёт через **Cursor CLI** (`agent -p`).
+
+```env
+API=false
+CURSOR_API_KEY=your-cursor-api-key
+CURSOR_MODEL=cursor-grok-4.5-high-fast
+```
+
+Ключ: [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys.
+
+Альтернатива без API key — OAuth в контейнере:
+
+```bash
+docker compose run --rm -it ai_analyzer agent login
+```
+
+Переключение на **OpenAI**:
+
+```env
+API=true
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4o-mini
+```
+
+## Команды и меню
+
+| Команда / кнопка | Что делает |
+|------------------|------------|
+| `/start` | Онбординг; deep-link `?start=premium` открывает экран подписки |
+| `/profile` · «👤 Профиль» | Вес, рост, цель, норма ккал; правка веса |
+| `/today` · «📊 Сегодня» | Дневной баланс и записи |
+| `/stats` · «📈 Статистика» | Месяц, график веса, день |
+| `/favorites` · «⭐ Избранное» | Быстрое добавление сохранённых блюд/активностей |
+| `/correct` | Исправить или удалить запись |
+| `/premium` · «⭐ Подписка» | Статус и покупка Stars |
+| `/paysupport` | Контакты по оплате и возвратам |
+| `/feedback` | Чат поддержки |
+| Фото или текст | Автоопределение еды/активности и пересчёт баланса |
+
+## Подписка (Telegram Stars)
+
+Оплата встроенными Stars (`currency=XTR`), без внешних платёжек.
+
+Значения по умолчанию (можно переопределить в `.env`):
+
+| Переменная | По умолчанию | Смысл |
+|------------|--------------|--------|
+| `DAILY_REQUEST_LIMIT` | `6` | Лимит AI-запросов без подписки |
+| `SUBSCRIPTION_DAILY_REQUEST_LIMIT` | `30` | Лимит с подпиской |
+| `SUBSCRIPTION_PRICE_STARS` | `150` | Цена в Stars |
+| `SUBSCRIPTION_DURATION_DAYS` | `30` | Срок |
+| `SUBSCRIPTION_REMINDER_DAYS_BEFORE` | `2` | Напоминание до окончания |
+
+Deep-link на экран подписки:
+
+```text
+https://t.me/<TELEGRAM_BOT_USERNAME>?start=premium
+```
+
+Для корректных ссылок в напоминаниях и сообщениях о лимите задайте `TELEGRAM_BOT_USERNAME` (без `@`).
+
+## База данных
+
+Бот при старте выполняет `alembic upgrade head`.
+
+Пример `DATABASE_URL`:
+
+```env
+# хост postgres в вашей сети / на VPS
+DATABASE_URL=postgresql+asyncpg://wellhealth:wellhealth@postgres:5432/wellhealth
+
+# локальная разработка без Docker-сети
+DATABASE_URL=postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth
+```
+
+Нужны миграции из `migrations/versions/` (включая подписку и историю веса).
+
+## Лендинг
+
+```env
+TELEGRAM_BOT_USERNAME=taarelka_bot
+LANDING_TITLE=ТАРЕЛКА
+LANDING_PORT=8080
+TELEGRAM_FEEDBACK_CHAT=taarelkachat
+```
+
+Только лендинг:
+
+```bash
+docker compose up -d --build landing
+```
+
+Ссылки на бота: `https://t.me/${TELEGRAM_BOT_USERNAME}`.
+
+## Админка
+
+UI: `/admin.html` на лендинге. API проксируется на `ai_analyzer` по `/admin/`.
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=...          # смените дефолт
+ADMIN_TOKEN_SECRET=...      # длинный случайный секрет
+```
+
+Метрики: пользователи, активные подписки, Stars, динамика.
+
+Не оставляйте пароль `admin` в проде и не открывайте админку без HTTPS/ограничения доступа.
+
+## Чат поддержки
+
+1. Создайте публичную группу или канал с username, либо invite-ссылку.
+2. В `.env`:
+
+```env
+TELEGRAM_FEEDBACK_CHAT=taarelkachat
+# или
+TELEGRAM_FEEDBACK_CHAT=https://t.me/+XXXXXXXX
+```
+
+После этого ссылка появится в `/start`, `/feedback`, профиле и на лендинге. Та же ссылка используется в `/paysupport`.
+
+## Переменные окружения
+
+Полный шаблон — `.env.example`. Кратко обязательное и частое:
+
+| Переменная | Обязательно | Описание |
+|------------|-------------|----------|
+| `TELEGRAM_BOT_TOKEN` | да | Токен BotFather |
+| `TELEGRAM_BOT_USERNAME` | да* | Username без `@` (*для deep-link и лендинга) |
+| `DATABASE_URL` | да | Async Postgres URL (`postgresql+asyncpg://...`) |
+| `CURSOR_API_KEY` | да, если `API=false` | Ключ Cursor |
+| `OPENAI_API_KEY` | да, если `API=true` | Ключ OpenAI |
+| `AI_ANALYZER_URL` | нет | По умолчанию `http://ai_analyzer:8000` в Docker |
+| `DEFAULT_TIMEZONE` | нет | `Europe/Moscow` |
+| `MESSAGE_CLEANUP_TTL_SECONDS` | нет | TTL служебных сообщений (`7200`) |
+| `TELEGRAM_FEEDBACK_CHAT` | нет | Username чата или invite URL |
+| `ADMIN_*` | для админки | Логин, пароль, секрет токена |
 
 ## Если анализ фото не работает
 
-Ошибка `Failed to reach the Cursor API` означает, что контейнер `ai_analyzer` не может достучаться до Cursor API (не проблема Telegram-бота).
+Ошибка `Failed to reach the Cursor API` значит, что `ai_analyzer` не достучался до Cursor API (не проблема Telegram-бота).
 
-1. Проверьте ключ в `.env`: `CURSOR_API_KEY` из [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations.
-2. Пересоберите `ai_analyzer` (в образе включён HTTP/1.1 для CLI):
+1. Проверьте `CURSOR_API_KEY` в `.env`.
+2. Пересоберите анализатор:
 
 ```bash
 docker compose up -d --build ai_analyzer
@@ -45,7 +220,7 @@ docker compose exec ai_analyzer curl -I https://api2.cursor.sh
 docker compose exec ai_analyzer agent -p "reply ok" --output-format text --mode ask --force
 ```
 
-4. Если вы за корпоративным прокси, добавьте в `.env`:
+4. За корпоративным прокси:
 
 ```env
 HTTPS_PROXY=http://your-proxy:port
@@ -53,67 +228,53 @@ HTTP_PROXY=http://your-proxy:port
 NODE_USE_ENV_PROXY=1
 ```
 
-5. Альтернатива API key — OAuth в контейнере:
+5. Либо OAuth:
 
 ```bash
 docker compose run --rm -it ai_analyzer agent login
 ```
 
-## Сервисы
-
-- `bot` — Telegram-бот (aiogram)
-- `ai_analyzer` — HTTP API поверх Cursor CLI (`agent -p`)
-- `postgres` — хранение профилей и дневных записей
-- `landing` — статический лендинг (nginx) с описанием бота и ссылкой в Telegram
-
-## Лендинг
-
-В `.env` укажите username бота без `@`:
-
-```env
-TELEGRAM_BOT_USERNAME=taarelka_bot
-LANDING_TITLE=ТАРЕЛКА
-LANDING_PORT=8080
-TELEGRAM_FEEDBACK_CHAT=taarelkachat
-```
-
-Запуск только лендинга:
-
-```bash
-docker compose up -d --build landing
-```
-
-Ссылки на бота формируются как `https://t.me/${TELEGRAM_BOT_USERNAME}`.
-
-## Чат для фидбека
-
-1. В Telegram: **Новая группа** → назовите, например, «ТАРЕЛКА — поддержка».
-2. Добавьте @taarelka_bot как администратора (по желанию).
-3. **Настройки группы → Тип группы → Публичная** → задайте username, например `taarelkachat`.
-4. Закрепите приветственное сообщение: что писать вопросы, баги и идеи.
-5. Добавьте в `.env`:
-
-```env
-TELEGRAM_FEEDBACK_CHAT=taarelkachat
-```
-
-Можно указать invite-ссылку: `https://t.me/+XXXXXXXX`.
-
-После этого в приветственном сообщении бота будет ссылка на чат, команда `/feedback` и кнопка в профиле. На лендинге — ссылка в меню, FAQ и футере.
-
-## Команды бота
-
-- `/profile` — настройка веса, роста, цели и нормы калорий
-- `/today` — дневной баланс и записи за сегодня
-- `/correct` — исправить последний анализ приема пищи
-- `/feedback` — чат для вопросов и предложений
-- Фото или текст — бот сам определит еду или активность и пересчитает баланс
-
 ## Локальная разработка
+
+Нужны Python 3.12+ и доступный PostgreSQL.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+cp .env.example .env
+# поправьте DATABASE_URL на localhost и токены
+alembic upgrade head
 pytest
+```
+
+Запуск без Docker (в двух терминалах):
+
+```bash
+uvicorn src.ai_analyzer.server:app --host 0.0.0.0 --port 8000
+python -m src.bot.main
+```
+
+## Деплой
+
+Ручной деплой на VPS (как в CI):
+
+```bash
+./scripts/deploy.sh
+```
+
+Скрипт делает `git reset --hard origin/master` и `docker compose up -d --build`.  
+В GitHub Actions job автодеплоя сейчас выключен; тесты (`pytest`) гоняются на push/PR в `master`.
+
+## Структура репозитория
+
+```text
+src/bot/           # Telegram-бот, handlers, сервисы
+src/ai_analyzer/   # FastAPI: анализ + admin API
+src/db/            # модели, repository, session
+src/shared/        # схемы и логирование
+migrations/        # Alembic
+landing/           # nginx + статика + admin UI
+tests/             # pytest
+scripts/deploy.sh  # ручной деплой
 ```

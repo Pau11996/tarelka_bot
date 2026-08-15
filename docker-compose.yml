@@ -45,6 +45,7 @@ services:
         condition: service_healthy
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHANNEL: ${TELEGRAM_CHANNEL:-}
       TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
       DATABASE_URL: ${DATABASE_URL}
       AI_ANALYZER_URL: ${AI_ANALYZER_URL:-http://ai_analyzer:8000}

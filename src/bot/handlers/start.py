@@ -6,7 +6,11 @@ from aiogram.types import CallbackQuery, Message
 from src.bot.config import settings
 from src.bot.keyboards.menus import main_menu, profile_fill_keyboard
 from src.bot.handlers.subscription import show_subscription_screen
-from src.bot.services.links import feedback_welcome_note
+from src.bot.services.links import (
+    channel_welcome_note,
+    feedback_welcome_note,
+    normalize_acquisition_source,
+)
 from src.bot.services.messaging import answer_ephemeral, answer_persistent
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.request_limit import limit_welcome_note
@@ -44,7 +48,14 @@ HOW_TO_USE = (
 
 
 def build_welcome_new(user) -> str:
-    return WELCOME_INTRO + limit_welcome_note(user) + "\n\n" + HOW_TO_USE + feedback_welcome_note()
+    return (
+        WELCOME_INTRO
+        + limit_welcome_note(user)
+        + "\n\n"
+        + HOW_TO_USE
+        + channel_welcome_note()
+        + feedback_welcome_note()
+    )
 
 PROFILE_PROMPT = "Заполните профиль, чтобы бот рассчитал вашу норму калорий и БЖУ."
 
@@ -80,6 +91,11 @@ async def cmd_start(
     if command.args == "premium":
         await show_subscription_screen(message, user, cleanup)
         return
+
+    source = normalize_acquisition_source(command.args)
+    if source is not None:
+        await repo.set_acquisition_source_if_empty(user, source)
+
     profile = await repo.get_profile(user.id)
     if profile is None:
         await answer_persistent(
@@ -97,7 +113,7 @@ async def cmd_start(
 
     await answer_persistent(
         message,
-        f"{WELCOME_BACK}{limit_welcome_note(user)}{feedback_welcome_note()}\n\n{READY_TEXT}",
+        f"{WELCOME_BACK}{limit_welcome_note(user)}{channel_welcome_note()}{feedback_welcome_note()}\n\n{READY_TEXT}",
         cleanup=cleanup,
         reply_markup=main_menu(),
     )

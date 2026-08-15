@@ -699,6 +699,43 @@ img {
     height: 320px;
 }
 
+.admin-sources-card {
+    margin-top: 1.25rem;
+}
+
+.admin-table-wrap {
+    overflow-x: auto;
+}
+
+.admin-sources-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.admin-sources-table th,
+.admin-sources-table td {
+    padding: 0.7rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.admin-sources-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-sources-table td:not(:first-child),
+.admin-sources-table th:not(:first-child) {
+    text-align: right;
+}
+
+.admin-source-name {
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 [hidden] {
     display: none !important;
 }

@@ -15,13 +15,15 @@ from pydantic import BaseModel
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Payment, User
+from src.db.models import AIAnalysis, AnalysisType, Payment, User
 from src.db.session import get_session
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin"
 DEFAULT_TOKEN_TTL_SECONDS = 12 * 60 * 60
 MAX_STATS_DAYS = 365
+DIRECT_SOURCE_LABEL = "direct"
+PHOTO_ANALYSIS_TYPES = (AnalysisType.FOOD_PHOTO, AnalysisType.ACTIVITY_PHOTO)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -54,11 +56,20 @@ class DailySubscriptionsPoint(BaseModel):
     stars: int
 
 
+class AcquisitionSourcePoint(BaseModel):
+    source: str
+    users: int
+    with_photo: int
+    photo_24h: int
+    conversion_pct: float
+
+
 class AdminStatsResponse(BaseModel):
     period_days: int
     totals: AdminTotals
     users_chart: list[DailyUsersPoint]
     subscriptions_chart: list[DailySubscriptionsPoint]
+    sources: list[AcquisitionSourcePoint] = []
 
 
 def admin_username() -> str:
@@ -224,6 +235,54 @@ async def collect_admin_stats(
             stars=int(stars or 0),
         )
 
+    source_key = func.coalesce(User.acquisition_source, DIRECT_SOURCE_LABEL).label("source")
+    photo_exists = (
+        select(AIAnalysis.id)
+        .where(
+            AIAnalysis.user_id == User.id,
+            AIAnalysis.analysis_type.in_(PHOTO_ANALYSIS_TYPES),
+        )
+        .correlate(User)
+        .exists()
+    )
+    photo_24h_exists = (
+        select(AIAnalysis.id)
+        .where(
+            AIAnalysis.user_id == User.id,
+            AIAnalysis.analysis_type.in_(PHOTO_ANALYSIS_TYPES),
+            AIAnalysis.created_at <= User.created_at + timedelta(hours=24),
+        )
+        .correlate(User)
+        .exists()
+    )
+    source_rows = await session.execute(
+        select(
+            source_key,
+            func.count(User.id),
+            func.count(User.id).filter(photo_exists),
+            func.count(User.id).filter(photo_24h_exists),
+        )
+        .where(User.created_at >= start_at)
+        .group_by(source_key)
+        .order_by(func.count(User.id).desc(), source_key.asc())
+    )
+
+    sources: list[AcquisitionSourcePoint] = []
+    for source, users_count, with_photo, photo_24h in source_rows.all():
+        users_value = int(users_count or 0)
+        with_photo_value = int(with_photo or 0)
+        photo_24h_value = int(photo_24h or 0)
+        conversion = round((with_photo_value / users_value) * 100, 1) if users_value else 0.0
+        sources.append(
+            AcquisitionSourcePoint(
+                source=str(source or DIRECT_SOURCE_LABEL),
+                users=users_value,
+                with_photo=with_photo_value,
+                photo_24h=photo_24h_value,
+                conversion_pct=conversion,
+            )
+        )
+
     return AdminStatsResponse(
         period_days=period_days,
         totals=AdminTotals(
@@ -233,6 +292,7 @@ async def collect_admin_stats(
         ),
         users_chart=list(users_chart.values()),
         subscriptions_chart=list(subscriptions_chart.values()),
+        sources=sources,
     )
 
 

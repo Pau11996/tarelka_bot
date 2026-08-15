@@ -14,6 +14,7 @@
     const totalStars = document.getElementById("total-stars");
     const usersChart = document.getElementById("users-chart");
     const subscriptionsChart = document.getElementById("subscriptions-chart");
+    const sourcesBody = document.getElementById("sources-body");
 
     const numberFormatter = new Intl.NumberFormat("ru-RU");
     const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -125,6 +126,40 @@
         });
     }
 
+    function renderSources(sources) {
+        sourcesBody.replaceChildren();
+        if (!sources || !sources.length) {
+            const emptyRow = document.createElement("tr");
+            const emptyCell = document.createElement("td");
+            emptyCell.colSpan = 5;
+            emptyCell.className = "admin-muted";
+            emptyCell.textContent = "Нет данных за период";
+            emptyRow.appendChild(emptyCell);
+            sourcesBody.appendChild(emptyRow);
+            return;
+        }
+
+        sources.forEach((row) => {
+            const tr = document.createElement("tr");
+            const cells = [
+                row.source === "direct" ? "без метки" : row.source,
+                numberFormatter.format(row.users),
+                numberFormatter.format(row.with_photo),
+                numberFormatter.format(row.photo_24h),
+                `${numberFormatter.format(row.conversion_pct)}%`,
+            ];
+            cells.forEach((value, index) => {
+                const td = document.createElement("td");
+                td.textContent = value;
+                if (index === 0) {
+                    td.className = "admin-source-name";
+                }
+                tr.appendChild(td);
+            });
+            sourcesBody.appendChild(tr);
+        });
+    }
+
     function renderStats(data) {
         latestStats = data;
         totalUsers.textContent = numberFormatter.format(data.totals.users);
@@ -137,6 +172,7 @@
         drawBarChart(subscriptionsChart, data.subscriptions_chart, {
             value: (point) => point.subscriptions,
         });
+        renderSources(data.sources || []);
     }
 
     async function fetchStats() {

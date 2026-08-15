@@ -75,6 +75,18 @@ def test_format_limit_reached_message_with_support_link(monkeypatch) -> None:
     assert 'href="https://t.me/taarelkachat"' in message
 
 
+def test_channel_welcome_note(monkeypatch) -> None:
+    from src.bot.services.links import channel_welcome_note
+
+    monkeypatch.setattr(settings, "telegram_channel", "https://t.me/+Y1ttKmidISwyZjMy")
+    note = channel_welcome_note()
+    assert "канале ТАРЕЛКА" in note
+    assert 'href="https://t.me/+Y1ttKmidISwyZjMy"' in note
+
+    monkeypatch.setattr(settings, "telegram_channel", "")
+    assert channel_welcome_note() == ""
+
+
 def test_limit_welcome_note_with_support_link(monkeypatch) -> None:
     monkeypatch.setattr(settings, "telegram_feedback_chat", "taarelkachat")
     monkeypatch.setattr(settings, "telegram_bot_username", "taarelka_bot")

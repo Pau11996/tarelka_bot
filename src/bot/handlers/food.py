@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import meal_card_keyboard
+from src.bot.keyboards.menus import MENU_BUTTON_TEXTS, meal_card_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
 from src.bot.services.analysis_errors import ANALYSIS_DURATION_HINT, ANALYSIS_UNAVAILABLE
 from src.bot.services.entry_service import EntryService
@@ -224,7 +224,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     )
 
 
-@router.message(F.text & ~F.text.in_({"📊 Сегодня", "📈 Статистика", "👤 Профиль", "⭐ Избранное"}))
+@router.message(F.text & ~F.text.in_(MENU_BUTTON_TEXTS))
 async def handle_food_text(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
     if current_state and "ProfileStates" in str(current_state):

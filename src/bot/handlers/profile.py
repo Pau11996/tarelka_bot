@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import (
+    PROFILE_BUTTON,
     activity_keyboard,
     goal_keyboard,
     main_menu,
@@ -37,7 +38,7 @@ async def _start_profile_form(
 
 
 @router.message(Command("profile"))
-@router.message(F.text == "👤 Профиль")
+@router.message(F.text == PROFILE_BUTTON)
 async def show_or_create_profile(
     message: Message,
     state: FSMContext,

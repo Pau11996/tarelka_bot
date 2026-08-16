@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import statistics_keyboard
+from src.bot.keyboards.menus import STATS_BUTTON, statistics_keyboard
 from src.bot.services.charts import DailyCaloriesPoint, WeightPoint, render_calories_chart_png, render_weight_chart_png
 from src.bot.services.formatting import format_daily_balance, format_entry_list
 from src.bot.services.messaging import answer_ephemeral, schedule_bot_message, schedule_user_message
@@ -93,7 +93,7 @@ def _format_weight_caption(points: list[WeightPoint], current_weight: float) -> 
 
 
 @router.message(Command("stats"))
-@router.message(F.text == "📈 Статистика")
+@router.message(F.text == STATS_BUTTON)
 async def show_statistics_menu(
     message: Message,
     state: FSMContext,

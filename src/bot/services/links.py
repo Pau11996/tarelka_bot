@@ -2,6 +2,8 @@ import re
 
 from src.bot.config import settings
 
+SUPPORT_EMAIL = "help.4posts@gmail.com"
+
 _ACQUISITION_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
 _RESERVED_START_PAYLOADS = frozenset({"premium"})
 _MAX_ACQUISITION_SOURCE_LEN = 64
@@ -75,3 +77,26 @@ def feedback_welcome_note() -> str:
         "\n\n💬 Вопросы, идеи и баги — пишите в "
         f'<a href="{url}">чат поддержки</a>.'
     )
+
+
+def support_email_link() -> str:
+    return f"<code>{SUPPORT_EMAIL}</code>"
+
+
+def format_contacts() -> str:
+    feedback = feedback_chat_url()
+    channel = channel_url()
+    lines = ["Контакты ТАРЕЛКИ", ""]
+    if feedback:
+        lines.append(f'💬 Чат поддержки: <a href="{feedback}">открыть</a>.')
+    if channel:
+        lines.append(f'📢 Новости и советы: <a href="{channel}">канал ТАРЕЛКА</a>.')
+    lines.extend(
+        [
+            f"📧 Почта — возвраты, отдельные вопросы поддержки и идеи по улучшению: {support_email_link()}.",
+            "",
+            "По подписке и возвратам пишите на почту или в чат. "
+            "Telegram Support покупки этого бота не обрабатывает.",
+        ]
+    )
+    return "\n".join(lines)

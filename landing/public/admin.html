@@ -115,6 +115,44 @@
                 </div>
             </article>
 
+            <article class="admin-chart-card admin-broadcast-card">
+                <div>
+                    <h2>Рассылка</h2>
+                    <p class="admin-muted">Разовое сообщение в бота. Не удаляется автоматически. Для проверки сначала отправьте себе.</p>
+                </div>
+                <form class="admin-broadcast-form" id="broadcast-form">
+                    <label>
+                        <span>Текст</span>
+                        <textarea
+                            id="broadcast-text"
+                            name="text"
+                            rows="5"
+                            maxlength="4096"
+                            required
+                            placeholder="Короткое сообщение пользователям"
+                        ></textarea>
+                        <span class="admin-broadcast-counter" id="broadcast-counter">0 / 4096</span>
+                    </label>
+                    <fieldset class="admin-broadcast-audience">
+                        <legend>Кому отправить</legend>
+                        <label>
+                            <input type="radio" name="audience" value="me" checked>
+                            <span>Только мне (тест)</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="audience" value="subscribers">
+                            <span id="broadcast-subscribers-label">Подписчикам</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="audience" value="all">
+                            <span id="broadcast-all-label">Всем</span>
+                        </label>
+                    </fieldset>
+                    <button class="button button-primary" id="broadcast-submit" type="submit">Отправить</button>
+                    <p class="admin-broadcast-status" id="broadcast-status" role="status"></p>
+                </form>
+            </article>
+
             <p class="admin-error" id="dashboard-error" role="alert"></p>
         </section>
     </main>

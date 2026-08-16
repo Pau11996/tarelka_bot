@@ -9,12 +9,21 @@ import secrets
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai_analyzer.broadcast import (
+    TELEGRAM_MESSAGE_MAX_LENGTH,
+    BroadcastAudience,
+    BroadcastStatus,
+    broadcast_state,
+    list_broadcast_telegram_ids,
+    run_broadcast,
+    telegram_bot_token,
+)
 from src.db.models import AIAnalysis, AnalysisType, Payment, User
 from src.db.session import get_session
 
@@ -70,6 +79,19 @@ class AdminStatsResponse(BaseModel):
     users_chart: list[DailyUsersPoint]
     subscriptions_chart: list[DailySubscriptionsPoint]
     sources: list[AcquisitionSourcePoint] = []
+
+
+class BroadcastRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=TELEGRAM_MESSAGE_MAX_LENGTH)
+    audience: BroadcastAudience
+
+    @field_validator("text")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("text is blank")
+        return text
 
 
 def admin_username() -> str:
@@ -309,3 +331,34 @@ async def admin_stats(
     days: Annotated[int, Query(ge=1, le=MAX_STATS_DAYS)] = 30,
 ) -> AdminStatsResponse:
     return await collect_admin_stats(session, days=days)
+
+
+@router.get("/broadcast", response_model=BroadcastStatus, dependencies=[Depends(require_admin)])
+async def admin_broadcast_status() -> BroadcastStatus:
+    return broadcast_state.snapshot()
+
+
+@router.post("/broadcast", response_model=BroadcastStatus, dependencies=[Depends(require_admin)])
+async def admin_broadcast(
+    request: BroadcastRequest,
+    background_tasks: BackgroundTasks,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BroadcastStatus:
+    token = telegram_bot_token()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TELEGRAM_BOT_TOKEN is not configured",
+        )
+
+    async with broadcast_state.lock:
+        if broadcast_state.is_running:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Broadcast is already running",
+            )
+        telegram_ids = await list_broadcast_telegram_ids(session, request.audience)
+        snapshot = broadcast_state.begin(request.audience.value, len(telegram_ids))
+
+    background_tasks.add_task(run_broadcast, telegram_ids, request.text, token=token)
+    return snapshot

@@ -1,27 +1,22 @@
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import Message
 
-from src.bot.services.links import feedback_chat_url
+from src.bot.keyboards.menus import CONTACTS_BUTTON, contacts_keyboard
+from src.bot.services.links import format_contacts
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
 
 router = Router()
 
 
+@router.message(Command("contacts"))
 @router.message(Command("feedback"))
-async def show_feedback(message: Message, cleanup: MessageCleanupService) -> None:
-    url = feedback_chat_url()
-    if url is None:
-        await answer_ephemeral(message, cleanup, "Чат для обратной связи пока не настроен.")
-        return
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="💬 Написать в чат", url=url)]]
-    )
+@router.message(F.text == CONTACTS_BUTTON)
+async def show_contacts(message: Message, cleanup: MessageCleanupService) -> None:
     await answer_ephemeral(
         message,
         cleanup,
-        "Вопросы, идеи и предложения — в наш чат поддержки:",
-        reply_markup=keyboard,
+        format_contacts(),
+        reply_markup=contacts_keyboard(),
     )

@@ -1,17 +1,33 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from src.bot.config import settings
-from src.bot.services.links import feedback_chat_url
+from src.bot.services.links import channel_url, feedback_chat_url
 
 MAIN_MENU_ANCHOR = "Системное сообщение, бот работает корректно"
+TODAY_BUTTON = "📊 Сегодня"
+STATS_BUTTON = "📈 Статистика"
+FAVORITES_BUTTON = "⭐ Избранное"
+SUBSCRIPTION_BUTTON = "⭐ Подписка"
+PROFILE_BUTTON = "👤 Профиль"
+CONTACTS_BUTTON = "💬 Контакты"
+MENU_BUTTON_TEXTS = frozenset(
+    {
+        TODAY_BUTTON,
+        STATS_BUTTON,
+        FAVORITES_BUTTON,
+        SUBSCRIPTION_BUTTON,
+        PROFILE_BUTTON,
+        CONTACTS_BUTTON,
+    }
+)
 
 
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📊 Сегодня"), KeyboardButton(text="📈 Статистика")],
-            [KeyboardButton(text="⭐ Избранное"), KeyboardButton(text="⭐ Подписка")],
-            [KeyboardButton(text="👤 Профиль")],
+            [KeyboardButton(text=TODAY_BUTTON), KeyboardButton(text=STATS_BUTTON)],
+            [KeyboardButton(text=FAVORITES_BUTTON), KeyboardButton(text=SUBSCRIPTION_BUTTON)],
+            [KeyboardButton(text=PROFILE_BUTTON), KeyboardButton(text=CONTACTS_BUTTON)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -125,4 +141,17 @@ def profile_card_keyboard() -> InlineKeyboardMarkup:
     if url:
         rows.append([InlineKeyboardButton(text="💬 Вопросы и фидбек", url=url)])
 
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def contacts_keyboard() -> InlineKeyboardMarkup | None:
+    rows: list[list[InlineKeyboardButton]] = []
+    feedback = feedback_chat_url()
+    channel = channel_url()
+    if feedback:
+        rows.append([InlineKeyboardButton(text="💬 Написать в поддержку", url=feedback)])
+    if channel:
+        rows.append([InlineKeyboardButton(text="📢 Канал ТАРЕЛКА", url=channel)])
+    if not rows:
+        return None
     return InlineKeyboardMarkup(inline_keyboard=rows)

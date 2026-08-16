@@ -7,8 +7,8 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import subscription_keyboard
-from src.bot.services.links import feedback_chat_url
+from src.bot.keyboards.menus import SUBSCRIPTION_BUTTON, subscription_keyboard
+from src.bot.services.links import feedback_chat_url, support_email_link
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.request_limit import has_active_subscription
@@ -21,13 +21,15 @@ SUBSCRIPTION_PAYLOAD = "subscription:30d"
 
 def format_payment_support() -> str:
     url = feedback_chat_url()
-    base = (
-        "По вопросам оплаты, подписки и возвратов пишите в поддержку. "
-        "Telegram Support не обрабатывает покупки внутри этого бота."
-    )
+    lines = [
+        "По вопросам оплаты, подписки и возвратов пишите на почту "
+        f"{support_email_link()}.",
+        "Отдельные вопросы поддержки и идеи по улучшению — тоже на эту почту.",
+        "Telegram Support не обрабатывает покупки внутри этого бота.",
+    ]
     if url:
-        return f'{base}\n\nЧат поддержки: <a href="{url}">открыть</a>.'
-    return f"{base}\n\nЕсли чат поддержки не настроен, используйте команду /feedback."
+        lines.append(f'Чат поддержки: <a href="{url}">открыть</a>.')
+    return "\n".join(lines)
 
 
 def format_subscription_status(user) -> str:
@@ -60,7 +62,7 @@ async def show_subscription_screen(
 
 
 @router.message(Command("premium"))
-@router.message(F.text == "⭐ Подписка")
+@router.message(F.text == SUBSCRIPTION_BUTTON)
 async def show_subscription(
     message: Message,
     session,

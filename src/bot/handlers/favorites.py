@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.handlers.food import send_result_card
-from src.bot.keyboards.menus import favorites_keyboard, meal_card_keyboard
+from src.bot.keyboards.menus import FAVORITES_BUTTON, favorites_keyboard, meal_card_keyboard
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import (
     format_activity_result,
@@ -40,7 +40,7 @@ async def _update_meal_card_keyboard(
 
 
 @router.message(Command("favorites"))
-@router.message(F.text == "⭐ Избранное")
+@router.message(F.text == FAVORITES_BUTTON)
 async def show_favorites(
     message: Message,
     state: FSMContext,

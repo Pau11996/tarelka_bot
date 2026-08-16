@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import main_menu
+from src.bot.keyboards.menus import TODAY_BUTTON, main_menu
 from src.bot.services.formatting import format_daily_balance, format_entry_list
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -15,7 +15,7 @@ router = Router()
 
 
 @router.message(Command("today"))
-@router.message(F.text == "📊 Сегодня")
+@router.message(F.text == TODAY_BUTTON)
 async def show_today(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     await state.clear()
     repo = UserRepository(session)

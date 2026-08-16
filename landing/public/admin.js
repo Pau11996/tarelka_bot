@@ -15,6 +15,13 @@
     const usersChart = document.getElementById("users-chart");
     const subscriptionsChart = document.getElementById("subscriptions-chart");
     const sourcesBody = document.getElementById("sources-body");
+    const broadcastForm = document.getElementById("broadcast-form");
+    const broadcastText = document.getElementById("broadcast-text");
+    const broadcastCounter = document.getElementById("broadcast-counter");
+    const broadcastSubmit = document.getElementById("broadcast-submit");
+    const broadcastStatus = document.getElementById("broadcast-status");
+    const broadcastSubscribersLabel = document.getElementById("broadcast-subscribers-label");
+    const broadcastAllLabel = document.getElementById("broadcast-all-label");
 
     const numberFormatter = new Intl.NumberFormat("ru-RU");
     const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -22,6 +29,7 @@
         month: "2-digit",
     });
     let latestStats = null;
+    let broadcastPollTimer = null;
 
     function getToken() {
         return localStorage.getItem(tokenKey);
@@ -173,6 +181,123 @@
             value: (point) => point.subscriptions,
         });
         renderSources(data.sources || []);
+        updateBroadcastAudienceLabels(data);
+    }
+
+    function updateBroadcastAudienceLabels(data) {
+        const subscribers = numberFormatter.format(data.totals.active_subscriptions);
+        const users = numberFormatter.format(data.totals.users);
+        broadcastSubscribersLabel.textContent = `Подписчикам (${subscribers})`;
+        broadcastAllLabel.textContent = `Всем (${users})`;
+    }
+
+    function updateBroadcastCounter() {
+        broadcastCounter.textContent = `${broadcastText.value.length} / 4096`;
+    }
+
+    function setBroadcastStatus(message, kind) {
+        broadcastStatus.textContent = message || "";
+        broadcastStatus.classList.toggle("is-error", kind === "error");
+        broadcastStatus.classList.toggle("is-success", kind === "success");
+    }
+
+    function formatBroadcastStatus(data) {
+        const parts = [
+            `Доставлено: ${numberFormatter.format(data.sent)}`,
+            `заблокировали: ${numberFormatter.format(data.blocked)}`,
+            `ошибки: ${numberFormatter.format(data.failed)}`,
+        ];
+        if (data.status === "running") {
+            return `Отправка ${numberFormatter.format(data.sent + data.blocked + data.failed)} из ${numberFormatter.format(data.targeted)}. ${parts.join(", ")}.`;
+        }
+        if (data.status === "error") {
+            return data.error || "Рассылка остановилась с ошибкой.";
+        }
+        return `${parts.join(". ")}. Всего в выборке: ${numberFormatter.format(data.targeted)}.`;
+    }
+
+    function stopBroadcastPolling() {
+        if (broadcastPollTimer) {
+            clearTimeout(broadcastPollTimer);
+            broadcastPollTimer = null;
+        }
+    }
+
+    function setBroadcastBusy(isBusy) {
+        broadcastSubmit.disabled = isBusy;
+        broadcastText.disabled = isBusy;
+        broadcastForm.querySelectorAll("input[name='audience']").forEach((input) => {
+            input.disabled = isBusy;
+        });
+    }
+
+    async function fetchBroadcastStatus() {
+        const token = getToken();
+        if (!token) {
+            return null;
+        }
+        const response = await fetch("/admin/broadcast", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (response.status === 401) {
+            clearToken();
+            showLogin();
+            setError(loginError, "Сессия истекла. Войдите снова.");
+            return null;
+        }
+        if (!response.ok) {
+            throw new Error("Не удалось получить статус рассылки.");
+        }
+        return response.json();
+    }
+
+    function pollBroadcastStatus(delay) {
+        stopBroadcastPolling();
+        broadcastPollTimer = setTimeout(async () => {
+            try {
+                const data = await fetchBroadcastStatus();
+                if (!data) {
+                    setBroadcastBusy(false);
+                    return;
+                }
+                if (data.status === "running") {
+                    setBroadcastBusy(true);
+                    setBroadcastStatus(formatBroadcastStatus(data));
+                    pollBroadcastStatus(800);
+                    return;
+                }
+                setBroadcastBusy(false);
+                if (data.status === "error") {
+                    setBroadcastStatus(formatBroadcastStatus(data), "error");
+                    return;
+                }
+                if (data.status === "done") {
+                    setBroadcastStatus(formatBroadcastStatus(data), "success");
+                }
+            } catch (error) {
+                setBroadcastBusy(false);
+                setBroadcastStatus(error.message || "Не удалось получить статус рассылки.", "error");
+            }
+        }, delay || 400);
+    }
+
+    function selectedAudience() {
+        const checked = broadcastForm.querySelector("input[name='audience']:checked");
+        return checked ? checked.value : "me";
+    }
+
+    function confirmBroadcast(audience) {
+        if (audience === "me") {
+            return true;
+        }
+        const count = audience === "subscribers"
+            ? latestStats?.totals.active_subscriptions
+            : latestStats?.totals.users;
+        const label = audience === "subscribers" ? "подписчикам" : "всем пользователям";
+        const countText = typeof count === "number" ? ` (${numberFormatter.format(count)})` : "";
+        return window.confirm(`Отправить сообщение ${label}${countText}?`);
     }
 
     async function fetchStats() {
@@ -201,6 +326,17 @@
 
         renderStats(await response.json());
         showDashboard();
+        updateBroadcastCounter();
+        try {
+            const broadcast = await fetchBroadcastStatus();
+            if (broadcast && broadcast.status === "running") {
+                setBroadcastBusy(true);
+                setBroadcastStatus(formatBroadcastStatus(broadcast));
+                pollBroadcastStatus();
+            }
+        } catch (error) {
+            setBroadcastStatus(error.message || "Не удалось получить статус рассылки.", "error");
+        }
     }
 
     loginForm.addEventListener("submit", async (event) => {
@@ -229,8 +365,72 @@
     });
 
     logoutButton.addEventListener("click", () => {
+        stopBroadcastPolling();
+        setBroadcastBusy(false);
         clearToken();
         showLogin();
+    });
+
+    broadcastText.addEventListener("input", updateBroadcastCounter);
+
+    broadcastForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        const text = broadcastText.value.trim();
+        const audience = selectedAudience();
+        if (!text) {
+            setBroadcastStatus("Введите текст сообщения.", "error");
+            return;
+        }
+        if (!confirmBroadcast(audience)) {
+            return;
+        }
+
+        setBroadcastBusy(true);
+        setBroadcastStatus("Отправляем…");
+        try {
+            const response = await fetch("/admin/broadcast", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ text, audience }),
+            });
+
+            if (response.status === 401) {
+                clearToken();
+                showLogin();
+                setError(loginError, "Сессия истекла. Войдите снова.");
+                setBroadcastBusy(false);
+                return;
+            }
+            if (response.status === 409) {
+                setBroadcastStatus("Рассылка уже идёт. Ждём завершения.", "error");
+                pollBroadcastStatus();
+                return;
+            }
+            if (response.status === 503) {
+                setBroadcastBusy(false);
+                setBroadcastStatus("Бот-токен не задан на сервере анализатора.", "error");
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Не удалось запустить рассылку.");
+            }
+
+            const data = await response.json();
+            setBroadcastStatus(formatBroadcastStatus(data));
+            pollBroadcastStatus();
+        } catch (error) {
+            setBroadcastBusy(false);
+            setBroadcastStatus(error.message || "Не удалось запустить рассылку.", "error");
+        }
     });
 
     periodSelect.addEventListener("change", () => {

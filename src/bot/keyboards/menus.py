@@ -12,6 +12,7 @@ PROFILE_BUTTON = "👤 Профиль"
 CONTACTS_BUTTON = "⚙️ Контакты и настройки"
 LEGACY_INVITE_BUTTON = "🎁 Пригласить"
 LEGACY_CONTACTS_BUTTON = "💬 Контакты"
+LEGACY_SUBSCRIPTION_BUTTON = "⭐ Подписка"
 MENU_BUTTON_TEXTS = frozenset(
     {
         TODAY_BUTTON,
@@ -22,6 +23,7 @@ MENU_BUTTON_TEXTS = frozenset(
         CONTACTS_BUTTON,
         LEGACY_INVITE_BUTTON,
         LEGACY_CONTACTS_BUTTON,
+        LEGACY_SUBSCRIPTION_BUTTON,
     }
 )
 

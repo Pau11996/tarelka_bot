@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
-from src.bot.keyboards.menus import main_menu
+from src.bot.keyboards.menus import MAIN_MENU_ANCHOR, main_menu
 from src.bot.services.message_cleanup import MessageCleanupService
 
 
@@ -63,7 +63,11 @@ async def answer_ephemeral(
     if track_user:
         schedule_user_message(cleanup, message)
     sent = await message.answer(text, **kwargs)
-    schedule_bot_message(cleanup, sent)
+    # Reply keyboards must not ride on TTL-deleted messages — clients drop the menu.
+    if _reply_markup_has_main_menu(kwargs.get("reply_markup")):
+        cleanup.remember_menu_message(sent.chat.id, sent.message_id)
+    else:
+        schedule_bot_message(cleanup, sent)
     return sent
 
 
@@ -93,13 +97,26 @@ async def answer_persistent_with_menu(
     **kwargs,
 ) -> Message:
     removed = await drop_cached_reply_keyboard(message)
-    kwargs["reply_markup"] = main_menu()
-    sent = await answer_persistent(message, text, cleanup=cleanup, **kwargs)
     try:
-        await removed.delete()
+        kwargs["reply_markup"] = main_menu()
+        return await answer_persistent(message, text, cleanup=cleanup, **kwargs)
     except Exception:
-        pass
-    return sent
+        # Never leave the chat without a reply keyboard after an explicit remove.
+        try:
+            await answer_persistent(
+                message,
+                MAIN_MENU_ANCHOR,
+                cleanup=cleanup,
+                reply_markup=main_menu(),
+            )
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            await removed.delete()
+        except Exception:
+            pass
 
 
 async def answer_photo_ephemeral(

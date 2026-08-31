@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from src.bot.keyboards.menus import CONTACTS_BUTTON, LEGACY_CONTACTS_BUTTON, main_menu
+from src.bot.keyboards.menus import CONTACTS_BUTTON, LEGACY_CONTACTS_BUTTON, contacts_keyboard
 from src.bot.services.links import format_contacts
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -19,5 +19,5 @@ async def show_contacts(message: Message, cleanup: MessageCleanupService) -> Non
         message,
         cleanup,
         format_contacts(),
-        reply_markup=main_menu(),
+        reply_markup=contacts_keyboard(),
     )

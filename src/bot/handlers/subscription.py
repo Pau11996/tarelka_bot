@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import SUBSCRIPTION_BUTTON, subscription_keyboard
+from src.bot.keyboards.menus import LEGACY_SUBSCRIPTION_BUTTON, SUBSCRIPTION_BUTTON, subscription_keyboard
 from src.bot.services.links import feedback_chat_url, support_email_link
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -64,6 +64,7 @@ async def show_subscription_screen(
 
 @router.message(Command("premium"))
 @router.message(F.text == SUBSCRIPTION_BUTTON)
+@router.message(F.text == LEGACY_SUBSCRIPTION_BUTTON)
 async def show_subscription(
     message: Message,
     session,

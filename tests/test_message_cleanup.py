@@ -78,3 +78,28 @@ async def test_answer_persistent_with_menu_drops_cached_keyboard() -> None:
     assert message.answer.await_args_list[1].args[0] == "hello"
     removed.delete.assert_awaited_once()
     assert cleanup._menu_message_ids[123] == 77
+
+
+@pytest.mark.asyncio
+async def test_answer_ephemeral_keeps_reply_keyboard_message() -> None:
+    from src.bot.keyboards.menus import main_menu
+    from src.bot.services.messaging import answer_ephemeral
+
+    sent = AsyncMock()
+    sent.chat.id = 55
+    sent.message_id = 88
+    message = AsyncMock()
+    message.chat.id = 55
+    message.message_id = 10
+    message.bot = AsyncMock()
+    message.answer = AsyncMock(return_value=sent)
+    cleanup = MessageCleanupService(ttl_seconds=60)
+
+    result = await answer_ephemeral(message, cleanup, "today", reply_markup=main_menu())
+
+    assert result is sent
+    assert cleanup._menu_message_ids[55] == 88
+    # User message may still be scheduled; the menu-bearing bot reply must not be deleted.
+    assert len(cleanup._tasks) == 1
+    cleanup.schedule(message.bot, 55, 88)
+    assert len(cleanup._tasks) == 1

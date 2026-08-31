@@ -38,13 +38,14 @@ def format_subscription_status(user) -> str:
         return (
             f"Подписка активна до {until}.\n\n"
             f"Доступно {settings.subscription_daily_request_limit} запросов в день "
-            "(фото, текст и исправления)."
+            "(фото, голос, текст и исправления)."
         )
     return (
         f"Подписка не активна.\n\n"
         f"Бесплатно: {settings.daily_request_limit} запросов в день.\n"
         f"С подпиской: {settings.subscription_daily_request_limit} запросов в день "
-        f"на {settings.subscription_duration_days} дней за {settings.subscription_price_stars}⭐."
+        f"на {settings.subscription_duration_days} дней за {settings.subscription_price_stars}⭐.\n"
+        "Автоматического продления нет."
     )
 
 

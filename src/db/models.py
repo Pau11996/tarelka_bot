@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum as PyEnum
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -77,14 +78,38 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
     acquisition_source: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    reengagement_last_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
+    referral_code: Mapped[str | None] = mapped_column(
+        String(12), nullable=True, unique=True, index=True
+    )
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    referral_reward_granted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    bonus_requests: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profile: Mapped[Profile | None] = relationship(back_populates="user", uselist=False)
     entries: Mapped[list[DayEntry]] = relationship(back_populates="user")
     favorites: Mapped[list[FavoriteMeal]] = relationship(back_populates="user")
     daily_request_usage: Mapped[list[DailyRequestUsage]] = relationship(back_populates="user")
+    daily_activity: Mapped[list[DailyUserActivity]] = relationship(back_populates="user")
     weight_history: Mapped[list[WeightHistory]] = relationship(back_populates="user")
     payments: Mapped[list[Payment]] = relationship(back_populates="user")
+    referrer: Mapped[User | None] = relationship(
+        remote_side=[id],
+        foreign_keys=[referred_by_user_id],
+    )
 
 
 class Profile(Base):
@@ -192,6 +217,28 @@ class DailyRequestUsage(Base):
     user: Mapped[User] = relationship(back_populates="daily_request_usage")
 
 
+class DailyUserActivity(Base):
+    __tablename__ = "daily_user_activity"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "activity_date",
+            name="uq_daily_user_activity_user_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    activity_date: Mapped[date] = mapped_column(Date, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="daily_activity")
+
+
 class FavoriteMeal(Base):
     __tablename__ = "favorite_meals"
 
@@ -215,3 +262,20 @@ class FavoriteMeal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="favorites")
+
+
+class MarketingCampaign(Base):
+    __tablename__ = "marketing_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    spend_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    reach: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

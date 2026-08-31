@@ -55,3 +55,26 @@ async def test_message_cleanup_refreshes_menu_after_ephemeral_delete() -> None:
     bot.delete_message.assert_awaited_once_with(chat_id=123, message_id=456)
     bot.send_message.assert_awaited_once()
     assert service._menu_message_ids[123] == 999
+
+
+@pytest.mark.asyncio
+async def test_answer_persistent_with_menu_drops_cached_keyboard() -> None:
+    from aiogram.types import ReplyKeyboardRemove
+
+    from src.bot.services.messaging import answer_persistent_with_menu
+
+    removed = AsyncMock()
+    sent = AsyncMock()
+    sent.chat.id = 123
+    sent.message_id = 77
+    message = AsyncMock()
+    message.answer = AsyncMock(side_effect=[removed, sent])
+    cleanup = MessageCleanupService(ttl_seconds=60)
+
+    result = await answer_persistent_with_menu(message, "hello", cleanup=cleanup)
+
+    assert result is sent
+    assert isinstance(message.answer.await_args_list[0].kwargs["reply_markup"], ReplyKeyboardRemove)
+    assert message.answer.await_args_list[1].args[0] == "hello"
+    removed.delete.assert_awaited_once()
+    assert cleanup._menu_message_ids[123] == 77

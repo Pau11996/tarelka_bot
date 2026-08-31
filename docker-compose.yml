@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wellhealth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wellhealth}
+      POSTGRES_DB: ${POSTGRES_DB:-wellhealth}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wellhealth} -d ${POSTGRES_DB:-wellhealth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   ai_analyzer:
     build:
       context: .
@@ -9,26 +25,31 @@ services:
       API: ${API:-false}
       DATABASE_URL: ${DATABASE_URL}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_TOKEN_SECRET: ${ADMIN_TOKEN_SECRET:-}
+      AI_ESTIMATED_COST_USD_PER_ANALYSIS: ${AI_ESTIMATED_COST_USD_PER_ANALYSIS:-0}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_TIMEOUT: ${OPENAI_TIMEOUT:-120}
+      VOSK_MODEL_PATH: ${VOSK_MODEL_PATH:-/opt/vosk/model}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
       CURSOR_MODEL: ${CURSOR_MODEL:-cursor-grok-4.5-high-fast}
       CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,ai_analyzer,bot}
       NODE_USE_ENV_PROXY: ${NODE_USE_ENV_PROXY:-1}
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     volumes:
       - cursor_data:/root/.config/cursor
-      - ai_uploads:/tmp/uploads
       - ./logs:/opt/logs
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -42,6 +63,8 @@ services:
     env_file:
       - .env
     depends_on:
+      postgres:
+        condition: service_healthy
       ai_analyzer:
         condition: service_healthy
     environment:
@@ -53,6 +76,13 @@ services:
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Europe/Moscow}
       MESSAGE_CLEANUP_TTL_SECONDS: ${MESSAGE_CLEANUP_TTL_SECONDS:-7200}
       DAILY_REQUEST_LIMIT: ${DAILY_REQUEST_LIMIT:-6}
+      SUBSCRIPTION_DAILY_REQUEST_LIMIT: ${SUBSCRIPTION_DAILY_REQUEST_LIMIT:-30}
+      SUBSCRIPTION_PRICE_STARS: ${SUBSCRIPTION_PRICE_STARS:-150}
+      SUBSCRIPTION_DURATION_DAYS: ${SUBSCRIPTION_DURATION_DAYS:-30}
+      REFERRAL_BONUS_REQUESTS: ${REFERRAL_BONUS_REQUESTS:-3}
+      REENGAGEMENT_ENABLED: ${REENGAGEMENT_ENABLED:-false}
+      REENGAGEMENT_INACTIVITY_DAYS: ${REENGAGEMENT_INACTIVITY_DAYS:-3}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help.4posts@gmail.com}
     volumes:
       - ./logs:/opt/logs
     restart: unless-stopped
@@ -70,6 +100,12 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
       TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
       LANDING_TITLE: ${LANDING_TITLE:-ТАРЕЛКА}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help.4posts@gmail.com}
+      LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-Администратор сервиса ТАРЕЛКА}
+      FREE_DAILY_LIMIT: ${DAILY_REQUEST_LIMIT:-6}
+      SUBSCRIPTION_DAILY_LIMIT: ${SUBSCRIPTION_DAILY_REQUEST_LIMIT:-30}
+      SUBSCRIPTION_PRICE_STARS: ${SUBSCRIPTION_PRICE_STARS:-150}
+      SUBSCRIPTION_DURATION_DAYS: ${SUBSCRIPTION_DURATION_DAYS:-30}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -78,8 +114,8 @@ services:
       retries: 3
 
 volumes:
+  postgres_data:
   cursor_data:
-  ai_uploads:
 
 networks:
   default:

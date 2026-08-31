@@ -34,7 +34,12 @@ async def _start_profile_form(
     cleanup: MessageCleanupService,
 ) -> None:
     await state.set_state(ProfileStates.weight)
-    await answer_ephemeral(message, cleanup, "Введите ваш вес в кг, например: 75", track_user=False)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        "Шаг 1 из 6 · Вес\nВведите ваш вес в кг, например: 75",
+        track_user=False,
+    )
 
 
 @router.message(Command("profile"))
@@ -71,7 +76,7 @@ async def edit_profile(callback: CallbackQuery, state: FSMContext, cleanup: Mess
     await edit_ephemeral(
         callback,
         cleanup,
-        "Редактируем профиль.\nВведите ваш вес в кг, например: 75",
+        "Редактируем профиль.\n\nШаг 1 из 6 · Вес\nВведите ваш вес в кг, например: 75",
     )
     await callback.answer()
 
@@ -224,7 +229,12 @@ async def profile_weight(message: Message, state: FSMContext, cleanup: MessageCl
     schedule_user_message(cleanup, message)
     await state.update_data(weight_kg=weight)
     await state.set_state(ProfileStates.height)
-    await answer_ephemeral(message, cleanup, "Введите ваш рост в см, например: 178", track_user=False)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        "Шаг 2 из 6 · Рост\nВведите ваш рост в см, например: 178",
+        track_user=False,
+    )
 
 
 @router.message(ProfileStates.height)
@@ -240,7 +250,12 @@ async def profile_height(message: Message, state: FSMContext, cleanup: MessageCl
     schedule_user_message(cleanup, message)
     await state.update_data(height_cm=height)
     await state.set_state(ProfileStates.age)
-    await answer_ephemeral(message, cleanup, "Введите ваш возраст, например: 30", track_user=False)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        "Шаг 3 из 6 · Возраст\nВведите ваш возраст, например: 30",
+        track_user=False,
+    )
 
 
 @router.message(ProfileStates.age)
@@ -256,7 +271,13 @@ async def profile_age(message: Message, state: FSMContext, cleanup: MessageClean
     schedule_user_message(cleanup, message)
     await state.update_data(age=age)
     await state.set_state(ProfileStates.sex)
-    await answer_ephemeral(message, cleanup, "Выберите пол:", reply_markup=sex_keyboard(), track_user=False)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        "Шаг 4 из 6 · Пол\nВыберите вариант:",
+        reply_markup=sex_keyboard(),
+        track_user=False,
+    )
 
 
 @router.callback_query(ProfileStates.sex, F.data.startswith("sex:"))
@@ -264,7 +285,12 @@ async def profile_sex(callback: CallbackQuery, state: FSMContext, cleanup: Messa
     sex = Sex(callback.data.split(":")[1])
     await state.update_data(sex=sex.value)
     await state.set_state(ProfileStates.goal)
-    await edit_ephemeral(callback, cleanup, "Выберите цель:", reply_markup=goal_keyboard())
+    await edit_ephemeral(
+        callback,
+        cleanup,
+        "Шаг 5 из 6 · Цель\nВыберите основную цель:",
+        reply_markup=goal_keyboard(),
+    )
     await callback.answer()
 
 
@@ -273,7 +299,12 @@ async def profile_goal(callback: CallbackQuery, state: FSMContext, cleanup: Mess
     goal = Goal(callback.data.split(":")[1])
     await state.update_data(goal=goal.value)
     await state.set_state(ProfileStates.activity_level)
-    await edit_ephemeral(callback, cleanup, "Выберите уровень активности:", reply_markup=activity_keyboard())
+    await edit_ephemeral(
+        callback,
+        cleanup,
+        "Шаг 6 из 6 · Активность\nВыберите обычный уровень активности:",
+        reply_markup=activity_keyboard(),
+    )
     await callback.answer()
 
 
@@ -327,7 +358,8 @@ async def profile_activity(
     )
     await answer_persistent(
         callback.message,
-        "Можно отправлять фото еды или описание блюда.",
+        "Готово. Отправьте первое фото еды — бот примерно оценит калории и БЖУ "
+        "и покажет остаток на день. Также можно использовать голос или текст.",
         cleanup=cleanup,
         reply_markup=main_menu(),
     )

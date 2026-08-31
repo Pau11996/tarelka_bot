@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
     AIAnalysis,
     AnalysisType,
     DailyRequestUsage,
+    DailyUserActivity,
     DayEntry,
     EntryType,
     FavoriteMeal,
+    MarketingCampaign,
     Payment,
     Profile,
     User,
@@ -34,6 +39,37 @@ class UserRepository:
             await self.session.refresh(user)
         return user
 
+    async def record_user_activity(
+        self,
+        telegram_id: int,
+        timezone_name: str,
+        *,
+        now: datetime | None = None,
+    ) -> User:
+        current = now or datetime.now(timezone.utc)
+        user = await self.get_or_create_user(telegram_id, timezone_name)
+        user.last_active_at = current
+        try:
+            activity_date = current.astimezone(ZoneInfo(user.timezone)).date()
+        except ZoneInfoNotFoundError:
+            activity_date = current.date()
+        await self.session.execute(
+            pg_insert(DailyUserActivity)
+            .values(
+                user_id=user.id,
+                activity_date=activity_date,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    DailyUserActivity.user_id,
+                    DailyUserActivity.activity_date,
+                ]
+            )
+        )
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
     async def set_acquisition_source_if_empty(self, user: User, source: str) -> bool:
         """First-touch: set acquisition_source only when it is still empty."""
         if user.acquisition_source:
@@ -41,6 +77,108 @@ class UserRepository:
         user.acquisition_source = source
         await self.session.commit()
         await self.session.refresh(user)
+        return True
+
+    async def set_notifications_enabled(self, user: User, enabled: bool) -> User:
+        user.notifications_enabled = enabled
+        if enabled:
+            user.reengagement_last_sent_at = None
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
+    async def delete_user(self, user: User) -> None:
+        await self.session.delete(user)
+        await self.session.commit()
+
+    async def ensure_referral_code(self, user: User) -> str:
+        if user.referral_code:
+            return user.referral_code
+
+        for _ in range(10):
+            candidate = secrets.token_hex(5)
+            result = await self.session.execute(
+                select(User.id).where(User.referral_code == candidate)
+            )
+            if result.scalar_one_or_none() is None:
+                user.referral_code = candidate
+                await self.session.commit()
+                await self.session.refresh(user)
+                return candidate
+        raise RuntimeError("Could not generate a unique referral code")
+
+    async def set_referrer_if_eligible(
+        self,
+        user: User,
+        referral_code: str,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        if user.referred_by_user_id is not None or user.referral_reward_granted_at is not None:
+            return False
+
+        current = now or datetime.now(timezone.utc)
+        created_at = user.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if created_at < current - timedelta(days=1):
+            return False
+
+        result = await self.session.execute(
+            select(User).where(User.referral_code == referral_code)
+        )
+        referrer = result.scalar_one_or_none()
+        if referrer is None or referrer.id == user.id:
+            return False
+
+        user.referred_by_user_id = referrer.id
+        await self.session.commit()
+        await self.session.refresh(user)
+        return True
+
+    async def grant_referral_reward(
+        self,
+        user_id: int,
+        *,
+        bonus_requests: int,
+        now: datetime | None = None,
+    ) -> User | None:
+        result = await self.session.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )
+        referred_user = result.scalar_one_or_none()
+        if (
+            referred_user is None
+            or referred_user.referred_by_user_id is None
+            or referred_user.referral_reward_granted_at is not None
+        ):
+            return None
+
+        referrer_result = await self.session.execute(
+            select(User)
+            .where(User.id == referred_user.referred_by_user_id)
+            .with_for_update()
+        )
+        referrer = referrer_result.scalar_one_or_none()
+        if referrer is None:
+            return None
+
+        referrer.bonus_requests = int(referrer.bonus_requests or 0) + max(0, bonus_requests)
+        referred_user.referral_reward_granted_at = now or datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(referrer)
+        return referrer
+
+    async def try_consume_bonus_request(self, user_id: int) -> bool:
+        result = await self.session.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )
+        user = result.scalar_one_or_none()
+        if user is None or int(user.bonus_requests or 0) <= 0:
+            await self.session.commit()
+            return False
+        user.bonus_requests -= 1
+        await self.session.commit()
         return True
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
@@ -343,3 +481,71 @@ class UserRepository:
         await self.session.commit()
         await self.session.refresh(user)
         return user
+
+    async def get_users_needing_reengagement(
+        self,
+        *,
+        now: datetime | None = None,
+        inactivity_days: int = 3,
+    ) -> list[User]:
+        current = now or datetime.now(timezone.utc)
+        inactive_before = current - timedelta(days=max(1, inactivity_days))
+        has_entry = (
+            select(DayEntry.id)
+            .where(DayEntry.user_id == User.id)
+            .correlate(User)
+            .exists()
+        )
+        result = await self.session.execute(
+            select(User).where(
+                User.notifications_enabled.is_(True),
+                User.last_active_at <= inactive_before,
+                has_entry,
+                or_(
+                    User.reengagement_last_sent_at.is_(None),
+                    User.reengagement_last_sent_at < User.last_active_at,
+                ),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def mark_reengagement_sent(
+        self,
+        user: User,
+        *,
+        now: datetime | None = None,
+    ) -> User:
+        user.reengagement_last_sent_at = now or datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
+    async def list_marketing_campaigns(self) -> list[MarketingCampaign]:
+        result = await self.session.execute(
+            select(MarketingCampaign).order_by(MarketingCampaign.updated_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def upsert_marketing_campaign(
+        self,
+        *,
+        source: str,
+        label: str | None,
+        spend_usd: float,
+        reach: int,
+        notes: str | None,
+    ) -> MarketingCampaign:
+        result = await self.session.execute(
+            select(MarketingCampaign).where(MarketingCampaign.source == source)
+        )
+        campaign = result.scalar_one_or_none()
+        if campaign is None:
+            campaign = MarketingCampaign(source=source)
+            self.session.add(campaign)
+        campaign.label = label
+        campaign.spend_usd = spend_usd
+        campaign.reach = reach
+        campaign.notes = notes
+        await self.session.commit()
+        await self.session.refresh(campaign)
+        return campaign

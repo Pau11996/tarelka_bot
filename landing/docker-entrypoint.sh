@@ -3,6 +3,12 @@ set -eu
 
 : "${TELEGRAM_BOT_USERNAME:=taarelka_bot}"
 : "${LANDING_TITLE:=ТАРЕЛКА}"
+: "${SUPPORT_EMAIL:=help.4posts@gmail.com}"
+: "${LEGAL_OPERATOR_NAME:=Администратор сервиса ТАРЕЛКА}"
+: "${FREE_DAILY_LIMIT:=6}"
+: "${SUBSCRIPTION_DAILY_LIMIT:=30}"
+: "${SUBSCRIPTION_PRICE_STARS:=150}"
+: "${SUBSCRIPTION_DURATION_DAYS:=30}"
 
 : "${TELEGRAM_FEEDBACK_CHAT:=}"
 
@@ -20,10 +26,25 @@ else
     FEEDBACK_FAQ_HTML=""
 fi
 
-export TELEGRAM_BOT_USERNAME LANDING_TITLE FEEDBACK_LINK_HTML FEEDBACK_NAV_HTML FEEDBACK_FAQ_HTML
+export TELEGRAM_BOT_USERNAME LANDING_TITLE SUPPORT_EMAIL LEGAL_OPERATOR_NAME
+export FREE_DAILY_LIMIT SUBSCRIPTION_DAILY_LIMIT SUBSCRIPTION_PRICE_STARS SUBSCRIPTION_DURATION_DAYS
+export FEEDBACK_LINK_HTML FEEDBACK_NAV_HTML FEEDBACK_FAQ_HTML
 
-envsubst '${TELEGRAM_BOT_USERNAME} ${LANDING_TITLE} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML}' \
+envsubst '${TELEGRAM_BOT_USERNAME} ${LANDING_TITLE} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML}' \
     < /usr/share/nginx/html/index.template.html \
     > /usr/share/nginx/html/index.html
+
+envsubst '${LANDING_TITLE} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME}' \
+    < /usr/share/nginx/html/privacy.template.html \
+    > /usr/share/nginx/html/privacy.html
+
+envsubst '${LANDING_TITLE} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS}' \
+    < /usr/share/nginx/html/terms.template.html \
+    > /usr/share/nginx/html/terms.html
+
+envsubst '${TELEGRAM_BOT_USERNAME} ${FREE_DAILY_LIMIT}' \
+    < /usr/share/nginx/html/admin.html \
+    > /tmp/admin.html
+mv /tmp/admin.html /usr/share/nginx/html/admin.html
 
 exec nginx -g 'daemon off;'

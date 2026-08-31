@@ -9,9 +9,23 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.bot.config import settings
 from src.shared.logging_config import setup_logging
-from src.bot.handlers import correction, daily, favorites, feedback, food, profile, start, statistics, subscription
+from src.bot.handlers import (
+    correction,
+    daily,
+    data_management,
+    favorites,
+    feedback,
+    food,
+    profile,
+    referrals,
+    start,
+    statistics,
+    subscription,
+)
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.reengagement import run_reengagement_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
+from src.db.repository import UserRepository
 from src.db.session import async_session_factory
 
 logger = logging.getLogger(__name__)
@@ -29,6 +43,13 @@ class DbSessionMiddleware(BaseMiddleware):
     ) -> Any:
         async with self.session_factory() as session:
             data["session"] = session
+            telegram_user = data.get("event_from_user")
+            if telegram_user is not None and not telegram_user.is_bot:
+                repo = UserRepository(session)
+                await repo.record_user_activity(
+                    telegram_user.id,
+                    settings.default_timezone,
+                )
             return await handler(event, data)
 
 
@@ -55,6 +76,8 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(start.router)
     dp.include_router(profile.router)
     dp.include_router(subscription.router)
+    dp.include_router(data_management.router)
+    dp.include_router(referrals.router)
     dp.include_router(feedback.router)
     dp.include_router(daily.router)
     dp.include_router(statistics.router)
@@ -76,6 +99,8 @@ async def main() -> None:
     dp = await create_dispatcher()
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
     asyncio.create_task(run_subscription_reminder_loop(bot))
+    if settings.reengagement_enabled:
+        asyncio.create_task(run_reengagement_loop(bot))
     await dp.start_polling(bot)
 
 

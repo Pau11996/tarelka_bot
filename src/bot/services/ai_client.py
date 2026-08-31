@@ -57,3 +57,16 @@ class AIAnalyzerClient:
             response.raise_for_status()
             payload = response.json()
             return payload["raw_response"], AnalysisResult.model_validate(payload["parsed"])
+
+    async def transcribe(
+        self,
+        *,
+        audio_bytes: bytes,
+        filename: str = "voice.ogg",
+    ) -> str:
+        files = {"audio": (filename, audio_bytes, "audio/ogg")}
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(f"{self.base_url}/transcribe", files=files)
+            response.raise_for_status()
+            data = response.json()
+            return str(data["text"]).strip()

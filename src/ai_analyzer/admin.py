@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import hmac
+import io
 import json
 import os
 import secrets
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Date, cast, func, select
@@ -24,11 +26,21 @@ from src.ai_analyzer.broadcast import (
     run_broadcast,
     telegram_bot_token,
 )
-from src.db.models import AIAnalysis, AnalysisType, Payment, User
+from src.bot.services.links import normalize_acquisition_source
+from src.db.models import (
+    AIAnalysis,
+    AnalysisType,
+    DailyUserActivity,
+    MarketingCampaign,
+    Payment,
+    Profile,
+    User,
+)
+from src.db.repository import UserRepository
 from src.db.session import get_session
 
 DEFAULT_ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin"
+DEFAULT_ADMIN_PASSWORD = ""
 DEFAULT_TOKEN_TTL_SECONDS = 12 * 60 * 60
 MAX_STATS_DAYS = 365
 DIRECT_SOURCE_LABEL = "direct"
@@ -50,8 +62,12 @@ class AdminLoginResponse(BaseModel):
 
 class AdminTotals(BaseModel):
     users: int
+    active_users: int
+    analyses: int
     active_subscriptions: int
     stars: int
+    estimated_ai_cost_usd: float
+    estimated_ai_cost_per_active_user_usd: float | None
 
 
 class DailyUsersPoint(BaseModel):
@@ -68,9 +84,36 @@ class DailySubscriptionsPoint(BaseModel):
 class AcquisitionSourcePoint(BaseModel):
     source: str
     users: int
+    profiles: int
+    activated: int
+    activated_24h: int
     with_photo: int
     photo_24h: int
+    d1_users: int
+    d7_users: int
+    paying_users: int
+    payments: int
+    stars: int
     conversion_pct: float
+    d1_pct: float
+    d7_pct: float
+    payment_conversion_pct: float
+    spend_usd: float = 0.0
+    reach: int = 0
+    cost_per_start_usd: float | None = None
+    cost_per_activation_usd: float | None = None
+    cost_per_paying_user_usd: float | None = None
+
+
+class MarketingCampaignRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    spend_usd: float = Field(default=0.0, ge=0)
+    reach: int = Field(default=0, ge=0)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class MarketingCampaignResponse(MarketingCampaignRequest):
+    source: str
 
 
 class AdminStatsResponse(BaseModel):
@@ -109,6 +152,14 @@ def token_ttl_seconds() -> int:
     except ValueError:
         return DEFAULT_TOKEN_TTL_SECONDS
     return max(60, value)
+
+
+def estimated_ai_cost_per_analysis() -> float:
+    raw_value = os.environ.get("AI_ESTIMATED_COST_USD_PER_ANALYSIS", "0")
+    try:
+        return max(0.0, float(raw_value))
+    except ValueError:
+        return 0.0
 
 
 def _token_secret() -> str:
@@ -172,9 +223,12 @@ def verify_admin_token(token: str, now: datetime | None = None) -> bool:
 
 
 def _check_admin_credentials(username: str, password: str) -> bool:
+    expected_password = admin_password()
+    if not expected_password or expected_password == "admin":
+        return False
     return secrets.compare_digest(username, admin_username()) and secrets.compare_digest(
         password,
-        admin_password(),
+        expected_password,
     )
 
 
@@ -224,6 +278,14 @@ async def collect_admin_stats(
         select(func.count(User.id)).where(User.subscription_until > current)
     )
     total_stars = await session.scalar(select(func.coalesce(func.sum(Payment.stars_amount), 0)))
+    active_users = await session.scalar(
+        select(func.count(func.distinct(DailyUserActivity.user_id))).where(
+            DailyUserActivity.activity_date >= start_day
+        )
+    )
+    analyses_count = await session.scalar(
+        select(func.count(AIAnalysis.id)).where(AIAnalysis.created_at >= start_at)
+    )
 
     user_day = cast(User.created_at, Date).label("day")
     user_rows = await session.execute(
@@ -258,6 +320,31 @@ async def collect_admin_stats(
         )
 
     source_key = func.coalesce(User.acquisition_source, DIRECT_SOURCE_LABEL).label("source")
+    profile_exists = (
+        select(Profile.id)
+        .where(Profile.user_id == User.id)
+        .correlate(User)
+        .exists()
+    )
+    analysis_exists = (
+        select(AIAnalysis.id)
+        .where(
+            AIAnalysis.user_id == User.id,
+            AIAnalysis.analysis_type != AnalysisType.CORRECTION,
+        )
+        .correlate(User)
+        .exists()
+    )
+    analysis_24h_exists = (
+        select(AIAnalysis.id)
+        .where(
+            AIAnalysis.user_id == User.id,
+            AIAnalysis.analysis_type != AnalysisType.CORRECTION,
+            AIAnalysis.created_at <= User.created_at + timedelta(hours=24),
+        )
+        .correlate(User)
+        .exists()
+    )
     photo_exists = (
         select(AIAnalysis.id)
         .where(
@@ -277,40 +364,188 @@ async def collect_admin_stats(
         .correlate(User)
         .exists()
     )
+    signup_day = cast(func.timezone(User.timezone, User.created_at), Date)
+    d1_exists = (
+        select(DailyUserActivity.id)
+        .where(
+            DailyUserActivity.user_id == User.id,
+            DailyUserActivity.activity_date == signup_day + 1,
+        )
+        .correlate(User)
+        .exists()
+    )
+    d7_exists = (
+        select(DailyUserActivity.id)
+        .where(
+            DailyUserActivity.user_id == User.id,
+            DailyUserActivity.activity_date >= signup_day + 5,
+            DailyUserActivity.activity_date <= signup_day + 8,
+        )
+        .correlate(User)
+        .exists()
+    )
     source_rows = await session.execute(
         select(
             source_key,
             func.count(User.id),
+            func.count(User.id).filter(profile_exists),
+            func.count(User.id).filter(analysis_exists),
+            func.count(User.id).filter(analysis_24h_exists),
             func.count(User.id).filter(photo_exists),
             func.count(User.id).filter(photo_24h_exists),
+            func.count(User.id).filter(analysis_24h_exists, d1_exists),
+            func.count(User.id).filter(analysis_24h_exists, d7_exists),
         )
         .where(User.created_at >= start_at)
         .group_by(source_key)
         .order_by(func.count(User.id).desc(), source_key.asc())
     )
 
+    source_payment_rows = await session.execute(
+        select(
+            source_key,
+            func.count(func.distinct(Payment.user_id)),
+            func.count(Payment.id),
+            func.coalesce(func.sum(Payment.stars_amount), 0),
+        )
+        .select_from(User)
+        .join(Payment, Payment.user_id == User.id)
+        .where(User.created_at >= start_at)
+        .group_by(source_key)
+    )
+    payment_by_source = {
+        str(source or DIRECT_SOURCE_LABEL): (
+            int(paying_users or 0),
+            int(payments or 0),
+            int(stars or 0),
+        )
+        for source, paying_users, payments, stars in source_payment_rows.all()
+    }
+
+    campaign_rows = await session.execute(
+        select(
+            MarketingCampaign.source,
+            MarketingCampaign.spend_usd,
+            MarketingCampaign.reach,
+        )
+    )
+    campaign_by_source = {
+        str(source): (float(spend_usd or 0), int(reach or 0))
+        for source, spend_usd, reach in campaign_rows.all()
+    }
+
+    def percentage(numerator: int, denominator: int) -> float:
+        return round((numerator / denominator) * 100, 1) if denominator else 0.0
+
     sources: list[AcquisitionSourcePoint] = []
-    for source, users_count, with_photo, photo_24h in source_rows.all():
+    seen_sources: set[str] = set()
+    for (
+        source,
+        users_count,
+        profiles,
+        activated,
+        activated_24h,
+        with_photo,
+        photo_24h,
+        d1_users,
+        d7_users,
+    ) in source_rows.all():
+        source_value = str(source or DIRECT_SOURCE_LABEL)
+        seen_sources.add(source_value)
         users_value = int(users_count or 0)
+        profiles_value = int(profiles or 0)
+        activated_value = int(activated or 0)
+        activated_24h_value = int(activated_24h or 0)
         with_photo_value = int(with_photo or 0)
         photo_24h_value = int(photo_24h or 0)
-        conversion = round((with_photo_value / users_value) * 100, 1) if users_value else 0.0
+        d1_value = int(d1_users or 0)
+        d7_value = int(d7_users or 0)
+        paying_users, payments, stars = payment_by_source.get(source_value, (0, 0, 0))
+        spend_usd, reach = campaign_by_source.get(source_value, (0.0, 0))
         sources.append(
             AcquisitionSourcePoint(
-                source=str(source or DIRECT_SOURCE_LABEL),
+                source=source_value,
                 users=users_value,
+                profiles=profiles_value,
+                activated=activated_value,
+                activated_24h=activated_24h_value,
                 with_photo=with_photo_value,
                 photo_24h=photo_24h_value,
-                conversion_pct=conversion,
+                d1_users=d1_value,
+                d7_users=d7_value,
+                paying_users=paying_users,
+                payments=payments,
+                stars=stars,
+                conversion_pct=percentage(activated_24h_value, users_value),
+                d1_pct=percentage(d1_value, activated_24h_value),
+                d7_pct=percentage(d7_value, activated_24h_value),
+                payment_conversion_pct=percentage(paying_users, activated_24h_value),
+                spend_usd=spend_usd,
+                reach=reach,
+                cost_per_start_usd=(
+                    round(spend_usd / users_value, 2)
+                    if spend_usd > 0 and users_value > 0
+                    else None
+                ),
+                cost_per_activation_usd=(
+                    round(spend_usd / activated_24h_value, 2)
+                    if spend_usd > 0 and activated_24h_value > 0
+                    else None
+                ),
+                cost_per_paying_user_usd=(
+                    round(spend_usd / paying_users, 2)
+                    if spend_usd > 0 and paying_users > 0
+                    else None
+                ),
             )
         )
 
+    for source_value, (spend_usd, reach) in campaign_by_source.items():
+        if source_value in seen_sources:
+            continue
+        sources.append(
+            AcquisitionSourcePoint(
+                source=source_value,
+                users=0,
+                profiles=0,
+                activated=0,
+                activated_24h=0,
+                with_photo=0,
+                photo_24h=0,
+                d1_users=0,
+                d7_users=0,
+                paying_users=0,
+                payments=0,
+                stars=0,
+                conversion_pct=0.0,
+                d1_pct=0.0,
+                d7_pct=0.0,
+                payment_conversion_pct=0.0,
+                spend_usd=spend_usd,
+                reach=reach,
+            )
+        )
+
+    analyses_value = int(analyses_count or 0)
+    active_users_value = int(active_users or 0)
+    estimated_cost = round(
+        analyses_value * estimated_ai_cost_per_analysis(),
+        4,
+    )
     return AdminStatsResponse(
         period_days=period_days,
         totals=AdminTotals(
             users=int(total_users or 0),
+            active_users=active_users_value,
+            analyses=analyses_value,
             active_subscriptions=int(active_subscriptions or 0),
             stars=int(total_stars or 0),
+            estimated_ai_cost_usd=estimated_cost,
+            estimated_ai_cost_per_active_user_usd=(
+                round(estimated_cost / active_users_value, 4)
+                if active_users_value > 0
+                else None
+            ),
         ),
         users_chart=list(users_chart.values()),
         subscriptions_chart=list(subscriptions_chart.values()),
@@ -331,6 +566,118 @@ async def admin_stats(
     days: Annotated[int, Query(ge=1, le=MAX_STATS_DAYS)] = 30,
 ) -> AdminStatsResponse:
     return await collect_admin_stats(session, days=days)
+
+
+@router.get("/stats.csv", dependencies=[Depends(require_admin)])
+async def admin_stats_csv(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    days: Annotated[int, Query(ge=1, le=MAX_STATS_DAYS)] = 30,
+) -> Response:
+    stats = await collect_admin_stats(session, days=days)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "source",
+            "users",
+            "profiles",
+            "activated",
+            "activated_24h",
+            "d1_users",
+            "d7_users",
+            "paying_users",
+            "payments",
+            "stars",
+            "activation_pct",
+            "d1_pct",
+            "d7_pct",
+            "payment_conversion_pct",
+            "spend_usd",
+            "reach",
+            "cost_per_start_usd",
+            "cost_per_activation_usd",
+            "cost_per_paying_user_usd",
+        ]
+    )
+    for source in stats.sources:
+        writer.writerow(
+            [
+                source.source,
+                source.users,
+                source.profiles,
+                source.activated,
+                source.activated_24h,
+                source.d1_users,
+                source.d7_users,
+                source.paying_users,
+                source.payments,
+                source.stars,
+                source.conversion_pct,
+                source.d1_pct,
+                source.d7_pct,
+                source.payment_conversion_pct,
+                source.spend_usd,
+                source.reach,
+                source.cost_per_start_usd or "",
+                source.cost_per_activation_usd or "",
+                source.cost_per_paying_user_usd or "",
+            ]
+        )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="taarelka-stats-{days}d.csv"'
+        },
+    )
+
+
+def campaign_response(campaign: MarketingCampaign) -> MarketingCampaignResponse:
+    return MarketingCampaignResponse(
+        source=campaign.source,
+        label=campaign.label,
+        spend_usd=campaign.spend_usd,
+        reach=campaign.reach,
+        notes=campaign.notes,
+    )
+
+
+@router.get(
+    "/campaigns",
+    response_model=list[MarketingCampaignResponse],
+    dependencies=[Depends(require_admin)],
+)
+async def admin_campaigns(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[MarketingCampaignResponse]:
+    campaigns = await UserRepository(session).list_marketing_campaigns()
+    return [campaign_response(campaign) for campaign in campaigns]
+
+
+@router.put(
+    "/campaigns/{source}",
+    response_model=MarketingCampaignResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def save_admin_campaign(
+    source: str,
+    request: MarketingCampaignRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MarketingCampaignResponse:
+    normalized_source = normalize_acquisition_source(source)
+    if normalized_source is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid campaign source",
+        )
+    campaign = await UserRepository(session).upsert_marketing_campaign(
+        source=normalized_source,
+        label=request.label.strip() if request.label else None,
+        spend_usd=request.spend_usd,
+        reach=request.reach,
+        notes=request.notes.strip() if request.notes else None,
+    )
+    return campaign_response(campaign)
 
 
 @router.get("/broadcast", response_model=BroadcastStatus, dependencies=[Depends(require_admin)])

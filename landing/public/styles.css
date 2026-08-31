@@ -301,6 +301,22 @@ img {
     object-fit: cover;
 }
 
+.chat-photo-placeholder {
+    width: 8.5rem;
+    height: 7.25rem;
+    display: grid;
+    place-content: center;
+    gap: 0.25rem;
+    text-align: center;
+    line-height: 1.2;
+    background: var(--accent-soft);
+    color: var(--text-muted);
+}
+
+.chat-photo-placeholder span {
+    font-size: 2.4rem;
+}
+
 .bubble-bot {
     background: #f7faf8;
     border: 1px solid var(--border);
@@ -433,6 +449,45 @@ img {
     gap: 1rem;
 }
 
+.pricing-layout {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.pricing-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.pricing-option {
+    padding: 1.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.pricing-option-primary {
+    border-color: var(--accent);
+}
+
+.pricing-option h3,
+.pricing-option p {
+    margin: 0;
+}
+
+.pricing-option strong {
+    display: block;
+    margin: 0.7rem 0;
+    font-size: 1.25rem;
+}
+
+.pricing-option p {
+    color: var(--text-muted);
+}
+
 .step-number {
     display: inline-flex;
     align-items: center;
@@ -516,7 +571,8 @@ img {
 @media (max-width: 960px) {
     .hero-grid,
     .features-grid,
-    .steps-grid {
+    .steps-grid,
+    .pricing-layout {
         grid-template-columns: 1fr 1fr;
     }
 
@@ -537,13 +593,44 @@ img {
 
     .hero-grid,
     .features-grid,
-    .steps-grid {
+    .steps-grid,
+    .pricing-layout,
+    .pricing-options {
         grid-template-columns: 1fr;
     }
 
     .stats-row {
         grid-template-columns: 1fr;
     }
+}
+
+.legal-page {
+    padding: 3rem 0 5rem;
+}
+
+.legal-shell {
+    max-width: 780px;
+}
+
+.legal-shell h1 {
+    margin: 0 0 1.5rem;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.1;
+}
+
+.legal-shell h2 {
+    margin: 2rem 0 0.65rem;
+    font-size: 1.35rem;
+}
+
+.legal-shell p,
+.legal-shell li {
+    color: var(--text-muted);
+}
+
+.legal-shell code {
+    color: var(--text);
+    font-weight: 600;
 }
 
 .admin-page {
@@ -736,6 +823,102 @@ img {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.admin-campaign-card {
+    margin-top: 1.25rem;
+}
+
+.admin-campaign-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.admin-campaign-form label {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.admin-campaign-form input,
+.admin-campaign-form textarea {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-alt);
+    color: var(--text);
+    font: inherit;
+}
+
+.admin-campaign-form textarea {
+    resize: vertical;
+}
+
+.admin-campaign-wide {
+    grid-column: 1 / -1;
+}
+
+.admin-link-row {
+    display: flex;
+    gap: 0.65rem;
+}
+
+.admin-link-row input {
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.admin-campaign-form > .button {
+    width: fit-content;
+}
+
+.admin-creative-card {
+    margin-top: 1.25rem;
+}
+
+.admin-creative-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.admin-creative-grid article {
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+.admin-creative-grid p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.admin-creative-grid .button {
+    width: fit-content;
+    align-self: end;
+}
+
+.admin-interview-guide {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.admin-interview-guide summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.admin-interview-guide ol {
+    margin-bottom: 0;
+    color: var(--text-muted);
+}
+
 .admin-broadcast-card {
     margin-top: 1.25rem;
 }
@@ -838,5 +1021,22 @@ img {
     .admin-summary-grid,
     .admin-chart-grid {
         grid-template-columns: 1fr;
+    }
+
+    .admin-campaign-form {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-creative-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-campaign-wide {
+        grid-column: auto;
+    }
+
+    .admin-link-row {
+        align-items: stretch;
+        flex-direction: column;
     }
 }

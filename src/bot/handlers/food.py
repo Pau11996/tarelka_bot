@@ -23,15 +23,27 @@ from src.bot.services.messaging import (
     schedule_user_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import ensure_request_allowed
 from src.bot.states import CorrectionStates
 from src.db.models import AnalysisType
 from src.db.repository import UserRepository
+from src.shared.schemas import AnalysisResult
 
 router = Router()
 ai_client = AIAnalyzerClient()
 logger = logging.getLogger(__name__)
 MAX_PHOTO_CAPTION_LENGTH = 1024
+MAX_VOICE_DURATION_SECONDS = 60
+
+VOICE_TOO_LONG = (
+    f"Голосовое слишком длинное. Отправьте сообщение до {MAX_VOICE_DURATION_SECONDS} секунд."
+)
+VOICE_NOT_RECOGNIZED = "Не удалось распознать речь. Попробуйте ещё раз или напишите текстом."
+VOICE_UNAVAILABLE = (
+    "Голосовой ввод временно недоступен.\n"
+    "Отправьте описание текстом или фото."
+)
 
 
 async def _delete_status_message(message: Message, status: Message) -> None:
@@ -135,6 +147,63 @@ async def send_result_card(
         await answer_ephemeral(message, cleanup, result_text, track_user=False)
 
 
+async def _save_and_send_text_result(
+    message: Message,
+    cleanup: MessageCleanupService,
+    *,
+    session,
+    user,
+    input_text: str,
+    raw: str,
+    result: AnalysisResult,
+) -> None:
+    service = EntryService(session)
+    schedule_user_message(cleanup, message, persistent=True)
+    if result.type == "activity":
+        entry, balance = await service.save_activity_from_analysis(
+            user=user,
+            analysis_type=AnalysisType.ACTIVITY_TEXT,
+            input_text=input_text,
+            image_path=None,
+            raw_response=raw,
+            result=result,
+        )
+        await reward_referrer_after_first_analysis(
+            message.bot,
+            service.repo,
+            referred_user_id=user.id,
+        )
+        await send_result_card(
+            message,
+            cleanup,
+            result_text=format_activity_result(result, balance),
+            entry_id=entry.id,
+            with_meal_actions=True,
+        )
+        return
+
+    entry, balance = await service.save_meal_from_analysis(
+        user=user,
+        analysis_type=AnalysisType.FOOD_TEXT,
+        input_text=input_text,
+        image_path=None,
+        raw_response=raw,
+        result=result,
+    )
+    await reward_referrer_after_first_analysis(
+        message.bot,
+        service.repo,
+        referred_user_id=user.id,
+    )
+    await send_result_card(
+        message,
+        cleanup,
+        result_text=format_analysis_result(result, balance),
+        entry_id=entry.id,
+        with_meal_actions=True,
+    )
+
+
 @router.message(F.photo)
 async def handle_food_photo(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
@@ -194,6 +263,11 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             raw_response=raw,
             result=result,
         )
+        await reward_referrer_after_first_analysis(
+            message.bot,
+            service.repo,
+            referred_user_id=user.id,
+        )
         await _delete_status_message(message, status)
         await _delete_original_and_send_photo_result(
             message,
@@ -213,6 +287,11 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         raw_response=raw,
         result=result,
     )
+    await reward_referrer_after_first_analysis(
+        message.bot,
+        service.repo,
+        referred_user_id=user.id,
+    )
     await _delete_status_message(message, status)
     await _delete_original_and_send_photo_result(
         message,
@@ -221,6 +300,103 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         result_text=format_analysis_result(result, balance),
         entry_id=entry.id,
         with_meal_actions=True,
+    )
+
+
+@router.message(F.voice)
+async def handle_food_voice(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
+    current_state = await state.get_state()
+    if current_state and "ProfileStates" in str(current_state):
+        return
+    if current_state == CorrectionStates.waiting_text:
+        return
+
+    voice = message.voice
+    if voice is None:
+        return
+    if voice.duration and voice.duration > MAX_VOICE_DURATION_SECONDS:
+        await answer_ephemeral(message, cleanup, VOICE_TOO_LONG, track_user=True)
+        return
+
+    ctx = await _require_profile(message, session, cleanup)
+    if ctx is None:
+        return
+    user, profile = ctx
+
+    repo = UserRepository(session)
+    if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
+        return
+
+    status = await answer_ephemeral(
+        message,
+        cleanup,
+        f"Слушаю голосовое...\n\n{ANALYSIS_DURATION_HINT}",
+        track_user=False,
+    )
+
+    file = await message.bot.get_file(voice.file_id)
+    file_bytes = await message.bot.download_file(file.file_path)
+    content = file_bytes.read()
+
+    try:
+        transcript = await ai_client.transcribe(audio_bytes=content, filename="voice.ogg")
+    except httpx.HTTPStatusError as exc:
+        logger.exception("Voice transcription request failed")
+        await _delete_status_message(message, status)
+        if exc.response is not None and exc.response.status_code == 400:
+            await answer_ephemeral(message, cleanup, VOICE_NOT_RECOGNIZED, track_user=False)
+        else:
+            await answer_ephemeral(message, cleanup, VOICE_UNAVAILABLE, track_user=False)
+        return
+    except httpx.HTTPError:
+        logger.exception("Voice transcription request failed")
+        await _delete_status_message(message, status)
+        await answer_ephemeral(message, cleanup, VOICE_UNAVAILABLE, track_user=False)
+        return
+
+    if not transcript:
+        await _delete_status_message(message, status)
+        await answer_ephemeral(message, cleanup, VOICE_NOT_RECOGNIZED, track_user=False)
+        return
+
+    try:
+        await message.bot.edit_message_text(
+            chat_id=status.chat.id,
+            message_id=status.message_id,
+            text=(
+                f"Распознал: {transcript}\n\n"
+                f"Анализирую...\n\n{ANALYSIS_DURATION_HINT}"
+            ),
+        )
+    except Exception:
+        pass
+
+    try:
+        raw, result = await ai_client.analyze_text(
+            mode="auto",
+            text=transcript,
+            profile_context=profile_context(profile),
+        )
+    except httpx.HTTPError:
+        logger.exception("Voice analysis request failed")
+        await _delete_status_message(message, status)
+        await answer_ephemeral(
+            message,
+            cleanup,
+            ANALYSIS_UNAVAILABLE,
+            track_user=False,
+        )
+        return
+
+    await _delete_status_message(message, status)
+    await _save_and_send_text_result(
+        message,
+        cleanup,
+        session=session,
+        user=user,
+        input_text=transcript,
+        raw=raw,
+        result=result,
     )
 
 
@@ -267,40 +443,13 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         )
         return
 
-    service = EntryService(session)
     await _delete_status_message(message, status)
-    if result.type == "activity":
-        schedule_user_message(cleanup, message, persistent=True)
-        entry, balance = await service.save_activity_from_analysis(
-            user=user,
-            analysis_type=AnalysisType.ACTIVITY_TEXT,
-            input_text=message.text,
-            image_path=None,
-            raw_response=raw,
-            result=result,
-        )
-        await send_result_card(
-            message,
-            cleanup,
-            result_text=format_activity_result(result, balance),
-            entry_id=entry.id,
-            with_meal_actions=True,
-        )
-        return
-
-    schedule_user_message(cleanup, message, persistent=True)
-    entry, balance = await service.save_meal_from_analysis(
-        user=user,
-        analysis_type=AnalysisType.FOOD_TEXT,
-        input_text=message.text,
-        image_path=None,
-        raw_response=raw,
-        result=result,
-    )
-    await send_result_card(
+    await _save_and_send_text_result(
         message,
         cleanup,
-        result_text=format_analysis_result(result, balance),
-        entry_id=entry.id,
-        with_meal_actions=True,
+        session=session,
+        user=user,
+        input_text=message.text,
+        raw=raw,
+        result=result,
     )

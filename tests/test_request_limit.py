@@ -93,7 +93,7 @@ def test_limit_welcome_note_with_support_link(monkeypatch) -> None:
     user = User(id=1, telegram_id=1, timezone="Europe/Moscow", daily_request_limit=6)
     message = limit_welcome_note(user)
     assert "6 запросов в день" in message
-    assert "фото, текст и исправления" in message
+    assert "фото, текст, голос и исправления" in message
     assert 'href="https://t.me/taarelka_bot?start=premium"' in message
     assert "оформить подписку" in message
     assert "либо напишите в" in message

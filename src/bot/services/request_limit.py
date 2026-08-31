@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import subscription_keyboard
+from src.bot.keyboards.menus import SUBSCRIPTION_BUTTON, subscription_keyboard
 from src.bot.services.links import feedback_chat_url, subscription_offer_link
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -38,7 +38,7 @@ def _increase_limit_hint() -> str:
     if offer:
         subscription_part = f"{offer} — {price_part}"
     else:
-        subscription_part = f"оформите подписку «⭐ Подписка» — {price_part}"
+        subscription_part = f"оформите подписку «{SUBSCRIPTION_BUTTON}» — {price_part}"
     url = feedback_chat_url()
     if url:
         return (
@@ -55,9 +55,16 @@ def format_limit_reached_message(user: User) -> str:
 
 def limit_welcome_note(user: User) -> str:
     limit = effective_daily_request_limit(user)
+    bonus_requests = int(user.bonus_requests or 0)
+    bonus_note = (
+        f" Бонусных запросов: {bonus_requests}."
+        if bonus_requests > 0
+        else ""
+    )
     return (
         f"\n\nДоступно {limit} запросов в день "
-        f"(фото, текст и исправления). {_increase_limit_hint()}\n\n"
+        f"(фото, текст, голос и исправления).{bonus_note} "
+        f"{_increase_limit_hint()}\n\n"
     )
 
 
@@ -76,6 +83,10 @@ async def ensure_request_allowed(
     track_user: bool = False,
 ) -> bool:
     if await try_consume_daily_request(repo, user):
+        return True
+    if await repo.try_consume_bonus_request(user.id):
+        if (user.bonus_requests or 0) > 0:
+            user.bonus_requests -= 1
         return True
 
     await answer_ephemeral(

@@ -2,9 +2,10 @@ import re
 
 from src.bot.config import settings
 
-SUPPORT_EMAIL = "help.4posts@gmail.com"
+SUPPORT_EMAIL = settings.support_email
 
 _ACQUISITION_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
+_REFERRAL_PAYLOAD_RE = re.compile(r"^ref_([a-f0-9]{10})$")
 _RESERVED_START_PAYLOADS = frozenset({"premium"})
 _MAX_ACQUISITION_SOURCE_LEN = 64
 
@@ -18,9 +19,18 @@ def normalize_acquisition_source(raw: str | None) -> str | None:
     if raw is None:
         return None
     cleaned = _ACQUISITION_SOURCE_RE.sub("", raw.strip().lower())
+    if _REFERRAL_PAYLOAD_RE.fullmatch(cleaned):
+        return "referral"
     if not cleaned or cleaned in _RESERVED_START_PAYLOADS:
         return None
     return cleaned[:_MAX_ACQUISITION_SOURCE_LEN]
+
+
+def parse_referral_code(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    match = _REFERRAL_PAYLOAD_RE.fullmatch(raw.strip().lower())
+    return match.group(1) if match else None
 
 
 def bot_start_url(start: str) -> str | None:
@@ -32,6 +42,10 @@ def bot_start_url(start: str) -> str | None:
 
 def subscription_url() -> str | None:
     return bot_start_url("premium")
+
+
+def referral_url(code: str) -> str | None:
+    return bot_start_url(f"ref_{code}")
 
 
 def subscription_offer_link(*, renew: bool = False) -> str | None:
@@ -83,10 +97,35 @@ def support_email_link() -> str:
     return f"<code>{SUPPORT_EMAIL}</code>"
 
 
+BOT_COMMANDS = (
+    ("start", "приветствие и меню"),
+    ("today", "дневник за сегодня"),
+    ("stats", "статистика"),
+    ("favorites", "избранные блюда и активности"),
+    ("correct", "исправить или удалить запись"),
+    ("profile", "профиль"),
+    ("premium", "подписка"),
+    ("invite", "пригласить друга"),
+    ("contacts", "контакты и настройки"),
+    ("feedback", "чат поддержки"),
+    ("paysupport", "вопросы по оплате и возвратам"),
+    ("privacy", "какие данные хранятся"),
+    ("notifications_off", "отключить напоминания"),
+    ("notifications_on", "включить напоминания"),
+    ("delete_me", "удалить все данные"),
+)
+
+
+def format_bot_commands() -> str:
+    lines = ["Команды"]
+    lines.extend(f"/{name} — {description}" for name, description in BOT_COMMANDS)
+    return "\n".join(lines)
+
+
 def format_contacts() -> str:
     feedback = feedback_chat_url()
     channel = channel_url()
-    lines = ["Контакты ТАРЕЛКИ", ""]
+    lines = ["Контакты и настройки", ""]
     if feedback:
         lines.append(f'💬 Чат поддержки: <a href="{feedback}">открыть</a>.')
     if channel:
@@ -97,6 +136,8 @@ def format_contacts() -> str:
             "",
             "По подписке и возвратам пишите на почту или в чат. "
             "Telegram Support покупки этого бота не обрабатывает.",
+            "",
+            format_bot_commands(),
         ]
     )
     return "\n".join(lines)

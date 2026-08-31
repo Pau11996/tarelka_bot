@@ -7,29 +7,50 @@
     const loginError = document.getElementById("login-error");
     const dashboardError = document.getElementById("dashboard-error");
     const logoutButton = document.getElementById("logout-button");
+    const exportButton = document.getElementById("export-button");
     const periodSelect = document.getElementById("period-select");
 
     const totalUsers = document.getElementById("total-users");
     const activeSubscriptions = document.getElementById("active-subscriptions");
     const totalStars = document.getElementById("total-stars");
+    const activeUsers = document.getElementById("active-users");
+    const totalAnalyses = document.getElementById("total-analyses");
+    const estimatedAiCost = document.getElementById("estimated-ai-cost");
+    const estimatedAiCostPerUser = document.getElementById("estimated-ai-cost-per-user");
     const usersChart = document.getElementById("users-chart");
     const subscriptionsChart = document.getElementById("subscriptions-chart");
     const sourcesBody = document.getElementById("sources-body");
+    const campaignForm = document.getElementById("campaign-form");
+    const campaignSource = document.getElementById("campaign-source");
+    const campaignLink = document.getElementById("campaign-link");
+    const campaignStatus = document.getElementById("campaign-status");
+    const copyLinkButton = document.getElementById("copy-link-button");
+    const creativeCopyButtons = document.querySelectorAll(".creative-copy-button");
     const broadcastForm = document.getElementById("broadcast-form");
     const broadcastText = document.getElementById("broadcast-text");
     const broadcastCounter = document.getElementById("broadcast-counter");
     const broadcastSubmit = document.getElementById("broadcast-submit");
+    const interviewPresetButton = document.getElementById("interview-preset-button");
     const broadcastStatus = document.getElementById("broadcast-status");
     const broadcastSubscribersLabel = document.getElementById("broadcast-subscribers-label");
     const broadcastAllLabel = document.getElementById("broadcast-all-label");
 
     const numberFormatter = new Intl.NumberFormat("ru-RU");
+    const usdFormatter = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4,
+    });
     const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
         day: "2-digit",
         month: "2-digit",
     });
     let latestStats = null;
     let broadcastPollTimer = null;
+    const botUsername = (document.body.dataset.botUsername || "")
+        .trim()
+        .replace(/^@/, "");
 
     function getToken() {
         return localStorage.getItem(tokenKey);
@@ -139,7 +160,7 @@
         if (!sources || !sources.length) {
             const emptyRow = document.createElement("tr");
             const emptyCell = document.createElement("td");
-            emptyCell.colSpan = 5;
+            emptyCell.colSpan = 13;
             emptyCell.className = "admin-muted";
             emptyCell.textContent = "Нет данных за период";
             emptyRow.appendChild(emptyCell);
@@ -152,9 +173,21 @@
             const cells = [
                 row.source === "direct" ? "без метки" : row.source,
                 numberFormatter.format(row.users),
-                numberFormatter.format(row.with_photo),
-                numberFormatter.format(row.photo_24h),
+                numberFormatter.format(row.profiles),
+                numberFormatter.format(row.activated_24h),
+                `${numberFormatter.format(row.d1_users)} (${numberFormatter.format(row.d1_pct)}%)`,
+                `${numberFormatter.format(row.d7_users)} (${numberFormatter.format(row.d7_pct)}%)`,
+                numberFormatter.format(row.paying_users),
+                `${numberFormatter.format(row.stars)} ⭐`,
                 `${numberFormatter.format(row.conversion_pct)}%`,
+                `${numberFormatter.format(row.payment_conversion_pct)}%`,
+                usdFormatter.format(row.spend_usd || 0),
+                row.cost_per_activation_usd == null
+                    ? "—"
+                    : usdFormatter.format(row.cost_per_activation_usd),
+                row.cost_per_paying_user_usd == null
+                    ? "—"
+                    : usdFormatter.format(row.cost_per_paying_user_usd),
             ];
             cells.forEach((value, index) => {
                 const td = document.createElement("td");
@@ -173,6 +206,12 @@
         totalUsers.textContent = numberFormatter.format(data.totals.users);
         activeSubscriptions.textContent = numberFormatter.format(data.totals.active_subscriptions);
         totalStars.textContent = `${numberFormatter.format(data.totals.stars)} ⭐`;
+        activeUsers.textContent = numberFormatter.format(data.totals.active_users);
+        totalAnalyses.textContent = numberFormatter.format(data.totals.analyses);
+        estimatedAiCost.textContent = usdFormatter.format(data.totals.estimated_ai_cost_usd);
+        estimatedAiCostPerUser.textContent = data.totals.estimated_ai_cost_per_active_user_usd == null
+            ? "нет активных пользователей"
+            : `${usdFormatter.format(data.totals.estimated_ai_cost_per_active_user_usd)} на активного`;
 
         drawBarChart(usersChart, data.users_chart, {
             value: (point) => point.users,
@@ -189,6 +228,60 @@
         const users = numberFormatter.format(data.totals.users);
         broadcastSubscribersLabel.textContent = `Подписчикам (${subscribers})`;
         broadcastAllLabel.textContent = `Всем (${users})`;
+    }
+
+    function normalizeCampaignSource(value) {
+        return value
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, "")
+            .slice(0, 64);
+    }
+
+    function updateCampaignLink() {
+        const source = normalizeCampaignSource(campaignSource.value);
+        campaignSource.value = source;
+        campaignLink.value = botUsername && source
+            ? `https://t.me/${botUsername}?start=${source}`
+            : "";
+        copyLinkButton.disabled = !campaignLink.value;
+        renderCreativeTexts();
+    }
+
+    function renderCreativeTexts() {
+        const link = campaignLink.value || "[вставьте deep-link]";
+        document.querySelectorAll("[data-creative]").forEach((element) => {
+            element.textContent = element.dataset.creative.replace("{{LINK}}", link);
+        });
+    }
+
+    function setCampaignStatus(message, kind) {
+        campaignStatus.textContent = message || "";
+        campaignStatus.classList.toggle("is-error", kind === "error");
+        campaignStatus.classList.toggle("is-success", kind === "success");
+    }
+
+    async function exportStatsCsv() {
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+        const response = await fetch(`/admin/stats.csv?days=${periodSelect.value}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (!response.ok) {
+            throw new Error("Не удалось выгрузить CSV.");
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `taarelka-stats-${periodSelect.value}d.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
     }
 
     function updateBroadcastCounter() {
@@ -372,6 +465,16 @@
     });
 
     broadcastText.addEventListener("input", updateBroadcastCounter);
+    interviewPresetButton.addEventListener("click", () => {
+        broadcastText.value = (
+            "Я улучшаю ТАРЕЛКУ и хочу понять ваш реальный опыт. "
+            + "Если готовы на короткий 15-минутный разговор или несколько голосовых, "
+            + "откройте /feedback и напишите «готов помочь». "
+            + "Нужна честная обратная связь, продавать ничего не буду."
+        );
+        updateBroadcastCounter();
+        broadcastText.focus();
+    });
 
     broadcastForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -433,6 +536,91 @@
         }
     });
 
+    campaignSource.addEventListener("input", updateCampaignLink);
+    campaignSource.addEventListener("blur", updateCampaignLink);
+
+    copyLinkButton.addEventListener("click", async () => {
+        if (!campaignLink.value) {
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(campaignLink.value);
+            setCampaignStatus("Ссылка скопирована.", "success");
+        } catch (error) {
+            campaignLink.select();
+            setCampaignStatus("Скопируйте выделенную ссылку.", "");
+        }
+    });
+
+    creativeCopyButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const textElement = button.parentElement.querySelector("[data-creative]");
+            if (!textElement) {
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(textElement.textContent);
+                const originalText = button.textContent;
+                button.textContent = "Скопировано";
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 1200);
+            } catch (error) {
+                setCampaignStatus("Не удалось скопировать текст.", "error");
+            }
+        });
+    });
+
+    campaignForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const token = getToken();
+        const source = normalizeCampaignSource(campaignSource.value);
+        if (!token) {
+            showLogin();
+            return;
+        }
+        if (!source) {
+            setCampaignStatus("Введите корректную метку источника.", "error");
+            return;
+        }
+
+        const formData = new FormData(campaignForm);
+        setCampaignStatus("Сохраняем…");
+        try {
+            const response = await fetch(`/admin/campaigns/${encodeURIComponent(source)}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    label: formData.get("label") || null,
+                    spend_usd: Number(formData.get("spend_usd") || 0),
+                    reach: Number(formData.get("reach") || 0),
+                    notes: formData.get("notes") || null,
+                }),
+            });
+            if (response.status === 401) {
+                clearToken();
+                showLogin();
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Не удалось сохранить эксперимент.");
+            }
+            setCampaignStatus("Эксперимент сохранён.", "success");
+            await fetchStats();
+        } catch (error) {
+            setCampaignStatus(error.message || "Не удалось сохранить эксперимент.", "error");
+        }
+    });
+
+    exportButton.addEventListener("click", () => {
+        exportStatsCsv().catch((error) => {
+            setError(dashboardError, error.message || "Не удалось выгрузить CSV.");
+        });
+    });
+
     periodSelect.addEventListener("change", () => {
         fetchStats().catch(() => {
             setError(dashboardError, "Не удалось обновить статистику.");
@@ -453,4 +641,5 @@
     } else {
         showLogin();
     }
+    updateCampaignLink();
 })();

@@ -6,11 +6,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     curl \
+    ffmpeg \
+    unzip \
     && curl -fsSL https://cursor.com/install | bash \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.local/bin:${PATH}"
 ENV UPLOAD_DIR=/tmp/uploads
+ENV VOSK_MODEL_PATH=/opt/vosk/model
+
+# Small Russian offline STT model (~45 MB)
+RUN mkdir -p /opt/vosk \
+    && curl -fsSL -o /tmp/vosk-model.zip \
+        https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip \
+    && unzip -q /tmp/vosk-model.zip -d /opt/vosk \
+    && mv /opt/vosk/vosk-model-small-ru-0.22 /opt/vosk/model \
+    && rm -f /tmp/vosk-model.zip
 
 COPY pyproject.toml ./
 COPY src ./src

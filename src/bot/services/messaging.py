@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 from src.bot.keyboards.menus import main_menu
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -67,6 +67,11 @@ async def answer_ephemeral(
     return sent
 
 
+async def drop_cached_reply_keyboard(message: Message) -> Message:
+    """Telegram often keeps an old persistent keyboard until it is explicitly removed."""
+    return await message.answer("\u2060", reply_markup=ReplyKeyboardRemove())
+
+
 async def answer_persistent(
     message: Message,
     text: str,
@@ -77,6 +82,23 @@ async def answer_persistent(
     sent = await message.answer(text, **kwargs)
     if cleanup is not None and _reply_markup_has_main_menu(kwargs.get("reply_markup")):
         cleanup.remember_menu_message(sent.chat.id, sent.message_id)
+    return sent
+
+
+async def answer_persistent_with_menu(
+    message: Message,
+    text: str,
+    *,
+    cleanup: MessageCleanupService | None = None,
+    **kwargs,
+) -> Message:
+    removed = await drop_cached_reply_keyboard(message)
+    kwargs["reply_markup"] = main_menu()
+    sent = await answer_persistent(message, text, cleanup=cleanup, **kwargs)
+    try:
+        await removed.delete()
+    except Exception:
+        pass
     return sent
 
 

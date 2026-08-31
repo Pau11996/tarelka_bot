@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -11,6 +12,11 @@ from pydantic import BaseModel
 
 from src.ai_analyzer.admin import router as admin_router
 from src.ai_analyzer.cursor_runner import save_upload
+from src.ai_analyzer.transcribe import (
+    TranscriptionEmpty,
+    TranscriptionUnavailable,
+    transcribe_audio,
+)
 from src.shared.logging_config import setup_logging
 from src.ai_analyzer.runner_factory import create_analysis_runner, use_openai_api
 from src.shared.schemas import AnalysisResult
@@ -34,10 +40,30 @@ class AnalyzeResponse(BaseModel):
     parsed: AnalysisResult
 
 
+class TranscribeResponse(BaseModel):
+    text: str
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     backend = "openai" if use_openai_api() else "cursor"
     return {"status": "ok", "backend": backend}
+
+
+@app.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe(audio: UploadFile = File(...)) -> TranscribeResponse:
+    try:
+        content = await audio.read()
+        filename = audio.filename or "voice.ogg"
+        text = await transcribe_audio(content, filename=filename)
+        return TranscribeResponse(text=text)
+    except TranscriptionUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except TranscriptionEmpty as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Transcription failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/analyze/text", response_model=AnalyzeResponse)
@@ -84,6 +110,7 @@ async def analyze_image(
     previous_result: str | None = Form(None),
     image: UploadFile = File(...),
 ) -> AnalyzeResponse:
+    image_path: str | None = None
     try:
         content = await image.read()
         suffix = os.path.splitext(image.filename or "upload.jpg")[1] or ".jpg"
@@ -121,6 +148,12 @@ async def analyze_image(
     except Exception as exc:
         logger.exception("Image analysis failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if image_path is not None:
+            try:
+                Path(image_path).unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Failed to delete temporary upload %s", image_path)
 
 
 def main() -> None:

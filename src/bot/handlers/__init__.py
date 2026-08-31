@@ -1,3 +1,25 @@
-from src.bot.handlers import correction, daily, favorites, feedback, food, profile, start, statistics
+from src.bot.handlers import (
+    correction,
+    daily,
+    data_management,
+    favorites,
+    feedback,
+    food,
+    profile,
+    referrals,
+    start,
+    statistics,
+)
 
-__all__ = ["correction", "daily", "favorites", "feedback", "food", "profile", "start", "statistics"]
+__all__ = [
+    "correction",
+    "daily",
+    "data_management",
+    "favorites",
+    "feedback",
+    "food",
+    "profile",
+    "referrals",
+    "start",
+    "statistics",
+]

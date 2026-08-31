@@ -7,9 +7,11 @@ MAIN_MENU_ANCHOR = "Системное сообщение, бот работае
 TODAY_BUTTON = "📊 Сегодня"
 STATS_BUTTON = "📈 Статистика"
 FAVORITES_BUTTON = "⭐ Избранное"
-SUBSCRIPTION_BUTTON = "⭐ Подписка"
+SUBSCRIPTION_BUTTON = "💎 Подписка"
 PROFILE_BUTTON = "👤 Профиль"
-CONTACTS_BUTTON = "💬 Контакты"
+CONTACTS_BUTTON = "⚙️ Контакты и настройки"
+LEGACY_INVITE_BUTTON = "🎁 Пригласить"
+LEGACY_CONTACTS_BUTTON = "💬 Контакты"
 MENU_BUTTON_TEXTS = frozenset(
     {
         TODAY_BUTTON,
@@ -18,6 +20,8 @@ MENU_BUTTON_TEXTS = frozenset(
         SUBSCRIPTION_BUTTON,
         PROFILE_BUTTON,
         CONTACTS_BUTTON,
+        LEGACY_INVITE_BUTTON,
+        LEGACY_CONTACTS_BUTTON,
     }
 )
 
@@ -31,13 +35,20 @@ def main_menu() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Фото или описание еды",
+        input_field_placeholder="Фото, голос или описание еды",
     )
 
 
 def profile_fill_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Заполнить", callback_data="start:begin")]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Заполнить профиль · 1 минута",
+                    callback_data="start:begin",
+                )
+            ]
+        ]
     )
 
 

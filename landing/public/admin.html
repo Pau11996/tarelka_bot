@@ -8,7 +8,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="admin-page">
+<body class="admin-page" data-bot-username="${TELEGRAM_BOT_USERNAME}">
     <main class="admin-shell">
         <section class="admin-login-card" id="login-panel">
             <a class="logo admin-logo" href="/">
@@ -54,6 +54,9 @@
                             <option value="365">365 дней</option>
                         </select>
                     </label>
+                    <button class="button button-secondary" id="export-button" type="button">
+                        Скачать CSV
+                    </button>
                     <button class="button button-secondary" id="logout-button" type="button">Выйти</button>
                 </div>
             </header>
@@ -70,6 +73,19 @@
                 <article class="admin-summary-card">
                     <span>Заработок в звездах</span>
                     <strong id="total-stars">0</strong>
+                </article>
+                <article class="admin-summary-card">
+                    <span>Активных за период</span>
+                    <strong id="active-users">0</strong>
+                </article>
+                <article class="admin-summary-card">
+                    <span>AI-анализов за период</span>
+                    <strong id="total-analyses">0</strong>
+                </article>
+                <article class="admin-summary-card">
+                    <span>Оценка AI-затрат</span>
+                    <strong id="estimated-ai-cost">$0</strong>
+                    <small class="admin-muted" id="estimated-ai-cost-per-user"></small>
                 </article>
             </div>
 
@@ -93,26 +109,107 @@
             <article class="admin-chart-card admin-sources-card">
                 <div>
                     <h2>Откуда приходят</h2>
-                    <p class="admin-muted">Метки <code>?start=</code> за выбранный период: старты и активация по фото.</p>
+                    <p class="admin-muted">Метки <code>?start=</code> за выбранный период: профиль, первый AI-анализ, D1/D7 по любому взаимодействию и оплаты.</p>
                 </div>
                 <div class="admin-table-wrap">
                     <table class="admin-sources-table" id="sources-table">
                         <thead>
                             <tr>
                                 <th>Источник</th>
-                                <th>Пользователи</th>
-                                <th>С фото</th>
-                                <th>Фото за 24 ч</th>
-                                <th>Конверсия</th>
+                                <th>Старты</th>
+                                <th>Профили</th>
+                                <th>Активация 24 ч</th>
+                                <th>D1</th>
+                                <th>D7</th>
+                                <th>Платящие</th>
+                                <th>Stars</th>
+                                <th>Активация</th>
+                                <th>Оплата</th>
+                                <th>Расход</th>
+                                <th title="Стоимость пользователя с первым AI-анализом за 24 часа">CPA</th>
+                                <th title="Стоимость платящего пользователя">CAC</th>
                             </tr>
                         </thead>
                         <tbody id="sources-body">
                             <tr>
-                                <td colspan="5" class="admin-muted">Нет данных</td>
+                                <td colspan="13" class="admin-muted">Нет данных</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+            </article>
+
+            <article class="admin-chart-card admin-campaign-card">
+                <div>
+                    <h2>Эксперимент с источником</h2>
+                    <p class="admin-muted">Сохраните расход и охват. Та же метка должна использоваться в <code>?start=</code>.</p>
+                </div>
+                <form class="admin-campaign-form" id="campaign-form">
+                    <label>
+                        <span>Метка источника</span>
+                        <input id="campaign-source" name="source" maxlength="64" placeholder="tg_channel_a" required>
+                    </label>
+                    <label>
+                        <span>Название</span>
+                        <input id="campaign-label" name="label" maxlength="255" placeholder="Канал про похудение, креатив A">
+                    </label>
+                    <label>
+                        <span>Расход, USD</span>
+                        <input id="campaign-spend" name="spend_usd" type="number" min="0" step="0.01" value="0">
+                    </label>
+                    <label>
+                        <span>Охват за 24 часа</span>
+                        <input id="campaign-reach" name="reach" type="number" min="0" step="1" value="0">
+                    </label>
+                    <label class="admin-campaign-wide">
+                        <span>Заметка</span>
+                        <textarea id="campaign-notes" name="notes" rows="2" maxlength="2000"></textarea>
+                    </label>
+                    <label class="admin-campaign-wide">
+                        <span>Deep-link</span>
+                        <div class="admin-link-row">
+                            <input id="campaign-link" type="text" readonly>
+                            <button class="button button-secondary" id="copy-link-button" type="button">Копировать</button>
+                        </div>
+                    </label>
+                    <button class="button button-primary" type="submit">Сохранить эксперимент</button>
+                    <p class="admin-broadcast-status" id="campaign-status" role="status"></p>
+                </form>
+            </article>
+
+            <article class="admin-chart-card admin-creative-card">
+                <div>
+                    <h2>Тексты для микро-тестов</h2>
+                    <p class="admin-muted">Используйте по одному тезису на размещение и отдельную метку источника.</p>
+                </div>
+                <div class="admin-creative-grid">
+                    <article>
+                        <strong>A — меньше ручного ввода</strong>
+                        <p data-creative="Надоело вручную искать каждое блюдо в дневнике калорий? Отправьте фото еды боту ТАРЕЛКА — он примерно оценит калории и БЖУ и обновит баланс дня прямо в Telegram. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. Расчёт примерный. {{LINK}}"></p>
+                        <button class="button button-secondary creative-copy-button" type="button">Копировать A</button>
+                    </article>
+                    <article>
+                        <strong>B — контроль остатка</strong>
+                        <p data-creative="Сфотографируйте тарелку и посмотрите, сколько калорий примерно осталось до вашей дневной нормы. ТАРЕЛКА работает прямо в Telegram: без отдельного приложения и сложных таблиц. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. {{LINK}}"></p>
+                        <button class="button button-secondary creative-copy-button" type="button">Копировать B</button>
+                    </article>
+                    <article>
+                        <strong>C — голосовой ввод</strong>
+                        <p data-creative="Нет времени фотографировать и заполнять дневник? Надиктуйте, что съели, голосовым сообщением. ТАРЕЛКА распознает текст, примерно оценит калории и обновит дневной баланс. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. {{LINK}}"></p>
+                        <button class="button button-secondary creative-copy-button" type="button">Копировать C</button>
+                    </article>
+                </div>
+                <details class="admin-interview-guide">
+                    <summary>Вопросы для интервью с текущими пользователями</summary>
+                    <ol>
+                        <li>Какую задачу вы хотели решить, когда запустили бота?</li>
+                        <li>Как считали калории раньше и что там раздражало?</li>
+                        <li>На каком шаге ТАРЕЛКИ было непонятно или неудобно?</li>
+                        <li>Что заставило бы возвращаться каждый день?</li>
+                        <li>Почему пока не купили подписку за 150 Stars?</li>
+                        <li>За какую конкретную пользу вы были бы готовы платить?</li>
+                    </ol>
+                </details>
             </article>
 
             <article class="admin-chart-card admin-broadcast-card">
@@ -120,6 +217,9 @@
                     <h2>Рассылка</h2>
                     <p class="admin-muted">Разовое сообщение в бота. Не удаляется автоматически. Для проверки сначала отправьте себе.</p>
                 </div>
+                <button class="button button-secondary" id="interview-preset-button" type="button">
+                    Подставить приглашение на интервью
+                </button>
                 <form class="admin-broadcast-form" id="broadcast-form">
                     <label>
                         <span>Текст</span>

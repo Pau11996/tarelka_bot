@@ -31,4 +31,4 @@ async def show_today(message: Message, state: FSMContext, session, cleanup: Mess
 
     text = format_daily_balance(balance, profile=profile)
     text += "\n\n" + format_entry_list(entries)
-    await answer_ephemeral(message, cleanup, text)
+    await answer_ephemeral(message, cleanup, text, reply_markup=main_menu())

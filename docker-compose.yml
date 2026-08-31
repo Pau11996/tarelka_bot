@@ -39,7 +39,7 @@ services:
       CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,ai_analyzer,bot}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}
       NODE_USE_ENV_PROXY: ${NODE_USE_ENV_PROXY:-1}
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     volumes:
@@ -47,9 +47,9 @@ services:
       - ./logs:/opt/logs
     ports:
       - "127.0.0.1:8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -63,8 +63,8 @@ services:
     env_file:
       - .env
     depends_on:
-      postgres:
-        condition: service_healthy
+#      postgres:
+#        condition: service_healthy
       ai_analyzer:
         condition: service_healthy
     environment:
@@ -114,7 +114,7 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
+#  postgres_data:
   cursor_data:
 
 networks:

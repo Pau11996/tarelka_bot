@@ -27,7 +27,7 @@ class AIAnalyzerClient:
             "profile_context": profile_context,
             "previous_result": previous_result,
         }
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(f"{self.base_url}/analyze/text", json=payload)
             response.raise_for_status()
             data = response.json()
@@ -52,7 +52,7 @@ class AIAnalyzerClient:
         if previous_result:
             data["previous_result"] = json.dumps(previous_result, ensure_ascii=False)
 
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(f"{self.base_url}/analyze/image", data=data, files=files)
             response.raise_for_status()
             payload = response.json()

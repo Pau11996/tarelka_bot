@@ -36,7 +36,7 @@ services:
       VOSK_MODEL_PATH: ${VOSK_MODEL_PATH:-/opt/vosk/model}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
       CURSOR_MODEL: ${CURSOR_MODEL:-cursor-grok-4.5-high-fast}
-      CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
+      CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-600}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}

@@ -20,7 +20,7 @@ RETRYABLE_MARKERS = (
 class CursorRunner(BaseAnalysisRunner):
     def __init__(self) -> None:
         self.model = os.environ.get("CURSOR_MODEL", "cursor-grok-4.5-high-fast")
-        self.timeout = int(os.environ.get("CURSOR_TIMEOUT", "180"))
+        self.timeout = int(os.environ.get("CURSOR_TIMEOUT", "600"))
         self.agent_bin = os.environ.get("CURSOR_AGENT_BIN", "agent")
         self.workdir = os.environ.get("UPLOAD_DIR", "/tmp/uploads")
         self.max_retries = int(os.environ.get("CURSOR_MAX_RETRIES", "3"))

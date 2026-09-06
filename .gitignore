@@ -9,3 +9,9 @@ dist/
 build/
 .cursor/
 logs/
+scripts/russian_tts.py
+speech.mp3
+taarelka-marketing-plan.xlsx
+taarelka-marketing-strategy.pdf
+taarelka-plan-21d.xlsx
+text.txt

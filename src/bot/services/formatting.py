@@ -104,7 +104,21 @@ def format_daily_balance(
     return text
 
 
+def format_unknown_result(result: AnalysisResult, balance: DailyBalance | None = None) -> str:
+    lines = [
+        "❓ Неизвестный ввод",
+        "Не удалось распознать еду или активность.",
+        "Калории: 0 ккал",
+    ]
+    if balance:
+        lines.append(f"\n{format_daily_balance(balance, include_micronutrients=False)}")
+    return "\n".join(lines)
+
+
 def format_analysis_result(result: AnalysisResult, balance: DailyBalance | None = None) -> str:
+    if result.type == "unknown":
+        return format_unknown_result(result, balance)
+
     title = escape(result.title or "Анализ")
     lines = [f"🍽 {title}", f"Калории: {result.total_calories:.0f} ккал"]
     lines.append(

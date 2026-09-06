@@ -1,0 +1,1707 @@
+[
+  {
+    "name": "яйцо куриное",
+    "aliases": [
+      "яйцо",
+      "яйца",
+      "яичница",
+      "омлет"
+    ],
+    "calories": 157,
+    "protein_g": 12.7,
+    "fat_g": 11.5,
+    "carbs_g": 0.7,
+    "fiber_g": 0,
+    "sugar_g": 0.7
+  },
+  {
+    "name": "белок яичный",
+    "aliases": [
+      "яичный белок",
+      "белок яйца"
+    ],
+    "calories": 52,
+    "protein_g": 11.0,
+    "fat_g": 0.2,
+    "carbs_g": 0.7,
+    "fiber_g": 0,
+    "sugar_g": 0.7
+  },
+  {
+    "name": "желток яичный",
+    "aliases": [
+      "яичный желток",
+      "желток"
+    ],
+    "calories": 322,
+    "protein_g": 15.9,
+    "fat_g": 26.5,
+    "carbs_g": 3.6,
+    "fiber_g": 0,
+    "sugar_g": 0.6
+  },
+  {
+    "name": "молоко 2.5%",
+    "aliases": [
+      "молоко",
+      "молоко 2,5%"
+    ],
+    "calories": 52,
+    "protein_g": 2.8,
+    "fat_g": 2.5,
+    "carbs_g": 4.7,
+    "fiber_g": 0,
+    "sugar_g": 4.7
+  },
+  {
+    "name": "молоко 3.2%",
+    "aliases": [
+      "молоко 3,2%"
+    ],
+    "calories": 58,
+    "protein_g": 2.8,
+    "fat_g": 3.2,
+    "carbs_g": 4.7,
+    "fiber_g": 0,
+    "sugar_g": 4.7
+  },
+  {
+    "name": "кефир 1%",
+    "aliases": [
+      "кефир",
+      "кефир 1%"
+    ],
+    "calories": 40,
+    "protein_g": 3.0,
+    "fat_g": 1.0,
+    "carbs_g": 4.0,
+    "fiber_g": 0,
+    "sugar_g": 4.0
+  },
+  {
+    "name": "кефир 2.5%",
+    "aliases": [
+      "кефир 2,5%"
+    ],
+    "calories": 50,
+    "protein_g": 2.9,
+    "fat_g": 2.5,
+    "carbs_g": 3.9,
+    "fiber_g": 0,
+    "sugar_g": 3.9
+  },
+  {
+    "name": "йогурт натуральный",
+    "aliases": [
+      "йогурт",
+      "греческий йогурт"
+    ],
+    "calories": 66,
+    "protein_g": 5.0,
+    "fat_g": 3.2,
+    "carbs_g": 4.7,
+    "fiber_g": 0,
+    "sugar_g": 4.7
+  },
+  {
+    "name": "творог 5%",
+    "aliases": [
+      "творог",
+      "творог 5%"
+    ],
+    "calories": 121,
+    "protein_g": 17.2,
+    "fat_g": 5.0,
+    "carbs_g": 1.8,
+    "fiber_g": 0,
+    "sugar_g": 1.8
+  },
+  {
+    "name": "творог 9%",
+    "aliases": [
+      "творог 9%"
+    ],
+    "calories": 159,
+    "protein_g": 16.7,
+    "fat_g": 9.0,
+    "carbs_g": 2.0,
+    "fiber_g": 0,
+    "sugar_g": 2.0
+  },
+  {
+    "name": "творог обезжиренный",
+    "aliases": [
+      "творог 0%",
+      "обезжиренный творог"
+    ],
+    "calories": 71,
+    "protein_g": 16.5,
+    "fat_g": 0.6,
+    "carbs_g": 1.3,
+    "fiber_g": 0,
+    "sugar_g": 1.3
+  },
+  {
+    "name": "сметана 15%",
+    "aliases": [
+      "сметана",
+      "сметана 15%"
+    ],
+    "calories": 160,
+    "protein_g": 2.6,
+    "fat_g": 15.0,
+    "carbs_g": 3.0,
+    "fiber_g": 0,
+    "sugar_g": 3.0
+  },
+  {
+    "name": "сметана 20%",
+    "aliases": [
+      "сметана 20%"
+    ],
+    "calories": 206,
+    "protein_g": 2.8,
+    "fat_g": 20.0,
+    "carbs_g": 3.2,
+    "fiber_g": 0,
+    "sugar_g": 3.2
+  },
+  {
+    "name": "сыр твердый",
+    "aliases": [
+      "сыр",
+      "российский сыр",
+      "голландский сыр"
+    ],
+    "calories": 350,
+    "protein_g": 25.0,
+    "fat_g": 27.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "сыр моцарелла",
+    "aliases": [
+      "моцарелла"
+    ],
+    "calories": 280,
+    "protein_g": 18.0,
+    "fat_g": 22.0,
+    "carbs_g": 2.2,
+    "fiber_g": 0,
+    "sugar_g": 1.0
+  },
+  {
+    "name": "сыр фета",
+    "aliases": [
+      "фета"
+    ],
+    "calories": 264,
+    "protein_g": 14.0,
+    "fat_g": 21.0,
+    "carbs_g": 4.1,
+    "fiber_g": 0,
+    "sugar_g": 4.1
+  },
+  {
+    "name": "масло сливочное",
+    "aliases": [
+      "сливочное масло",
+      "масло"
+    ],
+    "calories": 748,
+    "protein_g": 0.5,
+    "fat_g": 82.5,
+    "carbs_g": 0.8,
+    "fiber_g": 0,
+    "sugar_g": 0.8
+  },
+  {
+    "name": "сливки 10%",
+    "aliases": [
+      "сливки",
+      "сливки 10%"
+    ],
+    "calories": 118,
+    "protein_g": 2.8,
+    "fat_g": 10.0,
+    "carbs_g": 4.0,
+    "fiber_g": 0,
+    "sugar_g": 4.0
+  },
+  {
+    "name": "куриная грудка",
+    "aliases": [
+      "грудка куриная",
+      "филе курицы",
+      "курица грудка"
+    ],
+    "calories": 113,
+    "protein_g": 23.6,
+    "fat_g": 1.9,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "куриное бедро",
+    "aliases": [
+      "бедро куриное",
+      "курица бедро"
+    ],
+    "calories": 185,
+    "protein_g": 18.0,
+    "fat_g": 12.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "курица вареная",
+    "aliases": [
+      "курица",
+      "куриное мясо"
+    ],
+    "calories": 170,
+    "protein_g": 25.0,
+    "fat_g": 7.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "индейка филе",
+    "aliases": [
+      "индейка",
+      "филе индейки"
+    ],
+    "calories": 104,
+    "protein_g": 23.0,
+    "fat_g": 1.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "говядина",
+    "aliases": [
+      "говядина тушеная",
+      "телятина"
+    ],
+    "calories": 187,
+    "protein_g": 18.9,
+    "fat_g": 12.4,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "свинина",
+    "aliases": [
+      "свинина жареная"
+    ],
+    "calories": 242,
+    "protein_g": 16.0,
+    "fat_g": 21.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "фарш говяжий",
+    "aliases": [
+      "говяжий фарш",
+      "фарш"
+    ],
+    "calories": 254,
+    "protein_g": 17.0,
+    "fat_g": 20.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "фарш куриный",
+    "aliases": [
+      "куриный фарш"
+    ],
+    "calories": 143,
+    "protein_g": 17.0,
+    "fat_g": 8.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "котлета куриная",
+    "aliases": [
+      "куриная котлета"
+    ],
+    "calories": 220,
+    "protein_g": 16.0,
+    "fat_g": 14.0,
+    "carbs_g": 6.0,
+    "fiber_g": 0.5,
+    "sugar_g": 0.5
+  },
+  {
+    "name": "сосиски",
+    "aliases": [
+      "сосиска",
+      "молочные сосиски"
+    ],
+    "calories": 266,
+    "protein_g": 11.0,
+    "fat_g": 23.9,
+    "carbs_g": 1.6,
+    "fiber_g": 0,
+    "sugar_g": 0.5
+  },
+  {
+    "name": "колбаса вареная",
+    "aliases": [
+      "колбаса",
+      "докторская"
+    ],
+    "calories": 257,
+    "protein_g": 12.8,
+    "fat_g": 22.2,
+    "carbs_g": 1.5,
+    "fiber_g": 0,
+    "sugar_g": 0.5
+  },
+  {
+    "name": "бекон",
+    "aliases": [
+      "бекон жареный"
+    ],
+    "calories": 468,
+    "protein_g": 13.0,
+    "fat_g": 45.0,
+    "carbs_g": 1.4,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "лосось",
+    "aliases": [
+      "семга",
+      "филе лосося"
+    ],
+    "calories": 208,
+    "protein_g": 20.0,
+    "fat_g": 13.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "тунец",
+    "aliases": [
+      "тунец консервированный"
+    ],
+    "calories": 132,
+    "protein_g": 28.0,
+    "fat_g": 1.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "треска",
+    "aliases": [
+      "филе трески"
+    ],
+    "calories": 78,
+    "protein_g": 17.7,
+    "fat_g": 0.7,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "сельдь",
+    "aliases": [
+      "селедка",
+      "сельдь соленая"
+    ],
+    "calories": 161,
+    "protein_g": 17.0,
+    "fat_g": 10.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "креветки",
+    "aliases": [
+      "креветка"
+    ],
+    "calories": 95,
+    "protein_g": 20.0,
+    "fat_g": 1.2,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "минтай",
+    "aliases": [
+      "филе минтая"
+    ],
+    "calories": 72,
+    "protein_g": 15.9,
+    "fat_g": 0.9,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "рис вареный",
+    "aliases": [
+      "рис",
+      "белый рис"
+    ],
+    "calories": 116,
+    "protein_g": 2.2,
+    "fat_g": 0.5,
+    "carbs_g": 25.0,
+    "fiber_g": 0.4,
+    "sugar_g": 0.1
+  },
+  {
+    "name": "рис бурый вареный",
+    "aliases": [
+      "бурый рис",
+      "коричневый рис"
+    ],
+    "calories": 111,
+    "protein_g": 2.6,
+    "fat_g": 0.9,
+    "carbs_g": 23.0,
+    "fiber_g": 1.8,
+    "sugar_g": 0.4
+  },
+  {
+    "name": "гречка вареная",
+    "aliases": [
+      "гречка",
+      "гречневая каша"
+    ],
+    "calories": 101,
+    "protein_g": 4.2,
+    "fat_g": 1.1,
+    "carbs_g": 18.6,
+    "fiber_g": 3.6,
+    "sugar_g": 0.7
+  },
+  {
+    "name": "овсянка на воде",
+    "aliases": [
+      "овсянка",
+      "овсяная каша",
+      "геркулес"
+    ],
+    "calories": 88,
+    "protein_g": 3.0,
+    "fat_g": 1.7,
+    "carbs_g": 15.0,
+    "fiber_g": 1.7,
+    "sugar_g": 0.4
+  },
+  {
+    "name": "овсянка на молоке",
+    "aliases": [
+      "овсянка с молоком"
+    ],
+    "calories": 102,
+    "protein_g": 3.2,
+    "fat_g": 2.5,
+    "carbs_g": 16.0,
+    "fiber_g": 1.5,
+    "sugar_g": 3.5
+  },
+  {
+    "name": "пшенная каша",
+    "aliases": [
+      "пшено",
+      "пшенка"
+    ],
+    "calories": 90,
+    "protein_g": 3.0,
+    "fat_g": 0.7,
+    "carbs_g": 17.0,
+    "fiber_g": 0.7,
+    "sugar_g": 0.2
+  },
+  {
+    "name": "перловка вареная",
+    "aliases": [
+      "перловка",
+      "перловая каша"
+    ],
+    "calories": 109,
+    "protein_g": 3.1,
+    "fat_g": 0.4,
+    "carbs_g": 22.2,
+    "fiber_g": 3.8,
+    "sugar_g": 0.3
+  },
+  {
+    "name": "макароны вареные",
+    "aliases": [
+      "макароны",
+      "паста",
+      "спагетти"
+    ],
+    "calories": 112,
+    "protein_g": 3.5,
+    "fat_g": 0.4,
+    "carbs_g": 23.2,
+    "fiber_g": 1.3,
+    "sugar_g": 0.6
+  },
+  {
+    "name": "картофель вареный",
+    "aliases": [
+      "картошка",
+      "картофель"
+    ],
+    "calories": 82,
+    "protein_g": 2.0,
+    "fat_g": 0.1,
+    "carbs_g": 18.0,
+    "fiber_g": 1.4,
+    "sugar_g": 0.8
+  },
+  {
+    "name": "картофель жареный",
+    "aliases": [
+      "жареная картошка",
+      "картошка жареная"
+    ],
+    "calories": 192,
+    "protein_g": 2.8,
+    "fat_g": 9.0,
+    "carbs_g": 23.0,
+    "fiber_g": 2.0,
+    "sugar_g": 0.8
+  },
+  {
+    "name": "пюре картофельное",
+    "aliases": [
+      "пюре",
+      "картофельное пюре"
+    ],
+    "calories": 106,
+    "protein_g": 2.0,
+    "fat_g": 4.0,
+    "carbs_g": 15.0,
+    "fiber_g": 1.2,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "картофель фри",
+    "aliases": [
+      "фри"
+    ],
+    "calories": 312,
+    "protein_g": 3.4,
+    "fat_g": 15.0,
+    "carbs_g": 41.0,
+    "fiber_g": 3.8,
+    "sugar_g": 0.3
+  },
+  {
+    "name": "киноа вареная",
+    "aliases": [
+      "киноа"
+    ],
+    "calories": 120,
+    "protein_g": 4.4,
+    "fat_g": 1.9,
+    "carbs_g": 21.3,
+    "fiber_g": 2.8,
+    "sugar_g": 0.9
+  },
+  {
+    "name": "кускус вареный",
+    "aliases": [
+      "кускус"
+    ],
+    "calories": 112,
+    "protein_g": 3.8,
+    "fat_g": 0.2,
+    "carbs_g": 23.0,
+    "fiber_g": 1.4,
+    "sugar_g": 0.1
+  },
+  {
+    "name": "хлеб белый",
+    "aliases": [
+      "белый хлеб",
+      "батон"
+    ],
+    "calories": 265,
+    "protein_g": 7.6,
+    "fat_g": 3.2,
+    "carbs_g": 49.0,
+    "fiber_g": 2.4,
+    "sugar_g": 5.0
+  },
+  {
+    "name": "хлеб черный",
+    "aliases": [
+      "черный хлеб",
+      "ржаной хлеб",
+      "бородинский"
+    ],
+    "calories": 214,
+    "protein_g": 6.6,
+    "fat_g": 1.2,
+    "carbs_g": 42.0,
+    "fiber_g": 5.8,
+    "sugar_g": 1.8
+  },
+  {
+    "name": "хлеб цельнозерновой",
+    "aliases": [
+      "цельнозерновой хлеб"
+    ],
+    "calories": 247,
+    "protein_g": 13.0,
+    "fat_g": 4.2,
+    "carbs_g": 41.0,
+    "fiber_g": 7.0,
+    "sugar_g": 5.0
+  },
+  {
+    "name": "лаваш",
+    "aliases": [
+      "тонкий лаваш"
+    ],
+    "calories": 275,
+    "protein_g": 9.1,
+    "fat_g": 1.1,
+    "carbs_g": 56.0,
+    "fiber_g": 2.0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "тортилья",
+    "aliases": [
+      "лепешка тортилья"
+    ],
+    "calories": 312,
+    "protein_g": 8.0,
+    "fat_g": 7.0,
+    "carbs_g": 52.0,
+    "fiber_g": 3.0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "булочка",
+    "aliases": [
+      "сдобная булочка"
+    ],
+    "calories": 300,
+    "protein_g": 7.5,
+    "fat_g": 7.0,
+    "carbs_g": 52.0,
+    "fiber_g": 2.0,
+    "sugar_g": 10.0
+  },
+  {
+    "name": "блин",
+    "aliases": [
+      "блины",
+      "блинчик"
+    ],
+    "calories": 227,
+    "protein_g": 6.1,
+    "fat_g": 6.3,
+    "carbs_g": 36.0,
+    "fiber_g": 1.0,
+    "sugar_g": 3.0
+  },
+  {
+    "name": "оладьи",
+    "aliases": [
+      "оладья"
+    ],
+    "calories": 233,
+    "protein_g": 6.0,
+    "fat_g": 9.0,
+    "carbs_g": 32.0,
+    "fiber_g": 1.0,
+    "sugar_g": 4.0
+  },
+  {
+    "name": "пицца",
+    "aliases": [
+      "пицца маргарита"
+    ],
+    "calories": 266,
+    "protein_g": 11.0,
+    "fat_g": 10.0,
+    "carbs_g": 33.0,
+    "fiber_g": 2.3,
+    "sugar_g": 3.6
+  },
+  {
+    "name": "помидор",
+    "aliases": [
+      "томат",
+      "помидоры"
+    ],
+    "calories": 20,
+    "protein_g": 0.9,
+    "fat_g": 0.2,
+    "carbs_g": 3.9,
+    "fiber_g": 1.2,
+    "sugar_g": 2.6
+  },
+  {
+    "name": "огурец",
+    "aliases": [
+      "огурцы"
+    ],
+    "calories": 15,
+    "protein_g": 0.8,
+    "fat_g": 0.1,
+    "carbs_g": 2.5,
+    "fiber_g": 0.7,
+    "sugar_g": 1.7
+  },
+  {
+    "name": "морковь",
+    "aliases": [
+      "морковка"
+    ],
+    "calories": 41,
+    "protein_g": 0.9,
+    "fat_g": 0.2,
+    "carbs_g": 9.6,
+    "fiber_g": 2.8,
+    "sugar_g": 4.7
+  },
+  {
+    "name": "капуста белокочанная",
+    "aliases": [
+      "капуста",
+      "белокочанная капуста"
+    ],
+    "calories": 28,
+    "protein_g": 1.8,
+    "fat_g": 0.1,
+    "carbs_g": 4.7,
+    "fiber_g": 2.0,
+    "sugar_g": 3.2
+  },
+  {
+    "name": "капуста пекинская",
+    "aliases": [
+      "пекинская капуста"
+    ],
+    "calories": 16,
+    "protein_g": 1.2,
+    "fat_g": 0.2,
+    "carbs_g": 2.0,
+    "fiber_g": 1.2,
+    "sugar_g": 1.4
+  },
+  {
+    "name": "брокколи",
+    "aliases": [
+      "капуста брокколи"
+    ],
+    "calories": 34,
+    "protein_g": 2.8,
+    "fat_g": 0.4,
+    "carbs_g": 7.0,
+    "fiber_g": 2.6,
+    "sugar_g": 1.7
+  },
+  {
+    "name": "цветная капуста",
+    "aliases": [
+      "капуста цветная"
+    ],
+    "calories": 30,
+    "protein_g": 2.5,
+    "fat_g": 0.3,
+    "carbs_g": 4.9,
+    "fiber_g": 2.0,
+    "sugar_g": 1.9
+  },
+  {
+    "name": "лук репчатый",
+    "aliases": [
+      "лук",
+      "репчатый лук"
+    ],
+    "calories": 41,
+    "protein_g": 1.4,
+    "fat_g": 0.1,
+    "carbs_g": 9.0,
+    "fiber_g": 1.7,
+    "sugar_g": 4.2
+  },
+  {
+    "name": "чеснок",
+    "aliases": [],
+    "calories": 149,
+    "protein_g": 6.5,
+    "fat_g": 0.5,
+    "carbs_g": 30.0,
+    "fiber_g": 2.1,
+    "sugar_g": 1.0
+  },
+  {
+    "name": "перец болгарский",
+    "aliases": [
+      "болгарский перец",
+      "сладкий перец"
+    ],
+    "calories": 27,
+    "protein_g": 1.3,
+    "fat_g": 0.1,
+    "carbs_g": 5.3,
+    "fiber_g": 1.9,
+    "sugar_g": 2.4
+  },
+  {
+    "name": "кабачок",
+    "aliases": [
+      "кабачки"
+    ],
+    "calories": 24,
+    "protein_g": 0.6,
+    "fat_g": 0.3,
+    "carbs_g": 4.6,
+    "fiber_g": 1.1,
+    "sugar_g": 2.5
+  },
+  {
+    "name": "баклажан",
+    "aliases": [
+      "баклажаны"
+    ],
+    "calories": 24,
+    "protein_g": 1.0,
+    "fat_g": 0.2,
+    "carbs_g": 4.5,
+    "fiber_g": 2.5,
+    "sugar_g": 2.4
+  },
+  {
+    "name": "свекла",
+    "aliases": [
+      "свёкла",
+      "свекла вареная"
+    ],
+    "calories": 43,
+    "protein_g": 1.6,
+    "fat_g": 0.1,
+    "carbs_g": 9.0,
+    "fiber_g": 2.8,
+    "sugar_g": 6.8
+  },
+  {
+    "name": "салат листовой",
+    "aliases": [
+      "салат",
+      "листья салата",
+      "айсберг"
+    ],
+    "calories": 15,
+    "protein_g": 1.4,
+    "fat_g": 0.2,
+    "carbs_g": 2.0,
+    "fiber_g": 1.3,
+    "sugar_g": 0.8
+  },
+  {
+    "name": "шпинат",
+    "aliases": [],
+    "calories": 23,
+    "protein_g": 2.9,
+    "fat_g": 0.4,
+    "carbs_g": 3.6,
+    "fiber_g": 2.2,
+    "sugar_g": 0.4
+  },
+  {
+    "name": "кукуруза",
+    "aliases": [
+      "кукуруза консервированная"
+    ],
+    "calories": 86,
+    "protein_g": 3.3,
+    "fat_g": 1.2,
+    "carbs_g": 19.0,
+    "fiber_g": 2.7,
+    "sugar_g": 3.2
+  },
+  {
+    "name": "горошек зеленый",
+    "aliases": [
+      "зеленый горошек",
+      "горох зеленый"
+    ],
+    "calories": 73,
+    "protein_g": 5.0,
+    "fat_g": 0.2,
+    "carbs_g": 13.0,
+    "fiber_g": 5.0,
+    "sugar_g": 5.7
+  },
+  {
+    "name": "фасоль вареная",
+    "aliases": [
+      "фасоль",
+      "красная фасоль"
+    ],
+    "calories": 127,
+    "protein_g": 8.0,
+    "fat_g": 0.5,
+    "carbs_g": 22.0,
+    "fiber_g": 7.0,
+    "sugar_g": 0.3
+  },
+  {
+    "name": "чечевица вареная",
+    "aliases": [
+      "чечевица"
+    ],
+    "calories": 116,
+    "protein_g": 9.0,
+    "fat_g": 0.4,
+    "carbs_g": 20.0,
+    "fiber_g": 7.9,
+    "sugar_g": 1.8
+  },
+  {
+    "name": "грибы шампиньоны",
+    "aliases": [
+      "шампиньоны",
+      "грибы"
+    ],
+    "calories": 27,
+    "protein_g": 4.3,
+    "fat_g": 0.1,
+    "carbs_g": 1.0,
+    "fiber_g": 1.0,
+    "sugar_g": 1.0
+  },
+  {
+    "name": "авокадо",
+    "aliases": [],
+    "calories": 160,
+    "protein_g": 2.0,
+    "fat_g": 15.0,
+    "carbs_g": 9.0,
+    "fiber_g": 6.7,
+    "sugar_g": 0.7
+  },
+  {
+    "name": "оливки",
+    "aliases": [
+      "маслины"
+    ],
+    "calories": 115,
+    "protein_g": 0.8,
+    "fat_g": 11.0,
+    "carbs_g": 6.0,
+    "fiber_g": 3.2,
+    "sugar_g": 0
+  },
+  {
+    "name": "яблоко",
+    "aliases": [
+      "яблоки"
+    ],
+    "calories": 52,
+    "protein_g": 0.3,
+    "fat_g": 0.2,
+    "carbs_g": 14.0,
+    "fiber_g": 2.4,
+    "sugar_g": 10.0
+  },
+  {
+    "name": "банан",
+    "aliases": [
+      "бананы"
+    ],
+    "calories": 89,
+    "protein_g": 1.1,
+    "fat_g": 0.3,
+    "carbs_g": 23.0,
+    "fiber_g": 2.6,
+    "sugar_g": 12.0
+  },
+  {
+    "name": "апельсин",
+    "aliases": [
+      "апельсины"
+    ],
+    "calories": 47,
+    "protein_g": 0.9,
+    "fat_g": 0.1,
+    "carbs_g": 12.0,
+    "fiber_g": 2.4,
+    "sugar_g": 9.0
+  },
+  {
+    "name": "мандарин",
+    "aliases": [
+      "мандарины"
+    ],
+    "calories": 53,
+    "protein_g": 0.8,
+    "fat_g": 0.3,
+    "carbs_g": 13.0,
+    "fiber_g": 1.8,
+    "sugar_g": 11.0
+  },
+  {
+    "name": "груша",
+    "aliases": [
+      "груши"
+    ],
+    "calories": 57,
+    "protein_g": 0.4,
+    "fat_g": 0.1,
+    "carbs_g": 15.0,
+    "fiber_g": 3.1,
+    "sugar_g": 10.0
+  },
+  {
+    "name": "виноград",
+    "aliases": [],
+    "calories": 69,
+    "protein_g": 0.7,
+    "fat_g": 0.2,
+    "carbs_g": 18.0,
+    "fiber_g": 0.9,
+    "sugar_g": 16.0
+  },
+  {
+    "name": "клубника",
+    "aliases": [
+      "земляника"
+    ],
+    "calories": 32,
+    "protein_g": 0.7,
+    "fat_g": 0.3,
+    "carbs_g": 7.7,
+    "fiber_g": 2.0,
+    "sugar_g": 4.9
+  },
+  {
+    "name": "черника",
+    "aliases": [
+      "голубика"
+    ],
+    "calories": 57,
+    "protein_g": 0.7,
+    "fat_g": 0.3,
+    "carbs_g": 14.0,
+    "fiber_g": 2.4,
+    "sugar_g": 10.0
+  },
+  {
+    "name": "малина",
+    "aliases": [],
+    "calories": 52,
+    "protein_g": 1.2,
+    "fat_g": 0.7,
+    "carbs_g": 12.0,
+    "fiber_g": 6.5,
+    "sugar_g": 4.4
+  },
+  {
+    "name": "арбуз",
+    "aliases": [],
+    "calories": 30,
+    "protein_g": 0.6,
+    "fat_g": 0.1,
+    "carbs_g": 7.6,
+    "fiber_g": 0.4,
+    "sugar_g": 6.2
+  },
+  {
+    "name": "дыня",
+    "aliases": [],
+    "calories": 34,
+    "protein_g": 0.8,
+    "fat_g": 0.2,
+    "carbs_g": 8.0,
+    "fiber_g": 0.9,
+    "sugar_g": 7.9
+  },
+  {
+    "name": "киви",
+    "aliases": [],
+    "calories": 61,
+    "protein_g": 1.1,
+    "fat_g": 0.5,
+    "carbs_g": 15.0,
+    "fiber_g": 3.0,
+    "sugar_g": 9.0
+  },
+  {
+    "name": "манго",
+    "aliases": [],
+    "calories": 60,
+    "protein_g": 0.8,
+    "fat_g": 0.4,
+    "carbs_g": 15.0,
+    "fiber_g": 1.6,
+    "sugar_g": 14.0
+  },
+  {
+    "name": "ананас",
+    "aliases": [],
+    "calories": 50,
+    "protein_g": 0.5,
+    "fat_g": 0.1,
+    "carbs_g": 13.0,
+    "fiber_g": 1.4,
+    "sugar_g": 10.0
+  },
+  {
+    "name": "лимон",
+    "aliases": [],
+    "calories": 29,
+    "protein_g": 1.1,
+    "fat_g": 0.3,
+    "carbs_g": 9.0,
+    "fiber_g": 2.8,
+    "sugar_g": 2.5
+  },
+  {
+    "name": "изюм",
+    "aliases": [],
+    "calories": 299,
+    "protein_g": 3.1,
+    "fat_g": 0.5,
+    "carbs_g": 79.0,
+    "fiber_g": 3.7,
+    "sugar_g": 59.0
+  },
+  {
+    "name": "курага",
+    "aliases": [
+      "сухофрукты курага"
+    ],
+    "calories": 241,
+    "protein_g": 3.4,
+    "fat_g": 0.5,
+    "carbs_g": 63.0,
+    "fiber_g": 7.3,
+    "sugar_g": 53.0
+  },
+  {
+    "name": "грецкий орех",
+    "aliases": [
+      "грецкие орехи",
+      "орехи грецкие"
+    ],
+    "calories": 654,
+    "protein_g": 15.0,
+    "fat_g": 65.0,
+    "carbs_g": 14.0,
+    "fiber_g": 6.7,
+    "sugar_g": 2.6
+  },
+  {
+    "name": "миндаль",
+    "aliases": [],
+    "calories": 579,
+    "protein_g": 21.0,
+    "fat_g": 50.0,
+    "carbs_g": 22.0,
+    "fiber_g": 12.5,
+    "sugar_g": 4.4
+  },
+  {
+    "name": "арахис",
+    "aliases": [],
+    "calories": 567,
+    "protein_g": 26.0,
+    "fat_g": 49.0,
+    "carbs_g": 16.0,
+    "fiber_g": 8.5,
+    "sugar_g": 4.7
+  },
+  {
+    "name": "кешью",
+    "aliases": [],
+    "calories": 553,
+    "protein_g": 18.0,
+    "fat_g": 44.0,
+    "carbs_g": 30.0,
+    "fiber_g": 3.3,
+    "sugar_g": 5.9
+  },
+  {
+    "name": "фундук",
+    "aliases": [],
+    "calories": 628,
+    "protein_g": 15.0,
+    "fat_g": 61.0,
+    "carbs_g": 17.0,
+    "fiber_g": 9.7,
+    "sugar_g": 4.3
+  },
+  {
+    "name": "семена чиа",
+    "aliases": [
+      "чиа"
+    ],
+    "calories": 486,
+    "protein_g": 17.0,
+    "fat_g": 31.0,
+    "carbs_g": 42.0,
+    "fiber_g": 34.0,
+    "sugar_g": 0
+  },
+  {
+    "name": "семена льна",
+    "aliases": [
+      "льняное семя"
+    ],
+    "calories": 534,
+    "protein_g": 18.0,
+    "fat_g": 42.0,
+    "carbs_g": 29.0,
+    "fiber_g": 27.0,
+    "sugar_g": 1.6
+  },
+  {
+    "name": "семечки подсолнечника",
+    "aliases": [
+      "семечки",
+      "подсолнечник"
+    ],
+    "calories": 584,
+    "protein_g": 21.0,
+    "fat_g": 51.0,
+    "carbs_g": 20.0,
+    "fiber_g": 8.6,
+    "sugar_g": 2.6
+  },
+  {
+    "name": "масло оливковое",
+    "aliases": [
+      "оливковое масло"
+    ],
+    "calories": 884,
+    "protein_g": 0.0,
+    "fat_g": 100.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "масло подсолнечное",
+    "aliases": [
+      "подсолнечное масло",
+      "растительное масло"
+    ],
+    "calories": 884,
+    "protein_g": 0.0,
+    "fat_g": 100.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "арахисовая паста",
+    "aliases": [
+      "паста арахисовая"
+    ],
+    "calories": 588,
+    "protein_g": 25.0,
+    "fat_g": 50.0,
+    "carbs_g": 20.0,
+    "fiber_g": 6.0,
+    "sugar_g": 9.0
+  },
+  {
+    "name": "майонез",
+    "aliases": [],
+    "calories": 680,
+    "protein_g": 1.0,
+    "fat_g": 75.0,
+    "carbs_g": 2.6,
+    "fiber_g": 0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "кетчуп",
+    "aliases": [],
+    "calories": 112,
+    "protein_g": 1.8,
+    "fat_g": 0.3,
+    "carbs_g": 26.0,
+    "fiber_g": 0.4,
+    "sugar_g": 22.0
+  },
+  {
+    "name": "соевый соус",
+    "aliases": [],
+    "calories": 53,
+    "protein_g": 8.1,
+    "fat_g": 0.0,
+    "carbs_g": 4.9,
+    "fiber_g": 0.8,
+    "sugar_g": 0.4
+  },
+  {
+    "name": "горчица",
+    "aliases": [],
+    "calories": 66,
+    "protein_g": 4.4,
+    "fat_g": 4.0,
+    "carbs_g": 5.0,
+    "fiber_g": 3.0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "мед",
+    "aliases": [
+      "мёд"
+    ],
+    "calories": 304,
+    "protein_g": 0.3,
+    "fat_g": 0.0,
+    "carbs_g": 82.0,
+    "fiber_g": 0.2,
+    "sugar_g": 82.0
+  },
+  {
+    "name": "сахар",
+    "aliases": [
+      "сахарный песок"
+    ],
+    "calories": 387,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "carbs_g": 100.0,
+    "fiber_g": 0,
+    "sugar_g": 100.0
+  },
+  {
+    "name": "шоколад темный",
+    "aliases": [
+      "темный шоколад",
+      "горький шоколад"
+    ],
+    "calories": 546,
+    "protein_g": 5.0,
+    "fat_g": 31.0,
+    "carbs_g": 60.0,
+    "fiber_g": 7.0,
+    "sugar_g": 48.0
+  },
+  {
+    "name": "шоколад молочный",
+    "aliases": [
+      "молочный шоколад"
+    ],
+    "calories": 535,
+    "protein_g": 7.0,
+    "fat_g": 30.0,
+    "carbs_g": 59.0,
+    "fiber_g": 3.0,
+    "sugar_g": 52.0
+  },
+  {
+    "name": "мороженое",
+    "aliases": [
+      "пломбир"
+    ],
+    "calories": 207,
+    "protein_g": 3.5,
+    "fat_g": 11.0,
+    "carbs_g": 24.0,
+    "fiber_g": 0.7,
+    "sugar_g": 21.0
+  },
+  {
+    "name": "варенье",
+    "aliases": [
+      "джем"
+    ],
+    "calories": 250,
+    "protein_g": 0.4,
+    "fat_g": 0.1,
+    "carbs_g": 65.0,
+    "fiber_g": 0.8,
+    "sugar_g": 60.0
+  },
+  {
+    "name": "борщ",
+    "aliases": [],
+    "calories": 49,
+    "protein_g": 1.1,
+    "fat_g": 2.2,
+    "carbs_g": 6.7,
+    "fiber_g": 1.5,
+    "sugar_g": 2.0
+  },
+  {
+    "name": "щи",
+    "aliases": [],
+    "calories": 31,
+    "protein_g": 1.0,
+    "fat_g": 1.5,
+    "carbs_g": 3.5,
+    "fiber_g": 1.0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "суп куриный",
+    "aliases": [
+      "куриный суп",
+      "бульон куриный"
+    ],
+    "calories": 36,
+    "protein_g": 3.5,
+    "fat_g": 1.2,
+    "carbs_g": 2.5,
+    "fiber_g": 0.3,
+    "sugar_g": 0.5
+  },
+  {
+    "name": "окрошка",
+    "aliases": [],
+    "calories": 54,
+    "protein_g": 2.5,
+    "fat_g": 2.5,
+    "carbs_g": 5.0,
+    "fiber_g": 0.5,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "салат цезарь",
+    "aliases": [
+      "цезарь"
+    ],
+    "calories": 180,
+    "protein_g": 10.0,
+    "fat_g": 12.0,
+    "carbs_g": 7.0,
+    "fiber_g": 1.5,
+    "sugar_g": 2.0
+  },
+  {
+    "name": "салат оливье",
+    "aliases": [
+      "оливье"
+    ],
+    "calories": 198,
+    "protein_g": 5.5,
+    "fat_g": 16.0,
+    "carbs_g": 8.0,
+    "fiber_g": 1.0,
+    "sugar_g": 1.5
+  },
+  {
+    "name": "винегрет",
+    "aliases": [],
+    "calories": 76,
+    "protein_g": 1.5,
+    "fat_g": 4.5,
+    "carbs_g": 7.0,
+    "fiber_g": 2.0,
+    "sugar_g": 3.0
+  },
+  {
+    "name": "греческий салат",
+    "aliases": [],
+    "calories": 120,
+    "protein_g": 4.0,
+    "fat_g": 10.0,
+    "carbs_g": 4.0,
+    "fiber_g": 1.5,
+    "sugar_g": 2.5
+  },
+  {
+    "name": "пельмени",
+    "aliases": [
+      "пельмень"
+    ],
+    "calories": 275,
+    "protein_g": 12.0,
+    "fat_g": 12.0,
+    "carbs_g": 29.0,
+    "fiber_g": 1.5,
+    "sugar_g": 1.0
+  },
+  {
+    "name": "вареники с картошкой",
+    "aliases": [
+      "вареники"
+    ],
+    "calories": 200,
+    "protein_g": 6.0,
+    "fat_g": 4.0,
+    "carbs_g": 35.0,
+    "fiber_g": 2.0,
+    "sugar_g": 1.0
+  },
+  {
+    "name": "сырники",
+    "aliases": [
+      "сырок творожный жареный"
+    ],
+    "calories": 220,
+    "protein_g": 12.0,
+    "fat_g": 10.0,
+    "carbs_g": 18.0,
+    "fiber_g": 0.5,
+    "sugar_g": 6.0
+  },
+  {
+    "name": "шаурма",
+    "aliases": [
+      "шаверма"
+    ],
+    "calories": 230,
+    "protein_g": 10.0,
+    "fat_g": 12.0,
+    "carbs_g": 20.0,
+    "fiber_g": 2.0,
+    "sugar_g": 2.5
+  },
+  {
+    "name": "бургер",
+    "aliases": [
+      "гамбургер",
+      "чизбургер"
+    ],
+    "calories": 295,
+    "protein_g": 15.0,
+    "fat_g": 14.0,
+    "carbs_g": 28.0,
+    "fiber_g": 1.5,
+    "sugar_g": 5.0
+  },
+  {
+    "name": "суши",
+    "aliases": [
+      "роллы",
+      "ролл"
+    ],
+    "calories": 150,
+    "protein_g": 5.0,
+    "fat_g": 3.0,
+    "carbs_g": 25.0,
+    "fiber_g": 1.0,
+    "sugar_g": 3.0
+  },
+  {
+    "name": "хумус",
+    "aliases": [],
+    "calories": 166,
+    "protein_g": 8.0,
+    "fat_g": 10.0,
+    "carbs_g": 14.0,
+    "fiber_g": 6.0,
+    "sugar_g": 0.5
+  },
+  {
+    "name": "тофу",
+    "aliases": [],
+    "calories": 76,
+    "protein_g": 8.0,
+    "fat_g": 4.8,
+    "carbs_g": 1.9,
+    "fiber_g": 0.3,
+    "sugar_g": 0.6
+  },
+  {
+    "name": "протеиновый батончик",
+    "aliases": [
+      "протеиновый батон",
+      "батончик протеиновый"
+    ],
+    "calories": 360,
+    "protein_g": 25.0,
+    "fat_g": 12.0,
+    "carbs_g": 35.0,
+    "fiber_g": 5.0,
+    "sugar_g": 12.0
+  },
+  {
+    "name": "кофе черный",
+    "aliases": [
+      "кофе",
+      "американо",
+      "эспрессо"
+    ],
+    "calories": 2,
+    "protein_g": 0.1,
+    "fat_g": 0.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "чай без сахара",
+    "aliases": [
+      "чай",
+      "черный чай",
+      "зеленый чай"
+    ],
+    "calories": 1,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  },
+  {
+    "name": "сок апельсиновый",
+    "aliases": [
+      "апельсиновый сок"
+    ],
+    "calories": 45,
+    "protein_g": 0.7,
+    "fat_g": 0.2,
+    "carbs_g": 10.0,
+    "fiber_g": 0.2,
+    "sugar_g": 8.0
+  },
+  {
+    "name": "кола",
+    "aliases": [
+      "coca-cola",
+      "пепси",
+      "газировка"
+    ],
+    "calories": 42,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "carbs_g": 10.6,
+    "fiber_g": 0,
+    "sugar_g": 10.6
+  },
+  {
+    "name": "вода",
+    "aliases": [
+      "питьевая вода",
+      "минеральная вода"
+    ],
+    "calories": 0,
+    "protein_g": 0.0,
+    "fat_g": 0.0,
+    "carbs_g": 0.0,
+    "fiber_g": 0,
+    "sugar_g": 0
+  }
+]

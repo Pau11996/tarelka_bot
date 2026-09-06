@@ -18,6 +18,8 @@ RETRYABLE_MARKERS = (
 
 
 class CursorRunner(BaseAnalysisRunner):
+    uses_openai = False
+
     def __init__(self) -> None:
         self.model = os.environ.get("CURSOR_MODEL", "cursor-grok-4.5-high-fast")
         self.timeout = int(os.environ.get("CURSOR_TIMEOUT", "600"))
@@ -25,7 +27,13 @@ class CursorRunner(BaseAnalysisRunner):
         self.workdir = os.environ.get("UPLOAD_DIR", "/tmp/uploads")
         self.max_retries = int(os.environ.get("CURSOR_MAX_RETRIES", "3"))
 
-    async def run_prompt(self, prompt: str, image_path: str | None = None) -> str:
+    async def run_prompt(
+        self,
+        prompt: str,
+        image_path: str | None = None,
+        *,
+        model: str | None = None,
+    ) -> str:
         full_prompt = prompt
         if image_path:
             full_prompt = (
@@ -37,7 +45,11 @@ class CursorRunner(BaseAnalysisRunner):
         last_error: RuntimeError | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                return await asyncio.to_thread(self._execute_agent, full_prompt)
+                return await asyncio.to_thread(
+                    self._execute_agent,
+                    full_prompt,
+                    model or self.model,
+                )
             except RuntimeError as exc:
                 last_error = exc
                 if attempt >= self.max_retries or not self._is_retryable(exc):
@@ -50,7 +62,7 @@ class CursorRunner(BaseAnalysisRunner):
         message = str(exc)
         return any(marker in message for marker in RETRYABLE_MARKERS)
 
-    def _execute_agent(self, prompt: str) -> str:
+    def _execute_agent(self, prompt: str, model: str | None = None) -> str:
         env = os.environ.copy()
 
         cmd = [
@@ -63,8 +75,9 @@ class CursorRunner(BaseAnalysisRunner):
             "ask",
             "--force",
         ]
-        if self.model:
-            cmd.extend(["--model", self.model])
+        selected_model = model or self.model
+        if selected_model:
+            cmd.extend(["--model", selected_model])
 
         result = subprocess.run(
             cmd,

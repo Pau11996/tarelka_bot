@@ -1,4 +1,4 @@
-from src.bot.services.formatting import format_analysis_result, format_daily_balance
+from src.bot.services.formatting import format_analysis_result, format_daily_balance, format_unknown_result
 from src.bot.services.nutrition import DailyBalance, calculate_daily_nutrient_targets
 from src.db.models import ActivityLevel, Goal, Profile, Sex
 from src.shared.schemas import AnalysisResult, NutrientItem
@@ -121,3 +121,24 @@ def test_analysis_card_escapes_html_values():
 
     assert "Рыба &lt;test&gt;" in text
     assert "соус &amp; сыр (&lt;50 г&gt;)" in text
+
+
+def test_unknown_result_formatting():
+    balance = DailyBalance(
+        target=2000,
+        consumed=0,
+        activity_bonus=0,
+        remaining=2000,
+        protein_g=0,
+        fat_g=0,
+        carbs_g=0,
+        micronutrients={"fiber_g": 0, "sugar_g": 0},
+    )
+    result = AnalysisResult(type="unknown", title="Неизвестный ввод", total_calories=0)
+
+    text = format_unknown_result(result, balance)
+    via_analysis = format_analysis_result(result, balance)
+
+    assert "Неизвестный ввод" in text
+    assert "0 ккал" in text
+    assert via_analysis == text

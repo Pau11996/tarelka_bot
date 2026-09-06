@@ -21,6 +21,7 @@ from src.bot.handlers import (
     start,
     statistics,
     subscription,
+    survey,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.reengagement import run_reengagement_loop
@@ -79,6 +80,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(data_management.router)
     dp.include_router(referrals.router)
     dp.include_router(feedback.router)
+    dp.include_router(survey.router)
     dp.include_router(daily.router)
     dp.include_router(statistics.router)
     dp.include_router(favorites.router)

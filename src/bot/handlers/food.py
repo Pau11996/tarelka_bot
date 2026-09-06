@@ -25,7 +25,7 @@ from src.bot.services.messaging import (
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import ensure_request_allowed
-from src.bot.states import CorrectionStates
+from src.bot.states import CorrectionStates, SurveyStates
 from src.db.models import AnalysisType
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult
@@ -209,6 +209,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     current_state = await state.get_state()
     if current_state and "ProfileStates" in str(current_state):
         return
+    if current_state and "SurveyStates" in str(current_state):
+        return
     if current_state == CorrectionStates.waiting_text:
         return
 
@@ -308,6 +310,8 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
     current_state = await state.get_state()
     if current_state and "ProfileStates" in str(current_state):
         return
+    if current_state and "SurveyStates" in str(current_state):
+        return
     if current_state == CorrectionStates.waiting_text:
         return
 
@@ -406,6 +410,10 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
     if current_state and "ProfileStates" in str(current_state):
         return
     if current_state == CorrectionStates.waiting_text:
+        return
+    if current_state == SurveyStates.feedback:
+        return
+    if current_state and "SurveyStates" in str(current_state):
         return
     if message.text.startswith("/"):
         return

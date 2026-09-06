@@ -24,9 +24,11 @@ from src.ai_analyzer.broadcast import (
     broadcast_state,
     list_broadcast_telegram_ids,
     run_broadcast,
+    survey_invitation_reply_markup,
     telegram_bot_token,
 )
 from src.bot.services.links import normalize_acquisition_source
+from src.bot.services.survey_texts import SURVEY_INVITATION
 from src.db.models import (
     AIAnalysis,
     AnalysisType,
@@ -135,6 +137,28 @@ class BroadcastRequest(BaseModel):
         if not text:
             raise ValueError("text is blank")
         return text
+
+
+class SurveyLaunchRequest(BaseModel):
+    audience: BroadcastAudience
+
+
+class SurveyFeedbackItem(BaseModel):
+    user_id: int
+    app_rating: int
+    photo_rating: int | None
+    feedback_text: str
+    created_at: datetime
+
+
+class SurveyResultsResponse(BaseModel):
+    total_responses: int
+    avg_app_rating: float | None
+    avg_photo_rating: float | None
+    app_distribution: dict[str, int]
+    photo_distribution: dict[str, int]
+    photo_skipped: int
+    recent_feedback: list[SurveyFeedbackItem]
 
 
 def admin_username() -> str:
@@ -709,3 +733,100 @@ async def admin_broadcast(
 
     background_tasks.add_task(run_broadcast, telegram_ids, request.text, token=token)
     return snapshot
+
+
+@router.post("/survey/launch", response_model=BroadcastStatus, dependencies=[Depends(require_admin)])
+async def admin_survey_launch(
+    request: SurveyLaunchRequest,
+    background_tasks: BackgroundTasks,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> BroadcastStatus:
+    token = telegram_bot_token()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TELEGRAM_BOT_TOKEN is not configured",
+        )
+
+    async with broadcast_state.lock:
+        if broadcast_state.is_running:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Broadcast is already running",
+            )
+        telegram_ids = await list_broadcast_telegram_ids(session, request.audience)
+        snapshot = broadcast_state.begin(request.audience.value, len(telegram_ids))
+
+    background_tasks.add_task(
+        run_broadcast,
+        telegram_ids,
+        SURVEY_INVITATION,
+        token=token,
+        reply_markup=survey_invitation_reply_markup(),
+    )
+    return snapshot
+
+
+@router.get("/survey/results", response_model=SurveyResultsResponse, dependencies=[Depends(require_admin)])
+async def admin_survey_results(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SurveyResultsResponse:
+    repo = UserRepository(session)
+    stats = await repo.get_survey_stats()
+    feedback_rows = await repo.list_survey_feedback(limit=50)
+    return SurveyResultsResponse(
+        total_responses=stats["total_responses"],
+        avg_app_rating=stats["avg_app_rating"],
+        avg_photo_rating=stats["avg_photo_rating"],
+        app_distribution={str(k): v for k, v in stats["app_distribution"].items()},
+        photo_distribution={str(k): v for k, v in stats["photo_distribution"].items()},
+        photo_skipped=stats["photo_skipped"],
+        recent_feedback=[
+            SurveyFeedbackItem(
+                user_id=row.user_id,
+                app_rating=row.app_rating,
+                photo_rating=row.photo_rating,
+                feedback_text=row.feedback_text or "",
+                created_at=row.created_at,
+            )
+            for row in feedback_rows
+        ],
+    )
+
+
+@router.get("/survey/export.csv", dependencies=[Depends(require_admin)])
+async def admin_survey_export_csv(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Response:
+    repo = UserRepository(session)
+    rows = await repo.list_survey_responses()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "id",
+            "user_id",
+            "app_rating",
+            "photo_rating",
+            "feedback_text",
+            "created_at",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.id,
+                row.user_id,
+                row.app_rating,
+                row.photo_rating if row.photo_rating is not None else "",
+                row.feedback_text or "",
+                row.created_at.isoformat() if row.created_at else "",
+            ]
+        )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="survey_responses.csv"',
+        },
+    )

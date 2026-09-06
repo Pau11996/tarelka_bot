@@ -178,41 +178,6 @@
                 </form>
             </article>
 
-            <article class="admin-chart-card admin-creative-card">
-                <div>
-                    <h2>Тексты для микро-тестов</h2>
-                    <p class="admin-muted">Используйте по одному тезису на размещение и отдельную метку источника.</p>
-                </div>
-                <div class="admin-creative-grid">
-                    <article>
-                        <strong>A — меньше ручного ввода</strong>
-                        <p data-creative="Надоело вручную искать каждое блюдо в дневнике калорий? Отправьте фото еды боту ТАРЕЛКА — он примерно оценит калории и БЖУ и обновит баланс дня прямо в Telegram. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. Расчёт примерный. {{LINK}}"></p>
-                        <button class="button button-secondary creative-copy-button" type="button">Копировать A</button>
-                    </article>
-                    <article>
-                        <strong>B — контроль остатка</strong>
-                        <p data-creative="Сфотографируйте тарелку и посмотрите, сколько калорий примерно осталось до вашей дневной нормы. ТАРЕЛКА работает прямо в Telegram: без отдельного приложения и сложных таблиц. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. {{LINK}}"></p>
-                        <button class="button button-secondary creative-copy-button" type="button">Копировать B</button>
-                    </article>
-                    <article>
-                        <strong>C — голосовой ввод</strong>
-                        <p data-creative="Нет времени фотографировать и заполнять дневник? Надиктуйте, что съели, голосовым сообщением. ТАРЕЛКА распознает текст, примерно оценит калории и обновит дневной баланс. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. {{LINK}}"></p>
-                        <button class="button button-secondary creative-copy-button" type="button">Копировать C</button>
-                    </article>
-                </div>
-                <details class="admin-interview-guide">
-                    <summary>Вопросы для интервью с текущими пользователями</summary>
-                    <ol>
-                        <li>Какую задачу вы хотели решить, когда запустили бота?</li>
-                        <li>Как считали калории раньше и что там раздражало?</li>
-                        <li>На каком шаге ТАРЕЛКИ было непонятно или неудобно?</li>
-                        <li>Что заставило бы возвращаться каждый день?</li>
-                        <li>Почему пока не купили подписку за 150 Stars?</li>
-                        <li>За какую конкретную пользу вы были бы готовы платить?</li>
-                    </ol>
-                </details>
-            </article>
-
             <article class="admin-chart-card admin-broadcast-card">
                 <div>
                     <h2>Рассылка</h2>
@@ -252,6 +217,62 @@
                     <button class="button button-primary" id="broadcast-submit" type="submit">Отправить</button>
                     <p class="admin-broadcast-status" id="broadcast-status" role="status"></p>
                 </form>
+            </article>
+
+            <article class="admin-chart-card admin-broadcast-card">
+                <div>
+                    <h2>Опрос</h2>
+                    <p class="admin-muted">
+                        Разовый опрос: оценка ТАРЕЛКИ, качества фото и свободный текст.
+                        Приглашение уходит с кнопкой «Пройти опрос». Для проверки сначала отправьте себе.
+                    </p>
+                </div>
+                <form class="admin-broadcast-form" id="survey-launch-form">
+                    <fieldset class="admin-broadcast-audience">
+                        <legend>Кому отправить приглашение</legend>
+                        <label>
+                            <input type="radio" name="survey-audience" value="me" checked>
+                            <span>Только мне (тест)</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="survey-audience" value="subscribers">
+                            <span id="survey-subscribers-label">Подписчикам</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="survey-audience" value="all">
+                            <span id="survey-all-label">Всем</span>
+                        </label>
+                    </fieldset>
+                    <button class="button button-primary" id="survey-launch-submit" type="submit">
+                        Отправить приглашение
+                    </button>
+                    <p class="admin-broadcast-status" id="survey-launch-status" role="status"></p>
+                </form>
+                <div class="admin-survey-results" id="survey-results">
+                    <div class="admin-survey-summary">
+                        <p><strong>Ответов:</strong> <span id="survey-total">0</span></p>
+                        <p><strong>Средняя оценка ТАРЕЛКИ:</strong> <span id="survey-avg-app">—</span></p>
+                        <p><strong>Средняя оценка фото:</strong> <span id="survey-avg-photo">—</span></p>
+                        <p><strong>Пропустили оценку фото:</strong> <span id="survey-photo-skipped">0</span></p>
+                    </div>
+                    <div class="admin-survey-distributions">
+                        <div>
+                            <h3>Оценка приложения</h3>
+                            <ul id="survey-app-distribution"></ul>
+                        </div>
+                        <div>
+                            <h3>Оценка фото</h3>
+                            <ul id="survey-photo-distribution"></ul>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Текстовые ответы</h3>
+                        <ul class="admin-survey-feedback" id="survey-feedback-list"></ul>
+                    </div>
+                    <button class="button button-secondary" id="survey-export-button" type="button">
+                        Скачать CSV
+                    </button>
+                </div>
             </article>
 
             <p class="admin-error" id="dashboard-error" role="alert"></p>

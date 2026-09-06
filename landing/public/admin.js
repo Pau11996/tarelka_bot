@@ -25,7 +25,6 @@
     const campaignLink = document.getElementById("campaign-link");
     const campaignStatus = document.getElementById("campaign-status");
     const copyLinkButton = document.getElementById("copy-link-button");
-    const creativeCopyButtons = document.querySelectorAll(".creative-copy-button");
     const broadcastForm = document.getElementById("broadcast-form");
     const broadcastText = document.getElementById("broadcast-text");
     const broadcastCounter = document.getElementById("broadcast-counter");
@@ -34,6 +33,19 @@
     const broadcastStatus = document.getElementById("broadcast-status");
     const broadcastSubscribersLabel = document.getElementById("broadcast-subscribers-label");
     const broadcastAllLabel = document.getElementById("broadcast-all-label");
+    const surveyLaunchForm = document.getElementById("survey-launch-form");
+    const surveyLaunchSubmit = document.getElementById("survey-launch-submit");
+    const surveyLaunchStatus = document.getElementById("survey-launch-status");
+    const surveySubscribersLabel = document.getElementById("survey-subscribers-label");
+    const surveyAllLabel = document.getElementById("survey-all-label");
+    const surveyTotal = document.getElementById("survey-total");
+    const surveyAvgApp = document.getElementById("survey-avg-app");
+    const surveyAvgPhoto = document.getElementById("survey-avg-photo");
+    const surveyPhotoSkipped = document.getElementById("survey-photo-skipped");
+    const surveyAppDistribution = document.getElementById("survey-app-distribution");
+    const surveyPhotoDistribution = document.getElementById("survey-photo-distribution");
+    const surveyFeedbackList = document.getElementById("survey-feedback-list");
+    const surveyExportButton = document.getElementById("survey-export-button");
 
     const numberFormatter = new Intl.NumberFormat("ru-RU");
     const usdFormatter = new Intl.NumberFormat("en-US", {
@@ -221,6 +233,9 @@
         });
         renderSources(data.sources || []);
         updateBroadcastAudienceLabels(data);
+        fetchSurveyResults().catch(() => {
+            setSurveyLaunchStatus("Не удалось загрузить результаты опроса.", "error");
+        });
     }
 
     function updateBroadcastAudienceLabels(data) {
@@ -228,6 +243,8 @@
         const users = numberFormatter.format(data.totals.users);
         broadcastSubscribersLabel.textContent = `Подписчикам (${subscribers})`;
         broadcastAllLabel.textContent = `Всем (${users})`;
+        surveySubscribersLabel.textContent = `Подписчикам (${subscribers})`;
+        surveyAllLabel.textContent = `Всем (${users})`;
     }
 
     function normalizeCampaignSource(value) {
@@ -245,14 +262,6 @@
             ? `https://t.me/${botUsername}?start=${source}`
             : "";
         copyLinkButton.disabled = !campaignLink.value;
-        renderCreativeTexts();
-    }
-
-    function renderCreativeTexts() {
-        const link = campaignLink.value || "[вставьте deep-link]";
-        document.querySelectorAll("[data-creative]").forEach((element) => {
-            element.textContent = element.dataset.creative.replace("{{LINK}}", link);
-        });
     }
 
     function setCampaignStatus(message, kind) {
@@ -292,6 +301,159 @@
         broadcastStatus.textContent = message || "";
         broadcastStatus.classList.toggle("is-error", kind === "error");
         broadcastStatus.classList.toggle("is-success", kind === "success");
+    }
+
+    function setSurveyLaunchStatus(message, kind) {
+        surveyLaunchStatus.textContent = message || "";
+        surveyLaunchStatus.classList.toggle("is-error", kind === "error");
+        surveyLaunchStatus.classList.toggle("is-success", kind === "success");
+    }
+
+    function setSurveyBusy(isBusy) {
+        surveyLaunchSubmit.disabled = isBusy;
+        surveyLaunchForm.querySelectorAll("input[name='survey-audience']").forEach((input) => {
+            input.disabled = isBusy;
+        });
+    }
+
+    function selectedSurveyAudience() {
+        const checked = surveyLaunchForm.querySelector("input[name='survey-audience']:checked");
+        return checked ? checked.value : "me";
+    }
+
+    function confirmSurveyLaunch(audience) {
+        if (audience === "me") {
+            return true;
+        }
+        const count = audience === "subscribers"
+            ? latestStats?.totals.active_subscriptions
+            : latestStats?.totals.users;
+        const label = audience === "subscribers" ? "подписчикам" : "всем пользователям";
+        const countText = typeof count === "number" ? ` (${numberFormatter.format(count)})` : "";
+        return window.confirm(`Отправить приглашение на опрос ${label}${countText}?`);
+    }
+
+    function formatRating(value) {
+        if (value == null || Number.isNaN(Number(value))) {
+            return "—";
+        }
+        return Number(value).toFixed(2);
+    }
+
+    function renderDistribution(target, distribution) {
+        target.innerHTML = "";
+        for (let rating = 1; rating <= 5; rating += 1) {
+            const count = distribution?.[String(rating)] ?? distribution?.[rating] ?? 0;
+            const item = document.createElement("li");
+            item.textContent = `${rating}: ${numberFormatter.format(count)}`;
+            target.appendChild(item);
+        }
+    }
+
+    function renderSurveyResults(data) {
+        surveyTotal.textContent = numberFormatter.format(data.total_responses || 0);
+        surveyAvgApp.textContent = formatRating(data.avg_app_rating);
+        surveyAvgPhoto.textContent = formatRating(data.avg_photo_rating);
+        surveyPhotoSkipped.textContent = numberFormatter.format(data.photo_skipped || 0);
+        renderDistribution(surveyAppDistribution, data.app_distribution || {});
+        renderDistribution(surveyPhotoDistribution, data.photo_distribution || {});
+        surveyFeedbackList.innerHTML = "";
+        const feedback = data.recent_feedback || [];
+        if (!feedback.length) {
+            const empty = document.createElement("li");
+            empty.className = "admin-muted";
+            empty.textContent = "Пока нет текстовых ответов.";
+            surveyFeedbackList.appendChild(empty);
+            return;
+        }
+        feedback.forEach((row) => {
+            const item = document.createElement("li");
+            const photo = row.photo_rating == null ? "фото: —" : `фото: ${row.photo_rating}`;
+            item.textContent = `#${row.user_id} · приложение: ${row.app_rating} · ${photo} — ${row.feedback_text}`;
+            surveyFeedbackList.appendChild(item);
+        });
+    }
+
+    async function fetchSurveyResults() {
+        const token = getToken();
+        if (!token) {
+            return null;
+        }
+        const response = await fetch("/admin/survey/results", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (response.status === 401) {
+            clearToken();
+            showLogin();
+            setError(loginError, "Сессия истекла. Войдите снова.");
+            return null;
+        }
+        if (!response.ok) {
+            throw new Error("Не удалось загрузить результаты опроса.");
+        }
+        const data = await response.json();
+        renderSurveyResults(data);
+        return data;
+    }
+
+    async function exportSurveyCsv() {
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+        const response = await fetch("/admin/survey/export.csv", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (!response.ok) {
+            throw new Error("Не удалось выгрузить ответы опроса.");
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "taarelka-survey.csv";
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function pollSurveyLaunchStatus(delay) {
+        stopBroadcastPolling();
+        broadcastPollTimer = setTimeout(async () => {
+            try {
+                const data = await fetchBroadcastStatus();
+                if (!data) {
+                    setSurveyBusy(false);
+                    setBroadcastBusy(false);
+                    return;
+                }
+                if (data.status === "running") {
+                    setSurveyBusy(true);
+                    setBroadcastBusy(true);
+                    setSurveyLaunchStatus(formatBroadcastStatus(data));
+                    pollSurveyLaunchStatus(800);
+                    return;
+                }
+                setSurveyBusy(false);
+                setBroadcastBusy(false);
+                if (data.status === "error") {
+                    setSurveyLaunchStatus(formatBroadcastStatus(data), "error");
+                    return;
+                }
+                if (data.status === "done") {
+                    setSurveyLaunchStatus(formatBroadcastStatus(data), "success");
+                    await fetchSurveyResults();
+                }
+            } catch (error) {
+                setSurveyBusy(false);
+                setBroadcastBusy(false);
+                setSurveyLaunchStatus(error.message || "Не удалось получить статус отправки.", "error");
+            }
+        }, delay || 400);
     }
 
     function formatBroadcastStatus(data) {
@@ -536,6 +698,71 @@
         }
     });
 
+    surveyLaunchForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        const audience = selectedSurveyAudience();
+        if (!confirmSurveyLaunch(audience)) {
+            return;
+        }
+
+        setSurveyBusy(true);
+        setBroadcastBusy(true);
+        setSurveyLaunchStatus("Отправляем приглашения…");
+        try {
+            const response = await fetch("/admin/survey/launch", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ audience }),
+            });
+
+            if (response.status === 401) {
+                clearToken();
+                showLogin();
+                setError(loginError, "Сессия истекла. Войдите снова.");
+                setSurveyBusy(false);
+                setBroadcastBusy(false);
+                return;
+            }
+            if (response.status === 409) {
+                setSurveyLaunchStatus("Рассылка уже идёт. Ждём завершения.", "error");
+                pollSurveyLaunchStatus();
+                return;
+            }
+            if (response.status === 503) {
+                setSurveyBusy(false);
+                setBroadcastBusy(false);
+                setSurveyLaunchStatus("Бот-токен не задан на сервере анализатора.", "error");
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Не удалось запустить опрос.");
+            }
+
+            const data = await response.json();
+            setSurveyLaunchStatus(formatBroadcastStatus(data));
+            pollSurveyLaunchStatus();
+        } catch (error) {
+            setSurveyBusy(false);
+            setBroadcastBusy(false);
+            setSurveyLaunchStatus(error.message || "Не удалось запустить опрос.", "error");
+        }
+    });
+
+    surveyExportButton.addEventListener("click", () => {
+        exportSurveyCsv().catch((error) => {
+            setSurveyLaunchStatus(error.message || "Не удалось выгрузить CSV.", "error");
+        });
+    });
+
     campaignSource.addEventListener("input", updateCampaignLink);
     campaignSource.addEventListener("blur", updateCampaignLink);
 
@@ -550,25 +777,6 @@
             campaignLink.select();
             setCampaignStatus("Скопируйте выделенную ссылку.", "");
         }
-    });
-
-    creativeCopyButtons.forEach((button) => {
-        button.addEventListener("click", async () => {
-            const textElement = button.parentElement.querySelector("[data-creative]");
-            if (!textElement) {
-                return;
-            }
-            try {
-                await navigator.clipboard.writeText(textElement.textContent);
-                const originalText = button.textContent;
-                button.textContent = "Скопировано";
-                setTimeout(() => {
-                    button.textContent = originalText;
-                }, 1200);
-            } catch (error) {
-                setCampaignStatus("Не удалось скопировать текст.", "error");
-            }
-        });
     });
 
     campaignForm.addEventListener("submit", async (event) => {

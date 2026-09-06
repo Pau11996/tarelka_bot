@@ -110,6 +110,9 @@ class User(Base):
         remote_side=[id],
         foreign_keys=[referred_by_user_id],
     )
+    survey_response: Mapped[SurveyResponse | None] = relationship(
+        back_populates="user", uselist=False
+    )
 
 
 class Profile(Base):
@@ -262,6 +265,23 @@ class FavoriteMeal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="favorites")
+
+
+class SurveyResponse(Base):
+    __tablename__ = "survey_responses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    app_rating: Mapped[int] = mapped_column(Integer)
+    photo_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="survey_response")
 
 
 class MarketingCampaign(Base):

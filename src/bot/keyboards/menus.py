@@ -168,3 +168,33 @@ def contacts_keyboard() -> InlineKeyboardMarkup | None:
     if not rows:
         return None
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def survey_start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Пройти опрос", callback_data="survey:start")]
+        ]
+    )
+
+
+def survey_rating_keyboard(prefix: str, *, allow_skip: bool = False) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text=str(rating), callback_data=f"{prefix}:{rating}")
+            for rating in range(1, 6)
+        ]
+    ]
+    if allow_skip:
+        rows.append(
+            [InlineKeyboardButton(text="Пропустить", callback_data=f"{prefix}:skip")]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def survey_feedback_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Пропустить", callback_data="survey:feedback:skip")]
+        ]
+    )

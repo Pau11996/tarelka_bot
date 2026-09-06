@@ -18,3 +18,9 @@ class CorrectionStates(StatesGroup):
 
 class StatisticsStates(StatesGroup):
     waiting_date = State()
+
+
+class SurveyStates(StatesGroup):
+    app_rating = State()
+    photo_rating = State()
+    feedback = State()

@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from src.bot.config import settings
 from src.bot.keyboards.menus import profile_fill_keyboard
 from src.bot.handlers.subscription import show_subscription_screen
+from src.bot.handlers.survey import start_survey_flow
 from src.bot.services.links import (
     channel_welcome_note,
     feedback_welcome_note,
@@ -93,6 +94,10 @@ async def cmd_start(
     )
     if command.args == "premium":
         await show_subscription_screen(message, user, cleanup)
+        return
+
+    if command.args == "survey":
+        await start_survey_flow(message, state, session, cleanup)
         return
 
     source = normalize_acquisition_source(command.args)

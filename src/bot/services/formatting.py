@@ -110,6 +110,10 @@ def format_analysis_result(result: AnalysisResult, balance: DailyBalance | None 
     lines.append(
         f"БЖУ: Б {result.protein_g:.1f} г | Ж {result.fat_g:.1f} г | У {result.carbs_g:.1f} г"
     )
+    fiber_g = result.micronutrients.get("fiber_g", 0)
+    sugar_g = result.micronutrients.get("sugar_g", 0)
+    if fiber_g or sugar_g:
+        lines.append(f"Клетчатка: {fiber_g:g} г | Сахар: {sugar_g:g} г")
 
     if result.items:
         lines.append("\nСостав:")

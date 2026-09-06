@@ -54,7 +54,7 @@ def test_daily_balance_with_meals_and_activity():
             protein_g=30,
             fat_g=15,
             carbs_g=50,
-            micronutrients={"fiber_g": 5, "sodium_mg": 300},
+            micronutrients={"fiber_g": 5, "sugar_g": 10},
         ),
         DayEntry(
             id=2,
@@ -66,7 +66,7 @@ def test_daily_balance_with_meals_and_activity():
             protein_g=40,
             fat_g=20,
             carbs_g=60,
-            micronutrients={"fiber_g": 7, "sodium_mg": 500},
+            micronutrients={"fiber_g": 7, "sugar_g": 15},
         ),
         DayEntry(
             id=3,
@@ -86,7 +86,8 @@ def test_daily_balance_with_meals_and_activity():
     assert balance.fat_g == 35
     assert balance.carbs_g == 110
     assert balance.micronutrients["fiber_g"] == 12
-    assert balance.micronutrients["sodium_mg"] == 800
+    assert balance.micronutrients["sugar_g"] == 25
+    assert "sodium_mg" not in balance.micronutrients
 
 
 def test_calculate_daily_nutrient_targets():
@@ -106,5 +107,6 @@ def test_calculate_daily_nutrient_targets():
     assert targets.protein_g == 128.0
     assert targets.fat_g == 75.0
     assert targets.carbs_g == 328.2
-    assert targets.micronutrients["iron_mg"] == 8.0
     assert targets.micronutrients["fiber_g"] == 35.0
+    assert targets.micronutrients["sugar_g"] == 62.5
+    assert "iron_mg" not in targets.micronutrients

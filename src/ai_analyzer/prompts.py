@@ -37,7 +37,7 @@ Rules:
 - For meal: calculate calories, protein_g, fat_g, carbs_g for EACH component.
 - For meal: return micronutrients ONLY as totals for the whole dish.
 - For meal: micronutrients keys must be exactly this fixed list:
-  fiber_g, sugar_g, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_b12_mcg, omega_3_g
+  fiber_g, sugar_g
 - For activity: estimate total calories burned using user profile context; items must be [] and all macro/micronutrient values must be zero.
 - type must be exactly the same as in identification JSON: "meal" or "activity".
 - needs_clarification must always be false.
@@ -63,18 +63,7 @@ JSON schema:
   "carbs_g": 0,
   "micronutrients": {
     "fiber_g": 0,
-    "sugar_g": 0,
-    "sodium_mg": 0,
-    "potassium_mg": 0,
-    "calcium_mg": 0,
-    "iron_mg": 0,
-    "magnesium_mg": 0,
-    "zinc_mg": 0,
-    "vitamin_a_mcg": 0,
-    "vitamin_c_mg": 0,
-    "vitamin_d_mcg": 0,
-    "vitamin_b12_mcg": 0,
-    "omega_3_g": 0
+    "sugar_g": 0
   },
   "confidence": 0.0,
   "assumptions": ["..."],
@@ -93,7 +82,7 @@ Rules:
 - For meal: identify dish components, estimate portion weights in grams, and calculate calories, protein_g, fat_g, carbs_g for EACH component.
 - For meal: return micronutrients ONLY as totals for the whole dish.
 - For meal: micronutrients keys must be exactly this fixed list:
-  fiber_g, sugar_g, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_b12_mcg, omega_3_g
+  fiber_g, sugar_g
 - For activity: identify activity type, estimated duration, intensity, and any visible metrics.
 - For activity: estimate total calories burned using user profile context; items must be [] and all macro/micronutrient values must be zero.
 - confidence must be between 0 and 1.
@@ -120,18 +109,7 @@ JSON schema:
   "carbs_g": 0,
   "micronutrients": {
     "fiber_g": 0,
-    "sugar_g": 0,
-    "sodium_mg": 0,
-    "potassium_mg": 0,
-    "calcium_mg": 0,
-    "iron_mg": 0,
-    "magnesium_mg": 0,
-    "zinc_mg": 0,
-    "vitamin_a_mcg": 0,
-    "vitamin_c_mg": 0,
-    "vitamin_d_mcg": 0,
-    "vitamin_b12_mcg": 0,
-    "omega_3_g": 0
+    "sugar_g": 0
   },
   "confidence": 0.0,
   "assumptions": ["..."],
@@ -154,5 +132,5 @@ If the user changes portion size or ingredients, recalculate all items and total
 Never ask clarification questions. Make a reasonable estimate when details are unclear.
 needs_clarification must always be false and clarification_question must always be null.
 Micronutrients must use only this fixed list:
-fiber_g, sugar_g, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_b12_mcg, omega_3_g
+fiber_g, sugar_g
 """

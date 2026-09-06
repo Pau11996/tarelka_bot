@@ -8,17 +8,6 @@ from pydantic import BaseModel, Field
 TRACKED_MICRONUTRIENTS: dict[str, str] = {
     "fiber_g": "Клетчатка, г",
     "sugar_g": "Сахар, г",
-    "sodium_mg": "Натрий, мг",
-    "potassium_mg": "Калий, мг",
-    "calcium_mg": "Кальций, мг",
-    "iron_mg": "Железо, мг",
-    "magnesium_mg": "Магний, мг",
-    "zinc_mg": "Цинк, мг",
-    "vitamin_a_mcg": "Витамин A, мкг",
-    "vitamin_c_mg": "Витамин C, мг",
-    "vitamin_d_mcg": "Витамин D, мкг",
-    "vitamin_b12_mcg": "Витамин B12, мкг",
-    "omega_3_g": "Омега-3, г",
 }
 
 

@@ -13,7 +13,7 @@ def test_analysis_card_does_not_include_daily_micronutrients():
         protein_g=10,
         fat_g=5,
         carbs_g=40,
-        micronutrients={"fiber_g": 3, "sodium_mg": 120},
+        micronutrients={"fiber_g": 3, "sugar_g": 8},
     )
     result = AnalysisResult(
         type="meal",
@@ -32,12 +32,13 @@ def test_analysis_card_does_not_include_daily_micronutrients():
         protein_g=8,
         fat_g=3,
         carbs_g=14,
-        micronutrients={"fiber_g": 1, "sodium_mg": 57},
+        micronutrients={"fiber_g": 1, "sugar_g": 12},
     )
 
     text = format_analysis_result(result, balance)
 
     assert "Полезные вещества за день" not in text
+    assert "Клетчатка: 1 г | Сахар: 12 г" in text
     assert "йогурт (150 г): 120 ккал, Б 8.0 г | Ж 3.0 г | У 14.0 г" in text
     assert "<b>ОСТАЛОСЬ: 1700 ккал</b>" in text
 
@@ -51,7 +52,7 @@ def test_daily_balance_can_include_micronutrients():
         protein_g=10,
         fat_g=5,
         carbs_g=40,
-        micronutrients={"fiber_g": 3, "sodium_mg": 120},
+        micronutrients={"fiber_g": 3, "sugar_g": 8},
     )
 
     text = format_daily_balance(balance)
@@ -59,7 +60,8 @@ def test_daily_balance_can_include_micronutrients():
     assert "Полезные вещества за день" in text
     assert "<b>ОСТАЛОСЬ: 1700 ккал</b>" in text
     assert "Клетчатка, г: 3" in text
-    assert "Натрий, мг: 120" in text
+    assert "Сахар, г: 8" in text
+    assert "Натрий" not in text
 
 
 def test_daily_balance_with_profile_shows_targets_through_slash():
@@ -82,7 +84,7 @@ def test_daily_balance_with_profile_shows_targets_through_slash():
         protein_g=29.8,
         fat_g=3.8,
         carbs_g=96.6,
-        micronutrients={"fiber_g": 3, "sodium_mg": 120},
+        micronutrients={"fiber_g": 3, "sugar_g": 8},
     )
 
     text = format_daily_balance(balance, profile=profile)
@@ -92,8 +94,9 @@ def test_daily_balance_with_profile_shows_targets_through_slash():
     assert f"Ж: 3.8 / {targets.fat_g:.1f} г" in text
     assert f"У: 96.6 / {targets.carbs_g:.1f} г" in text
     assert "Клетчатка, г: 3 / 35" in text
-    assert "Натрий, мг: 120 / 2000" in text
-    assert "Железо, мг: 0 / 8" in text
+    assert f"Сахар, г: 8 / {targets.micronutrients['sugar_g']:g}" in text
+    assert "Натрий" not in text
+    assert "Железо" not in text
 
 
 def test_analysis_card_escapes_html_values():

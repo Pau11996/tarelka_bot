@@ -5,6 +5,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware, Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand, MenuButtonCommands
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.bot.config import settings
@@ -23,6 +24,7 @@ from src.bot.handlers import (
     subscription,
     survey,
 )
+from src.bot.services.links import MENU_COMMANDS
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.reengagement import run_reengagement_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
@@ -99,6 +101,10 @@ async def main() -> None:
         default=DefaultBotProperties(parse_mode="HTML"),
     )
     dp = await create_dispatcher()
+    await bot.set_my_commands(
+        [BotCommand(command=name, description=description) for name, description in MENU_COMMANDS]
+    )
+    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
     asyncio.create_task(run_subscription_reminder_loop(bot))
     if settings.reengagement_enabled:

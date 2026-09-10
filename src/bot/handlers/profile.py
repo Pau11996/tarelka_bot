@@ -1,14 +1,13 @@
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import (
     PROFILE_BUTTON,
     activity_keyboard,
     goal_keyboard,
-    main_menu,
     profile_card_keyboard,
     sex_keyboard,
 )
@@ -361,6 +360,6 @@ async def profile_activity(
         "Готово. Отправьте первое фото еды — бот примерно оценит калории и БЖУ "
         "и покажет остаток на день. Также можно использовать голос или текст.",
         cleanup=cleanup,
-        reply_markup=main_menu(),
+        reply_markup=ReplyKeyboardRemove(),
     )
     await callback.answer()

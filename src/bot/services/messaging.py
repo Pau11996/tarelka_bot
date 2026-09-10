@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
-from src.bot.keyboards.menus import MAIN_MENU_ANCHOR, main_menu
 from src.bot.services.message_cleanup import MessageCleanupService
-
-
-def _reply_markup_has_main_menu(reply_markup) -> bool:
-    return isinstance(reply_markup, ReplyKeyboardMarkup)
 
 
 def schedule_message(
@@ -63,11 +58,7 @@ async def answer_ephemeral(
     if track_user:
         schedule_user_message(cleanup, message)
     sent = await message.answer(text, **kwargs)
-    # Reply keyboards must not ride on TTL-deleted messages — clients drop the menu.
-    if _reply_markup_has_main_menu(kwargs.get("reply_markup")):
-        cleanup.remember_menu_message(sent.chat.id, sent.message_id)
-    else:
-        schedule_bot_message(cleanup, sent)
+    schedule_bot_message(cleanup, sent)
     return sent
 
 
@@ -83,10 +74,7 @@ async def answer_persistent(
     cleanup: MessageCleanupService | None = None,
     **kwargs,
 ) -> Message:
-    sent = await message.answer(text, **kwargs)
-    if cleanup is not None and _reply_markup_has_main_menu(kwargs.get("reply_markup")):
-        cleanup.remember_menu_message(sent.chat.id, sent.message_id)
-    return sent
+    return await message.answer(text, **kwargs)
 
 
 async def answer_persistent_with_menu(
@@ -96,22 +84,11 @@ async def answer_persistent_with_menu(
     cleanup: MessageCleanupService | None = None,
     **kwargs,
 ) -> Message:
+    """Send a persistent reply and drop any cached ReplyKeyboard from older clients."""
     removed = await drop_cached_reply_keyboard(message)
     try:
-        kwargs["reply_markup"] = main_menu()
+        kwargs.setdefault("reply_markup", ReplyKeyboardRemove())
         return await answer_persistent(message, text, cleanup=cleanup, **kwargs)
-    except Exception:
-        # Never leave the chat without a reply keyboard after an explicit remove.
-        try:
-            await answer_persistent(
-                message,
-                MAIN_MENU_ANCHOR,
-                cleanup=cleanup,
-                reply_markup=main_menu(),
-            )
-        except Exception:
-            pass
-        raise
     finally:
         try:
             await removed.delete()

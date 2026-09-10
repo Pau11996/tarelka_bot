@@ -148,9 +148,6 @@ async def test_finish_survey_saves_response() -> None:
         def schedule(self, *args: Any, **kwargs: Any) -> None:
             return None
 
-        def remember_menu_message(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
     repo = FakeRepo()
     state = FakeState()
     message = FakeMessage()

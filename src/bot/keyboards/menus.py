@@ -1,9 +1,8 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.bot.config import settings
 from src.bot.services.links import channel_url, feedback_chat_url
 
-MAIN_MENU_ANCHOR = "Системное сообщение, бот работает корректно"
 TODAY_BUTTON = "📊 Сегодня"
 STATS_BUTTON = "📈 Статистика"
 FAVORITES_BUTTON = "⭐ Избранное"
@@ -26,19 +25,6 @@ MENU_BUTTON_TEXTS = frozenset(
         LEGACY_SUBSCRIPTION_BUTTON,
     }
 )
-
-
-def main_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=TODAY_BUTTON), KeyboardButton(text=STATS_BUTTON)],
-            [KeyboardButton(text=FAVORITES_BUTTON), KeyboardButton(text=SUBSCRIPTION_BUTTON)],
-            [KeyboardButton(text=PROFILE_BUTTON), KeyboardButton(text=CONTACTS_BUTTON)],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="Фото, голос или описание еды",
-    )
 
 
 def profile_fill_keyboard() -> InlineKeyboardMarkup:

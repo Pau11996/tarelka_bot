@@ -97,28 +97,32 @@ def support_email_link() -> str:
     return f"<code>{SUPPORT_EMAIL}</code>"
 
 
-BOT_COMMANDS = (
-    ("start", "приветствие и меню"),
-    ("today", "дневник за сегодня"),
-    ("stats", "статистика"),
-    ("favorites", "избранные блюда и активности"),
-    ("correct", "исправить или удалить запись"),
-    ("profile", "профиль"),
-    ("premium", "подписка"),
-    ("invite", "пригласить друга"),
-    ("contacts", "контакты и настройки"),
-    ("feedback", "чат поддержки"),
-    ("paysupport", "вопросы по оплате и возвратам"),
-    ("privacy", "какие данные хранятся"),
-    ("notifications_off", "отключить напоминания"),
-    ("notifications_on", "включить напоминания"),
-    ("delete_me", "удалить все данные"),
+MENU_COMMANDS = (
+    ("today", "📊 дневник за сегодня"),
+    ("stats", "📈 статистика"),
+    ("favorites", "⭐ избранные блюда и активности"),
+    ("premium", "💎 подписка"),
+    ("profile", "👤 профиль"),
+    ("invite", "🎁 пригласить друга"),
+    ("contacts", "⚙️ контакты и настройки"),
+    ("start", "👋 приветствие"),
 )
+
+SETTINGS_COMMANDS = (
+    ("feedback", "💬 чат поддержки"),
+    ("paysupport", "💳 вопросы по оплате и возвратам"),
+    ("privacy", "🔒 какие данные хранятся"),
+    ("notifications_off", "🔕 отключить напоминания"),
+    ("notifications_on", "🔔 включить напоминания"),
+    ("delete_me", "🗑 удалить все данные"),
+)
+
+BOT_COMMANDS = MENU_COMMANDS + SETTINGS_COMMANDS
 
 
 def format_bot_commands() -> str:
     lines = ["Команды"]
-    lines.extend(f"/{name} — {description}" for name, description in BOT_COMMANDS)
+    lines.extend(f"/{name} — {description}" for name, description in SETTINGS_COMMANDS)
     return "\n".join(lines)
 
 

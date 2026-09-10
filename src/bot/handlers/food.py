@@ -57,13 +57,11 @@ async def _require_profile(
     message: Message,
     session,
     cleanup: MessageCleanupService,
-) -> tuple | None:
+) -> tuple:
+    del cleanup
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return None
+    profile = await repo.ensure_default_profile(user.id)
     return user, profile
 
 
@@ -214,10 +212,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     if current_state == CorrectionStates.waiting_text:
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup):
@@ -322,10 +317,7 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         await answer_ephemeral(message, cleanup, VOICE_TOO_LONG, track_user=True)
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
@@ -418,10 +410,7 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
     if message.text.startswith("/"):
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):

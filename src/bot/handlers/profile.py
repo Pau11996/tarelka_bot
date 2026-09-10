@@ -27,20 +27,6 @@ from src.db.repository import UserRepository
 router = Router()
 
 
-async def _start_profile_form(
-    message: Message,
-    state: FSMContext,
-    cleanup: MessageCleanupService,
-) -> None:
-    await state.set_state(ProfileStates.weight)
-    await answer_ephemeral(
-        message,
-        cleanup,
-        "Шаг 1 из 6 · Вес\nВведите ваш вес в кг, например: 75",
-        track_user=False,
-    )
-
-
 @router.message(Command("profile"))
 @router.message(F.text == PROFILE_BUTTON)
 async def show_or_create_profile(
@@ -54,18 +40,14 @@ async def show_or_create_profile(
         telegram_id=message.from_user.id,
         timezone=settings.default_timezone,
     )
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await _start_profile_form(message, state, cleanup)
-        schedule_user_message(cleanup, message)
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     await state.clear()
     await answer_ephemeral(
         message,
         cleanup,
         format_profile_card(profile),
-        reply_markup=profile_card_keyboard(),
+        reply_markup=profile_card_keyboard(is_complete=profile.is_complete()),
     )
 
 
@@ -131,12 +113,7 @@ async def save_weight(
         telegram_id=message.from_user.id,
         timezone=settings.default_timezone,
     )
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await state.clear()
-        await _start_profile_form(message, state, cleanup)
-        schedule_user_message(cleanup, message)
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     profile = await repo.upsert_profile(
         user.id,
@@ -155,7 +132,7 @@ async def save_weight(
         message,
         cleanup,
         "Вес обновлен.\n\n" f"{format_profile_card(profile)}",
-        reply_markup=profile_card_keyboard(),
+        reply_markup=profile_card_keyboard(is_complete=profile.is_complete()),
         track_user=False,
     )
 
@@ -186,12 +163,7 @@ async def save_daily_calorie_target(
         telegram_id=message.from_user.id,
         timezone=settings.default_timezone,
     )
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await state.clear()
-        await _start_profile_form(message, state, cleanup)
-        schedule_user_message(cleanup, message)
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     profile = await repo.upsert_profile(
         user.id,
@@ -210,7 +182,7 @@ async def save_daily_calorie_target(
         message,
         cleanup,
         "Дневная норма обновлена.\n\n" f"{format_profile_card(profile)}",
-        reply_markup=profile_card_keyboard(),
+        reply_markup=profile_card_keyboard(is_complete=profile.is_complete()),
         track_user=False,
     )
 
@@ -325,9 +297,10 @@ async def profile_activity(
         timezone=settings.default_timezone,
     )
     current_profile = await repo.get_profile(user.id)
+    was_complete = current_profile is not None and current_profile.is_complete()
     daily_target = (
         current_profile.daily_calorie_target
-        if current_profile is not None
+        if was_complete
         else calculate_daily_target(
             weight_kg=data["weight_kg"],
             height_cm=data["height_cm"],
@@ -353,7 +326,7 @@ async def profile_activity(
         callback,
         cleanup,
         "Профиль сохранен.\n\n" f"{format_profile_card(profile)}",
-        reply_markup=profile_card_keyboard(),
+        reply_markup=profile_card_keyboard(is_complete=True),
     )
     await answer_persistent(
         callback.message,

@@ -25,6 +25,8 @@ from src.db.models import (
     WeightHistory,
 )
 
+DEFAULT_DAILY_CALORIE_TARGET = 2000.0
+
 
 class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -189,6 +191,15 @@ class UserRepository:
     async def get_profile(self, user_id: int) -> Profile | None:
         result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))
         return result.scalar_one_or_none()
+
+    async def ensure_default_profile(self, user_id: int) -> Profile:
+        profile = await self.get_profile(user_id)
+        if profile is not None:
+            return profile
+        return await self.upsert_profile(
+            user_id,
+            daily_calorie_target=DEFAULT_DAILY_CALORIE_TARGET,
+        )
 
     async def upsert_profile(self, user_id: int, **kwargs: Any) -> Profile:
         profile = await self.get_profile(user_id)

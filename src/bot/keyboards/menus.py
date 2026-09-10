@@ -32,7 +32,7 @@ def profile_fill_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Заполнить профиль · 1 минута",
+                    text="👤 Заполнить профиль · 1 минута",
                     callback_data="start:begin",
                 )
             ]
@@ -130,9 +130,14 @@ def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
     )
 
 
-def profile_card_keyboard() -> InlineKeyboardMarkup:
+def profile_card_keyboard(*, is_complete: bool = True) -> InlineKeyboardMarkup:
+    edit_text = (
+        "Редактировать профиль"
+        if is_complete
+        else "👤 Заполнить профиль · 1 минута"
+    )
     rows = [
-        [InlineKeyboardButton(text="Редактировать профиль", callback_data="profile:edit")],
+        [InlineKeyboardButton(text=edit_text, callback_data="profile:edit")],
         [InlineKeyboardButton(text="Изменить вес", callback_data="profile:edit_weight")],
         [InlineKeyboardButton(text="Изменить норму калорий", callback_data="profile:edit_calories")],
     ]

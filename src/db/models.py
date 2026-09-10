@@ -120,18 +120,33 @@ class Profile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
-    weight_kg: Mapped[float] = mapped_column(Float)
-    height_cm: Mapped[float] = mapped_column(Float)
-    age: Mapped[int] = mapped_column(Integer)
-    sex: Mapped[Sex] = mapped_column(_pg_enum(Sex, "sex_enum"))
-    goal: Mapped[Goal] = mapped_column(_pg_enum(Goal, "goal_enum"))
-    activity_level: Mapped[ActivityLevel] = mapped_column(_pg_enum(ActivityLevel, "activity_level_enum"))
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sex: Mapped[Sex | None] = mapped_column(_pg_enum(Sex, "sex_enum"), nullable=True)
+    goal: Mapped[Goal | None] = mapped_column(_pg_enum(Goal, "goal_enum"), nullable=True)
+    activity_level: Mapped[ActivityLevel | None] = mapped_column(
+        _pg_enum(ActivityLevel, "activity_level_enum"), nullable=True
+    )
     daily_calorie_target: Mapped[float] = mapped_column(Float)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     user: Mapped[User] = relationship(back_populates="profile")
+
+    def is_complete(self) -> bool:
+        return all(
+            value is not None
+            for value in (
+                self.weight_kg,
+                self.height_cm,
+                self.age,
+                self.sex,
+                self.goal,
+                self.activity_level,
+            )
+        )
 
 
 class WeightHistory(Base):

@@ -5,8 +5,8 @@ from datetime import date, datetime, timezone
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import SUBSCRIPTION_BUTTON, subscription_keyboard
-from src.bot.services.links import feedback_chat_url, subscription_offer_link
+from src.bot.keyboards.menus import subscription_keyboard
+from src.bot.services.links import increase_limit_hint
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.nutrition import local_today
@@ -29,28 +29,9 @@ def effective_daily_request_limit(user: User) -> int:
     return settings.daily_request_limit
 
 
-def _increase_limit_hint() -> str:
-    price_part = (
-        f"{settings.subscription_daily_request_limit} запросов в день "
-        f"за {settings.subscription_price_stars}⭐"
-    )
-    offer = subscription_offer_link()
-    if offer:
-        subscription_part = f"{offer} — {price_part}"
-    else:
-        subscription_part = f"оформите подписку «{SUBSCRIPTION_BUTTON}» — {price_part}"
-    url = feedback_chat_url()
-    if url:
-        return (
-            f"Чтобы увеличить лимит, {subscription_part}, "
-            f"либо напишите в <a href=\"{url}\">чат поддержки</a>."
-        )
-    return f"Чтобы увеличить лимит, {subscription_part}."
-
-
 def format_limit_reached_message(user: User) -> str:
     limit = effective_daily_request_limit(user)
-    return f"Вы достигли дневного лимита запросов ({limit} в день).\n\n{_increase_limit_hint()}"
+    return f"Вы достигли дневного лимита запросов ({limit} в день).\n\n{increase_limit_hint()}"
 
 
 def limit_welcome_note(user: User) -> str:
@@ -63,8 +44,7 @@ def limit_welcome_note(user: User) -> str:
     )
     return (
         f"\n\nДоступно {limit} запросов в день "
-        f"(фото, текст, голос и исправления).{bonus_note} "
-        f"{_increase_limit_hint()}\n\n"
+        f"(фото, текст, голос и исправления).{bonus_note}"
     )
 
 

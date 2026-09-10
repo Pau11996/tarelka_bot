@@ -62,6 +62,18 @@ def test_override_beats_active_subscription() -> None:
     assert effective_daily_request_limit(user) == 99
 
 
+def test_limit_welcome_note_with_support_link(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "telegram_feedback_chat", "taarelkachat")
+    monkeypatch.setattr(settings, "telegram_bot_username", "taarelka_bot")
+    user = User(id=1, telegram_id=1, timezone="Europe/Moscow", daily_request_limit=6)
+    message = limit_welcome_note(user)
+    assert "6 запросов в день" in message
+    assert "фото, текст, голос и исправления" in message
+    assert "оформить подписку" not in message
+    assert "Чтобы увеличить лимит" not in message
+    assert "чат поддержки" not in message
+
+
 def test_format_limit_reached_message_with_support_link(monkeypatch) -> None:
     monkeypatch.setattr(settings, "telegram_feedback_chat", "taarelkachat")
     monkeypatch.setattr(settings, "telegram_bot_username", "taarelka_bot")
@@ -70,9 +82,9 @@ def test_format_limit_reached_message_with_support_link(monkeypatch) -> None:
     assert "6 в день" in message
     assert 'href="https://t.me/taarelka_bot?start=premium"' in message
     assert "оформить подписку" in message
-    assert "либо напишите в" in message
-    assert "чат поддержки" in message
-    assert 'href="https://t.me/taarelkachat"' in message
+    assert "Чтобы увеличить лимит" in message
+    assert "чат поддержки" not in message
+    assert "taarelkachat" not in message
 
 
 def test_channel_welcome_note(monkeypatch) -> None:
@@ -85,19 +97,6 @@ def test_channel_welcome_note(monkeypatch) -> None:
 
     monkeypatch.setattr(settings, "telegram_channel", "")
     assert channel_welcome_note() == ""
-
-
-def test_limit_welcome_note_with_support_link(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "telegram_feedback_chat", "taarelkachat")
-    monkeypatch.setattr(settings, "telegram_bot_username", "taarelka_bot")
-    user = User(id=1, telegram_id=1, timezone="Europe/Moscow", daily_request_limit=6)
-    message = limit_welcome_note(user)
-    assert "6 запросов в день" in message
-    assert "фото, текст, голос и исправления" in message
-    assert 'href="https://t.me/taarelka_bot?start=premium"' in message
-    assert "оформить подписку" in message
-    assert "либо напишите в" in message
-    assert 'href="https://t.me/taarelkachat"' in message
 
 
 @pytest.mark.asyncio

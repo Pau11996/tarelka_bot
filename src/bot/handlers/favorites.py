@@ -50,10 +50,7 @@ async def show_favorites(
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return
+    await repo.ensure_default_profile(user.id)
 
     favorites = await repo.get_favorites(user.id)
     text = format_favorites_list(favorites)

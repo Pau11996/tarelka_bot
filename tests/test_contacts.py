@@ -14,6 +14,7 @@ def test_menu_commands_include_contacts_invite_and_start_last() -> None:
     assert CONTACTS_BUTTON == "⚙️ Контакты и настройки"
     assert "contacts" in names
     assert "invite" in names
+    assert "help" in names
     assert names[-1] == "start"
     assert "correct" not in names
     assert [description for _name, description in MENU_COMMANDS] == [
@@ -23,6 +24,7 @@ def test_menu_commands_include_contacts_invite_and_start_last() -> None:
         "💎 подписка",
         "👤 профиль",
         "🎁 пригласить друга",
+        "📖 как пользоваться",
         "⚙️ контакты и настройки",
         "👋 приветствие",
     ]
@@ -40,6 +42,7 @@ def test_settings_commands_exclude_menu_and_correct() -> None:
     ]
     assert "today" not in names
     assert "start" not in names
+    assert "help" not in names
     assert "correct" not in names
     assert [description for _name, description in SETTINGS_COMMANDS] == [
         "💬 чат поддержки",
@@ -54,11 +57,21 @@ def test_settings_commands_exclude_menu_and_correct() -> None:
 def test_format_contacts_with_links(monkeypatch) -> None:
     monkeypatch.setattr(settings, "telegram_feedback_chat", "taarelkachat")
     monkeypatch.setattr(settings, "telegram_channel", "taarelka_news")
+    monkeypatch.setattr(settings, "telegram_bot_username", "taarelka_bot")
 
     text = format_contacts()
     keyboard = contacts_keyboard()
 
     assert "Контакты и настройки" in text
+    assert "Как пользоваться:" not in text
+    assert "отправьте фото, голосовое или описание блюда" not in text
+    assert "/help — 📖 как пользоваться" in text
+    assert "Telegram ID, профиль, записи и результаты анализа" in text
+    assert "служебных сообщений удаляется автоматически" in text
+    assert "не претендует на идеальную точность" in text
+    assert "Чтобы увеличить лимит" in text
+    assert "оформить подписку" in text
+    assert 'href="https://t.me/taarelka_bot?start=premium"' in text
     assert SUPPORT_EMAIL in text
     assert f"<code>{SUPPORT_EMAIL}</code>" in text
     assert 'href="https://t.me/taarelkachat"' in text
@@ -76,6 +89,21 @@ def test_format_contacts_with_links(monkeypatch) -> None:
         "💬 Написать в поддержку",
         "📢 Канал ТАРЕЛКА",
     ]
+
+
+def test_format_help_is_short_and_current() -> None:
+    from src.bot.services.links import format_help
+
+    text = format_help()
+    assert "Как пользоваться" in text
+    assert "фото, голос или текст" in text
+    assert "2000 ккал" in text
+    assert "Сегодня" in text
+    assert "Статистика" in text
+    assert "Избранное" in text
+    assert "Профиль" in text
+    assert "оформить подписку" not in text
+    assert "/privacy" not in text
 
 
 def test_format_contacts_without_chat_still_shows_email(monkeypatch) -> None:

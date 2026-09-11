@@ -36,11 +36,26 @@ def normalize_openai_base_url(value: str | None) -> str | None:
     return base_url
 
 
+_REASONING_EFFORTS = {"minimal", "low", "medium", "high"}
+
+
 def resolve_openai_temperature() -> float | None:
     raw = os.environ.get("OPENAI_TEMPERATURE", "").strip()
     if not raw:
         return None
     return float(raw)
+
+
+def resolve_openai_reasoning_effort() -> str | None:
+    raw = os.environ.get("OPENAI_REASONING_EFFORT", "").strip().lower()
+    if not raw:
+        return None
+    if raw not in _REASONING_EFFORTS:
+        allowed = ", ".join(sorted(_REASONING_EFFORTS))
+        raise RuntimeError(
+            f"OPENAI_REASONING_EFFORT must be one of: {allowed} (got {raw!r})"
+        )
+    return raw
 
 
 def resolve_http_proxy() -> str | None:

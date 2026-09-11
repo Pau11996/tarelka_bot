@@ -6,6 +6,7 @@ from src.ai_analyzer.env_utils import (
     clean_empty_proxy_env_vars,
     normalize_openai_base_url,
     resolve_http_proxy,
+    resolve_openai_reasoning_effort,
     resolve_openai_temperature,
 )
 
@@ -38,6 +39,24 @@ def test_resolve_openai_temperature_is_optional() -> None:
 def test_resolve_openai_temperature_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_TEMPERATURE", "0.2")
     assert resolve_openai_temperature() == 0.2
+
+
+def test_resolve_openai_reasoning_effort_is_optional(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    assert resolve_openai_reasoning_effort() is None
+
+
+def test_resolve_openai_reasoning_effort_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "Medium")
+    assert resolve_openai_reasoning_effort() == "medium"
+
+
+def test_resolve_openai_reasoning_effort_rejects_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "turbo")
+    with pytest.raises(RuntimeError, match="OPENAI_REASONING_EFFORT must be one of"):
+        resolve_openai_reasoning_effort()
 
 
 def test_resolve_http_proxy_prefers_openai_specific_proxy(monkeypatch: pytest.MonkeyPatch) -> None:

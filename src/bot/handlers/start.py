@@ -1,7 +1,7 @@
 from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import profile_fill_keyboard
@@ -30,7 +30,7 @@ WELCOME_INTRO = (
 DEFAULT_TARGET_NOTE = (
     f"\n\nСтартовая норма — {DEFAULT_DAILY_CALORIE_TARGET:.0f} ккал. "
     "Можно сразу отправлять фото, голос или текст. "
-    "Если заполнить профиль — норма будет точнее.\n\n"
+    "Если заполнить профиль — норма калорий рассчитается автоматически.\n\n"
     "Как пользоваться: /help"
 )
 
@@ -119,10 +119,20 @@ async def start_begin(
 
     if not profile.is_complete():
         await state.set_state(ProfileStates.weight)
-        try:
-            await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
+        if callback.message:
+            new_reply_markup = None
+            if callback.message.reply_markup:
+                filtered_rows = [
+                    [btn for btn in row if btn.callback_data != "start:begin"]
+                    for row in callback.message.reply_markup.inline_keyboard
+                ]
+                filtered_rows = [row for row in filtered_rows if row]
+                if filtered_rows:
+                    new_reply_markup = InlineKeyboardMarkup(inline_keyboard=filtered_rows)
+            try:
+                await callback.message.edit_reply_markup(reply_markup=new_reply_markup)
+            except Exception:
+                pass
         await answer_persistent_with_menu(
             callback.message,
             "Шаг 1 из 6 · Вес\nВведите ваш вес в кг, например: 75",

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.bot.handlers.start import DEFAULT_TARGET_NOTE, READY_TEXT, build_welcome_new, start_begin
-from src.bot.keyboards.menus import profile_card_keyboard, profile_fill_keyboard
+from src.bot.keyboards.menus import meal_card_keyboard, profile_card_keyboard, profile_fill_keyboard
 from src.bot.services.formatting import format_profile_card, profile_context
 from src.bot.services.nutrition import calculate_daily_nutrient_targets, calculate_daily_target
 from src.bot.states import ProfileStates
@@ -84,6 +84,9 @@ def test_welcome_mentions_default_calorie_target() -> None:
     text = build_welcome_new(user)
     assert "2000" in text
     assert "Стартовая норма" in DEFAULT_TARGET_NOTE
+    assert "Если заполнить профиль — норма калорий рассчитается автоматически." in DEFAULT_TARGET_NOTE
+    assert "Если заполнить профиль — норма калорий рассчитается автоматически." in text
+    assert "норма будет точнее" not in text
     assert DEFAULT_TARGET_NOTE in text
     assert "Как пользоваться: /help" in text
     assert "отправьте фото, голосовое или описание блюда" not in text
@@ -263,3 +266,69 @@ async def test_start_begin_ready_text_for_complete_profile(monkeypatch: pytest.M
 
     state.set_state.assert_not_called()
     assert answered == [READY_TEXT]
+
+
+def test_meal_card_keyboard_calorie_calc_button() -> None:
+    incomplete = meal_card_keyboard(entry_id=42, is_profile_complete=False)
+    complete = meal_card_keyboard(entry_id=42, is_profile_complete=True)
+
+    incomplete_buttons = [btn for row in incomplete.inline_keyboard for btn in row]
+    complete_buttons = [btn for row in complete.inline_keyboard for btn in row]
+
+    calc_btn = next((btn for btn in incomplete_buttons if btn.callback_data == "start:begin"), None)
+    assert calc_btn is not None
+    assert calc_btn.text == "Рассчитать норму калорий"
+
+    assert not any(btn.callback_data == "start:begin" for btn in complete_buttons)
+    assert not any("рассчитать" in btn.text.lower() for btn in complete_buttons)
+
+
+@pytest.mark.asyncio
+async def test_start_begin_from_meal_card_preserves_meal_card_actions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.bot.handlers import start as start_module
+
+    user = User(id=1, telegram_id=100, timezone="Europe/Moscow")
+    profile = _incomplete_profile()
+
+    class FakeRepo:
+        async def get_or_create_user(self, telegram_id: int, timezone: str) -> User:
+            del telegram_id, timezone
+            return user
+
+        async def ensure_default_profile(self, user_id: int) -> Profile:
+            del user_id
+            return profile
+
+    monkeypatch.setattr(start_module, "UserRepository", lambda session: FakeRepo())
+
+    state = AsyncMock()
+    callback = AsyncMock()
+    callback.from_user.id = 100
+    callback.message = AsyncMock()
+    callback.message.reply_markup = meal_card_keyboard(entry_id=99, is_profile_complete=False)
+    cleanup = MagicMock()
+
+    edited_markup: list = []
+
+    async def fake_edit_reply_markup(reply_markup=None):
+        edited_markup.append(reply_markup)
+
+    callback.message.edit_reply_markup = fake_edit_reply_markup
+
+    async def fake_answer_persistent_with_menu(message, text, *, cleanup=None, **kwargs):
+        return AsyncMock()
+
+    monkeypatch.setattr(start_module, "answer_persistent_with_menu", fake_answer_persistent_with_menu)
+
+    await start_begin(callback, state, session=MagicMock(), cleanup=cleanup)
+
+    state.set_state.assert_awaited_once_with(ProfileStates.weight)
+    assert len(edited_markup) == 1
+    new_markup = edited_markup[0]
+    assert new_markup is not None
+    callbacks = [btn.callback_data for row in new_markup.inline_keyboard for btn in row]
+    assert "meal_edit:99" in callbacks
+    assert "meal_delete:99" in callbacks
+    assert "meal_favorite:99" in callbacks
+    assert "start:begin" not in callbacks
+

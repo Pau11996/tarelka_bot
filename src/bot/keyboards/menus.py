@@ -81,18 +81,26 @@ def correction_entries_keyboard(entries: list[tuple[int, str]]) -> InlineKeyboar
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def meal_card_keyboard(entry_id: int, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
+def meal_card_keyboard(
+    entry_id: int,
+    *,
+    is_favorited: bool = False,
+    is_profile_complete: bool = True,
+) -> InlineKeyboardMarkup:
     favorite_text = "✅ В избранном" if is_favorited else "⭐ В избранное"
     favorite_callback = f"meal_favorited:{entry_id}" if is_favorited else f"meal_favorite:{entry_id}"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Редактировать", callback_data=f"meal_edit:{entry_id}"),
-                InlineKeyboardButton(text="Удалить", callback_data=f"meal_delete:{entry_id}"),
-            ],
-            [InlineKeyboardButton(text=favorite_text, callback_data=favorite_callback)],
-        ]
-    )
+    rows = [
+        [
+            InlineKeyboardButton(text="Редактировать", callback_data=f"meal_edit:{entry_id}"),
+            InlineKeyboardButton(text="Удалить", callback_data=f"meal_delete:{entry_id}"),
+        ],
+        [InlineKeyboardButton(text=favorite_text, callback_data=favorite_callback)],
+    ]
+    if not is_profile_complete:
+        rows.append(
+            [InlineKeyboardButton(text="Рассчитать норму калорий", callback_data="start:begin")]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def favorites_keyboard(favorites: list) -> InlineKeyboardMarkup:

@@ -30,34 +30,6 @@ async def test_message_cleanup_ignores_delete_errors() -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_cleanup_skips_menu_anchor_message() -> None:
-    bot = AsyncMock()
-    service = MessageCleanupService(ttl_seconds=0)
-    service.remember_menu_message(chat_id=123, message_id=456)
-
-    service.schedule(bot, chat_id=123, message_id=456)
-    await asyncio.sleep(0.05)
-
-    bot.delete_message.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_message_cleanup_refreshes_menu_after_ephemeral_delete() -> None:
-    bot = AsyncMock()
-    sent = AsyncMock()
-    sent.message_id = 999
-    bot.send_message.return_value = sent
-    service = MessageCleanupService(ttl_seconds=0)
-
-    service.schedule(bot, chat_id=123, message_id=456)
-    await asyncio.sleep(0.2)
-
-    bot.delete_message.assert_awaited_once_with(chat_id=123, message_id=456)
-    bot.send_message.assert_awaited_once()
-    assert service._menu_message_ids[123] == 999
-
-
-@pytest.mark.asyncio
 async def test_answer_persistent_with_menu_drops_cached_keyboard() -> None:
     from aiogram.types import ReplyKeyboardRemove
 
@@ -76,13 +48,12 @@ async def test_answer_persistent_with_menu_drops_cached_keyboard() -> None:
     assert result is sent
     assert isinstance(message.answer.await_args_list[0].kwargs["reply_markup"], ReplyKeyboardRemove)
     assert message.answer.await_args_list[1].args[0] == "hello"
+    assert isinstance(message.answer.await_args_list[1].kwargs["reply_markup"], ReplyKeyboardRemove)
     removed.delete.assert_awaited_once()
-    assert cleanup._menu_message_ids[123] == 77
 
 
 @pytest.mark.asyncio
-async def test_answer_ephemeral_keeps_reply_keyboard_message() -> None:
-    from src.bot.keyboards.menus import main_menu
+async def test_answer_ephemeral_schedules_bot_message() -> None:
     from src.bot.services.messaging import answer_ephemeral
 
     sent = AsyncMock()
@@ -95,11 +66,7 @@ async def test_answer_ephemeral_keeps_reply_keyboard_message() -> None:
     message.answer = AsyncMock(return_value=sent)
     cleanup = MessageCleanupService(ttl_seconds=60)
 
-    result = await answer_ephemeral(message, cleanup, "today", reply_markup=main_menu())
+    result = await answer_ephemeral(message, cleanup, "today")
 
     assert result is sent
-    assert cleanup._menu_message_ids[55] == 88
-    # User message may still be scheduled; the menu-bearing bot reply must not be deleted.
-    assert len(cleanup._tasks) == 1
-    cleanup.schedule(message.bot, 55, 88)
-    assert len(cleanup._tasks) == 1
+    assert len(cleanup._tasks) == 2

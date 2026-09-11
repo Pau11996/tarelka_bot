@@ -13,6 +13,7 @@ from src.ai_analyzer.env_utils import (
     clean_empty_proxy_env_vars,
     normalize_openai_base_url,
     resolve_http_proxy,
+    resolve_openai_reasoning_effort,
     resolve_openai_temperature,
 )
 
@@ -40,6 +41,13 @@ def format_openai_error(exc: Exception) -> str:
             "Выбранная модель OpenAI не поддерживает OPENAI_TEMPERATURE. "
             "Уберите переменную из .env или смените модель, например gpt-4o-mini."
         )
+    if "reasoning" in message.lower() and any(
+        marker in message.lower() for marker in ("unsupported", "invalid", "unknown")
+    ):
+        return (
+            "Выбранная модель не поддерживает OPENAI_REASONING_EFFORT. "
+            "Уберите переменную из .env или поставьте medium/high только для моделей с thinking."
+        )
     return f"OpenAI API failed: {exc}"
 
 
@@ -55,6 +63,7 @@ class OpenAIRunner(BaseAnalysisRunner):
         self.timeout = float(os.environ.get("OPENAI_TIMEOUT", "120"))
         self.max_retries = int(os.environ.get("OPENAI_MAX_RETRIES", "3"))
         self.temperature = resolve_openai_temperature()
+        self.reasoning_effort = resolve_openai_reasoning_effort()
         clean_empty_proxy_env_vars()
         base_url = normalize_openai_base_url(os.environ.get("OPENAI_BASE_URL"))
 
@@ -91,6 +100,13 @@ class OpenAIRunner(BaseAnalysisRunner):
         }
         if self.temperature is not None:
             kwargs["temperature"] = self.temperature
+        if self.reasoning_effort is not None:
+            kwargs["extra_body"] = {
+                "reasoning": {
+                    "effort": self.reasoning_effort,
+                    "exclude": True,
+                }
+            }
         return kwargs
 
     async def run_prompt(

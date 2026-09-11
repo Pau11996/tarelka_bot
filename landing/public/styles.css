@@ -874,51 +874,6 @@ img {
     width: fit-content;
 }
 
-.admin-creative-card {
-    margin-top: 1.25rem;
-}
-
-.admin-creative-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
-}
-
-.admin-creative-grid article {
-    display: grid;
-    align-content: start;
-    gap: 0.75rem;
-    padding: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-}
-
-.admin-creative-grid p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-}
-
-.admin-creative-grid .button {
-    width: fit-content;
-    align-self: end;
-}
-
-.admin-interview-guide {
-    border-top: 1px solid var(--border);
-    padding-top: 1rem;
-}
-
-.admin-interview-guide summary {
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.admin-interview-guide ol {
-    margin-bottom: 0;
-    color: var(--text-muted);
-}
-
 .admin-broadcast-card {
     margin-top: 1.25rem;
 }
@@ -1007,6 +962,42 @@ img {
     color: var(--accent-dark);
 }
 
+.admin-survey-results {
+    display: grid;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.admin-survey-summary {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.admin-survey-summary p,
+.admin-survey-results h3 {
+    margin: 0;
+}
+
+.admin-survey-distributions {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-survey-distributions ul,
+.admin-survey-feedback {
+    margin: 0.5rem 0 0;
+    padding-left: 1.2rem;
+}
+
+.admin-survey-feedback {
+    display: grid;
+    gap: 0.5rem;
+    max-height: 16rem;
+    overflow: auto;
+    list-style: disc;
+}
+
 [hidden] {
     display: none !important;
 }
@@ -1027,12 +1018,12 @@ img {
         grid-template-columns: 1fr;
     }
 
-    .admin-creative-grid {
-        grid-template-columns: 1fr;
-    }
-
     .admin-campaign-wide {
         grid-column: auto;
+    }
+
+    .admin-survey-distributions {
+        grid-template-columns: 1fr;
     }
 
     .admin-link-row {

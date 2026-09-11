@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,9 +20,12 @@ from src.db.models import (
     MarketingCampaign,
     Payment,
     Profile,
+    SurveyResponse,
     User,
     WeightHistory,
 )
+
+DEFAULT_DAILY_CALORIE_TARGET = 2000.0
 
 
 class UserRepository:
@@ -188,6 +191,15 @@ class UserRepository:
     async def get_profile(self, user_id: int) -> Profile | None:
         result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))
         return result.scalar_one_or_none()
+
+    async def ensure_default_profile(self, user_id: int) -> Profile:
+        profile = await self.get_profile(user_id)
+        if profile is not None:
+            return profile
+        return await self.upsert_profile(
+            user_id,
+            daily_calorie_target=DEFAULT_DAILY_CALORIE_TARGET,
+        )
 
     async def upsert_profile(self, user_id: int, **kwargs: Any) -> Profile:
         profile = await self.get_profile(user_id)
@@ -549,3 +561,85 @@ class UserRepository:
         await self.session.commit()
         await self.session.refresh(campaign)
         return campaign
+
+    async def has_survey_response(self, user_id: int) -> bool:
+        result = await self.session.execute(
+            select(SurveyResponse.id).where(SurveyResponse.user_id == user_id)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def save_survey_response(
+        self,
+        user_id: int,
+        *,
+        app_rating: int,
+        photo_rating: int | None,
+        feedback_text: str | None,
+    ) -> SurveyResponse:
+        response = SurveyResponse(
+            user_id=user_id,
+            app_rating=app_rating,
+            photo_rating=photo_rating,
+            feedback_text=feedback_text,
+        )
+        self.session.add(response)
+        await self.session.commit()
+        await self.session.refresh(response)
+        return response
+
+    async def get_survey_stats(self) -> dict[str, Any]:
+        total = await self.session.scalar(select(func.count()).select_from(SurveyResponse))
+        total = int(total or 0)
+        avg_app = await self.session.scalar(select(func.avg(SurveyResponse.app_rating)))
+        avg_photo = await self.session.scalar(
+            select(func.avg(SurveyResponse.photo_rating)).where(
+                SurveyResponse.photo_rating.is_not(None)
+            )
+        )
+        app_distribution: dict[int, int] = {rating: 0 for rating in range(1, 6)}
+        photo_distribution: dict[int, int] = {rating: 0 for rating in range(1, 6)}
+        if total:
+            app_rows = await self.session.execute(
+                select(SurveyResponse.app_rating, func.count())
+                .group_by(SurveyResponse.app_rating)
+            )
+            for rating, count in app_rows.all():
+                app_distribution[int(rating)] = int(count)
+            photo_rows = await self.session.execute(
+                select(SurveyResponse.photo_rating, func.count())
+                .where(SurveyResponse.photo_rating.is_not(None))
+                .group_by(SurveyResponse.photo_rating)
+            )
+            for rating, count in photo_rows.all():
+                photo_distribution[int(rating)] = int(count)
+        photo_skipped = await self.session.scalar(
+            select(func.count())
+            .select_from(SurveyResponse)
+            .where(SurveyResponse.photo_rating.is_(None))
+        )
+        return {
+            "total_responses": total,
+            "avg_app_rating": float(avg_app) if avg_app is not None else None,
+            "avg_photo_rating": float(avg_photo) if avg_photo is not None else None,
+            "app_distribution": app_distribution,
+            "photo_distribution": photo_distribution,
+            "photo_skipped": int(photo_skipped or 0),
+        }
+
+    async def list_survey_responses(self) -> list[SurveyResponse]:
+        result = await self.session.execute(
+            select(SurveyResponse).order_by(SurveyResponse.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def list_survey_feedback(self, *, limit: int = 50) -> list[SurveyResponse]:
+        result = await self.session.execute(
+            select(SurveyResponse)
+            .where(
+                SurveyResponse.feedback_text.is_not(None),
+                SurveyResponse.feedback_text != "",
+            )
+            .order_by(SurveyResponse.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())

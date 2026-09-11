@@ -270,6 +270,7 @@ async def apply_correction(
         except Exception:
             pass
 
+    profile = await repo.ensure_default_profile(user.id)
     await send_result_card(
         message,
         cleanup,
@@ -278,4 +279,5 @@ async def apply_correction(
         photo_file_id=photo_file_id,
         is_favorited=await repo.get_favorite_by_source_entry(user.id, entry.id) is not None,
         with_meal_actions=True,
+        is_profile_complete=profile.is_complete(),
     )

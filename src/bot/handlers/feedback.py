@@ -3,11 +3,16 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.bot.keyboards.menus import CONTACTS_BUTTON, LEGACY_CONTACTS_BUTTON, contacts_keyboard
-from src.bot.services.links import format_contacts
+from src.bot.services.links import format_contacts, format_help
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
 
 router = Router()
+
+
+@router.message(Command("help"))
+async def show_help(message: Message, cleanup: MessageCleanupService) -> None:
+    await answer_ephemeral(message, cleanup, format_help())
 
 
 @router.message(Command("contacts"))

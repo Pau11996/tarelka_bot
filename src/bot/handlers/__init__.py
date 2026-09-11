@@ -9,6 +9,7 @@ from src.bot.handlers import (
     referrals,
     start,
     statistics,
+    survey,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "referrals",
     "start",
     "statistics",
+    "survey",
 ]

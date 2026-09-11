@@ -28,26 +28,44 @@ ACTIVITY_LABELS = {
 
 
 def profile_context(profile: Profile) -> dict:
-    return {
-        "weight_kg": profile.weight_kg,
-        "height_cm": profile.height_cm,
-        "age": profile.age,
-        "sex": profile.sex.value,
-        "goal": profile.goal.value,
-        "activity_level": profile.activity_level.value,
+    context: dict = {
         "daily_calorie_target": profile.daily_calorie_target,
     }
+    if profile.weight_kg is not None:
+        context["weight_kg"] = profile.weight_kg
+    if profile.height_cm is not None:
+        context["height_cm"] = profile.height_cm
+    if profile.age is not None:
+        context["age"] = profile.age
+    if profile.sex is not None:
+        context["sex"] = profile.sex.value
+    if profile.goal is not None:
+        context["goal"] = profile.goal.value
+    if profile.activity_level is not None:
+        context["activity_level"] = profile.activity_level.value
+    return context
+
+
+def _format_optional(value, *, suffix: str = "", labels: dict | None = None) -> str:
+    if value is None:
+        return "не указано"
+    if labels is not None:
+        key = value.value if hasattr(value, "value") else value
+        return labels.get(key, str(key))
+    if isinstance(value, float):
+        return f"{value:g}{suffix}"
+    return f"{value}{suffix}"
 
 
 def format_profile_card(profile: Profile) -> str:
     return (
         "👤 Профиль\n"
-        f"Вес: {profile.weight_kg:g} кг\n"
-        f"Рост: {profile.height_cm:g} см\n"
-        f"Возраст: {profile.age}\n"
-        f"Пол: {SEX_LABELS.get(profile.sex.value, profile.sex.value)}\n"
-        f"Цель: {GOAL_LABELS.get(profile.goal.value, profile.goal.value)}\n"
-        f"Активность: {ACTIVITY_LABELS.get(profile.activity_level.value, profile.activity_level.value)}\n"
+        f"Вес: {_format_optional(profile.weight_kg, suffix=' кг')}\n"
+        f"Рост: {_format_optional(profile.height_cm, suffix=' см')}\n"
+        f"Возраст: {_format_optional(profile.age)}\n"
+        f"Пол: {_format_optional(profile.sex, labels=SEX_LABELS)}\n"
+        f"Цель: {_format_optional(profile.goal, labels=GOAL_LABELS)}\n"
+        f"Активность: {_format_optional(profile.activity_level, labels=ACTIVITY_LABELS)}\n"
         f"Дневная норма: {profile.daily_calorie_target:.0f} ккал"
     )
 

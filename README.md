@@ -1,5 +1,8 @@
 # ТАРЕЛКА
 python3 scripts/russian_tts.py -f text.txt --voice dmitry
+
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
 Telegram-бот для учёта калорий, БЖУ и нутриентов. Пользователь отправляет фото, голосовое или текст — AI определяет еду или активность, пишет запись в дневник и обновляет дневной баланс.
 
 Стек: **aiogram 3** · **FastAPI** · **PostgreSQL** · **Alembic** · лендинг на **nginx**.

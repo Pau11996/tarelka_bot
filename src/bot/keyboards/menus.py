@@ -1,9 +1,8 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.bot.config import settings
 from src.bot.services.links import channel_url, feedback_chat_url
 
-MAIN_MENU_ANCHOR = "Системное сообщение, бот работает корректно"
 TODAY_BUTTON = "📊 Сегодня"
 STATS_BUTTON = "📈 Статистика"
 FAVORITES_BUTTON = "⭐ Избранное"
@@ -28,25 +27,12 @@ MENU_BUTTON_TEXTS = frozenset(
 )
 
 
-def main_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=TODAY_BUTTON), KeyboardButton(text=STATS_BUTTON)],
-            [KeyboardButton(text=FAVORITES_BUTTON), KeyboardButton(text=SUBSCRIPTION_BUTTON)],
-            [KeyboardButton(text=PROFILE_BUTTON), KeyboardButton(text=CONTACTS_BUTTON)],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="Фото, голос или описание еды",
-    )
-
-
 def profile_fill_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Заполнить профиль · 1 минута",
+                    text="👤 Заполнить профиль · 1 минута",
                     callback_data="start:begin",
                 )
             ]
@@ -95,18 +81,26 @@ def correction_entries_keyboard(entries: list[tuple[int, str]]) -> InlineKeyboar
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def meal_card_keyboard(entry_id: int, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
+def meal_card_keyboard(
+    entry_id: int,
+    *,
+    is_favorited: bool = False,
+    is_profile_complete: bool = True,
+) -> InlineKeyboardMarkup:
     favorite_text = "✅ В избранном" if is_favorited else "⭐ В избранное"
     favorite_callback = f"meal_favorited:{entry_id}" if is_favorited else f"meal_favorite:{entry_id}"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Редактировать", callback_data=f"meal_edit:{entry_id}"),
-                InlineKeyboardButton(text="Удалить", callback_data=f"meal_delete:{entry_id}"),
-            ],
-            [InlineKeyboardButton(text=favorite_text, callback_data=favorite_callback)],
-        ]
-    )
+    rows = [
+        [
+            InlineKeyboardButton(text="Редактировать", callback_data=f"meal_edit:{entry_id}"),
+            InlineKeyboardButton(text="Удалить", callback_data=f"meal_delete:{entry_id}"),
+        ],
+        [InlineKeyboardButton(text=favorite_text, callback_data=favorite_callback)],
+    ]
+    if not is_profile_complete:
+        rows.append(
+            [InlineKeyboardButton(text="Рассчитать норму калорий", callback_data="start:begin")]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def favorites_keyboard(favorites: list) -> InlineKeyboardMarkup:
@@ -144,9 +138,14 @@ def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
     )
 
 
-def profile_card_keyboard() -> InlineKeyboardMarkup:
+def profile_card_keyboard(*, is_complete: bool = True) -> InlineKeyboardMarkup:
+    edit_text = (
+        "Редактировать профиль"
+        if is_complete
+        else "👤 Заполнить профиль · 1 минута"
+    )
     rows = [
-        [InlineKeyboardButton(text="Редактировать профиль", callback_data="profile:edit")],
+        [InlineKeyboardButton(text=edit_text, callback_data="profile:edit")],
         [InlineKeyboardButton(text="Изменить вес", callback_data="profile:edit_weight")],
         [InlineKeyboardButton(text="Изменить норму калорий", callback_data="profile:edit_calories")],
     ]
@@ -168,3 +167,33 @@ def contacts_keyboard() -> InlineKeyboardMarkup | None:
     if not rows:
         return None
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def survey_start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Пройти опрос", callback_data="survey:start")]
+        ]
+    )
+
+
+def survey_rating_keyboard(prefix: str, *, allow_skip: bool = False) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text=str(rating), callback_data=f"{prefix}:{rating}")
+            for rating in range(1, 6)
+        ]
+    ]
+    if allow_skip:
+        rows.append(
+            [InlineKeyboardButton(text="Пропустить", callback_data=f"{prefix}:skip")]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def survey_feedback_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Пропустить", callback_data="survey:feedback:skip")]
+        ]
+    )

@@ -25,7 +25,7 @@ from src.bot.services.messaging import (
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import ensure_request_allowed
-from src.bot.states import CorrectionStates
+from src.bot.states import CorrectionStates, SurveyStates
 from src.db.models import AnalysisType
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult
@@ -57,13 +57,11 @@ async def _require_profile(
     message: Message,
     session,
     cleanup: MessageCleanupService,
-) -> tuple | None:
+) -> tuple:
+    del cleanup
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return None
+    profile = await repo.ensure_default_profile(user.id)
     return user, profile
 
 
@@ -75,6 +73,7 @@ async def _delete_original_and_send_photo_result(
     result_text: str,
     entry_id: int | None = None,
     with_meal_actions: bool = False,
+    is_profile_complete: bool = True,
 ) -> None:
     try:
         await message.delete()
@@ -88,6 +87,7 @@ async def _delete_original_and_send_photo_result(
         entry_id=entry_id,
         photo_file_id=photo_file_id,
         with_meal_actions=with_meal_actions,
+        is_profile_complete=is_profile_complete,
     )
 
 
@@ -100,10 +100,15 @@ async def send_result_card(
     photo_file_id: str | None = None,
     is_favorited: bool = False,
     with_meal_actions: bool = False,
+    is_profile_complete: bool = True,
 ) -> None:
     persistent = entry_id is not None
     reply_markup = (
-        meal_card_keyboard(entry_id, is_favorited=is_favorited)
+        meal_card_keyboard(
+            entry_id,
+            is_favorited=is_favorited,
+            is_profile_complete=is_profile_complete,
+        )
         if with_meal_actions and entry_id is not None
         else None
     )
@@ -156,6 +161,7 @@ async def _save_and_send_text_result(
     input_text: str,
     raw: str,
     result: AnalysisResult,
+    is_profile_complete: bool = True,
 ) -> None:
     service = EntryService(session)
     schedule_user_message(cleanup, message, persistent=True)
@@ -179,6 +185,7 @@ async def _save_and_send_text_result(
             result_text=format_activity_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
+            is_profile_complete=is_profile_complete,
         )
         return
 
@@ -201,6 +208,7 @@ async def _save_and_send_text_result(
         result_text=format_analysis_result(result, balance),
         entry_id=entry.id,
         with_meal_actions=True,
+        is_profile_complete=is_profile_complete,
     )
 
 
@@ -209,13 +217,12 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     current_state = await state.get_state()
     if current_state and "ProfileStates" in str(current_state):
         return
+    if current_state and "SurveyStates" in str(current_state):
+        return
     if current_state == CorrectionStates.waiting_text:
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup):
@@ -276,6 +283,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             result_text=format_activity_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
+            is_profile_complete=profile.is_complete(),
         )
         return
 
@@ -300,6 +308,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         result_text=format_analysis_result(result, balance),
         entry_id=entry.id,
         with_meal_actions=True,
+        is_profile_complete=profile.is_complete(),
     )
 
 
@@ -307,6 +316,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
 async def handle_food_voice(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
     if current_state and "ProfileStates" in str(current_state):
+        return
+    if current_state and "SurveyStates" in str(current_state):
         return
     if current_state == CorrectionStates.waiting_text:
         return
@@ -318,10 +329,7 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         await answer_ephemeral(message, cleanup, VOICE_TOO_LONG, track_user=True)
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
@@ -397,6 +405,7 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         input_text=transcript,
         raw=raw,
         result=result,
+        is_profile_complete=profile.is_complete(),
     )
 
 
@@ -407,13 +416,14 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         return
     if current_state == CorrectionStates.waiting_text:
         return
+    if current_state == SurveyStates.feedback:
+        return
+    if current_state and "SurveyStates" in str(current_state):
+        return
     if message.text.startswith("/"):
         return
 
-    ctx = await _require_profile(message, session, cleanup)
-    if ctx is None:
-        return
-    user, profile = ctx
+    user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
     if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
@@ -452,4 +462,5 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         input_text=message.text,
         raw=raw,
         result=result,
+        is_profile_complete=profile.is_complete(),
     )

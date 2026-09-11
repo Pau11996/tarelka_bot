@@ -121,12 +121,16 @@ async def send_telegram_message(
     chat_id: int,
     text: str,
     *,
+    reply_markup: dict[str, object] | None = None,
     retries_left: int = 3,
 ) -> SendResult:
     try:
+        payload_body: dict[str, object] = {"chat_id": chat_id, "text": text}
+        if reply_markup is not None:
+            payload_body["reply_markup"] = reply_markup
         response = await client.post(
             TELEGRAM_API_URL.format(token=token),
-            json={"chat_id": chat_id, "text": text},
+            json=payload_body,
         )
         try:
             payload = response.json()
@@ -146,6 +150,7 @@ async def send_telegram_message(
                 token,
                 chat_id,
                 text,
+                reply_markup=reply_markup,
                 retries_left=retries_left - 1,
             )
 
@@ -155,6 +160,33 @@ async def send_telegram_message(
         return "failed"
 
 
+async def send_telegram_message_with_markup(
+    client: httpx.AsyncClient,
+    token: str,
+    chat_id: int,
+    text: str,
+    reply_markup: dict[str, object],
+    *,
+    retries_left: int = 3,
+) -> SendResult:
+    return await send_telegram_message(
+        client,
+        token,
+        chat_id,
+        text,
+        reply_markup=reply_markup,
+        retries_left=retries_left,
+    )
+
+
+def survey_invitation_reply_markup() -> dict[str, object]:
+    return {
+        "inline_keyboard": [
+            [{"text": "Пройти опрос", "callback_data": "survey:start"}]
+        ]
+    }
+
+
 async def run_broadcast(
     telegram_ids: list[int],
     text: str,
@@ -162,13 +194,19 @@ async def run_broadcast(
     token: str,
     state: BroadcastState | None = None,
     send: SendFn = send_telegram_message,
+    reply_markup: dict[str, object] | None = None,
     delay_seconds: float = SEND_DELAY_SECONDS,
 ) -> BroadcastStatus:
     job = state or broadcast_state
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             for index, chat_id in enumerate(telegram_ids):
-                result = await send(client, token, chat_id, text)
+                if reply_markup is not None:
+                    result = await send_telegram_message_with_markup(
+                        client, token, chat_id, text, reply_markup
+                    )
+                else:
+                    result = await send(client, token, chat_id, text)
                 job.record(result)
                 if delay_seconds > 0 and index + 1 < len(telegram_ids):
                     await asyncio.sleep(delay_seconds)

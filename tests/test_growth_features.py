@@ -10,7 +10,8 @@ from fastapi import UploadFile
 from src.ai_analyzer import server
 from src.bot.handlers.data_management import delete_confirmation_keyboard, privacy_text
 from src.bot.handlers.referrals import invite_keyboard
-from src.bot.handlers.start import PRIVACY_NOTE, WELCOME_INTRO
+from src.bot.handlers.start import WELCOME_INTRO
+from src.bot.services.links import PRIVACY_NOTE
 from src.bot.services.reengagement import REENGAGEMENT_TEXT
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import limit_welcome_note
@@ -53,6 +54,11 @@ def test_privacy_text_describes_storage_and_deletion() -> None:
 def test_onboarding_privacy_and_cleanup_copy_are_accurate() -> None:
     assert "профиль, записи и результаты анализа" in PRIVACY_NOTE
     assert "не храним" not in PRIVACY_NOTE.lower()
+    assert "худеть" in WELCOME_INTRO
+    assert "первого расчёта" in WELCOME_INTRO
+    assert "🔒" not in WELCOME_INTRO
+    assert "Как пользоваться" not in WELCOME_INTRO
+    assert "служебных сообщений" not in WELCOME_INTRO
     assert "5 минут" not in WELCOME_INTRO
 
 
@@ -106,8 +112,6 @@ async def test_referral_reward_notifies_referrer() -> None:
 
 
 def test_limit_welcome_note_shows_bonus_requests(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.bot.services.request_limit.subscription_offer_link", lambda: None)
-    monkeypatch.setattr("src.bot.services.request_limit.feedback_chat_url", lambda: None)
     user = User(
         id=1,
         telegram_id=1,
@@ -116,7 +120,9 @@ def test_limit_welcome_note_shows_bonus_requests(monkeypatch: pytest.MonkeyPatch
         bonus_requests=4,
     )
 
-    assert "Бонусных запросов: 4" in limit_welcome_note(user)
+    note = limit_welcome_note(user)
+    assert "Бонусных запросов: 4" in note
+    assert "Чтобы увеличить лимит" not in note
 
 
 def test_reengagement_message_has_opt_out() -> None:

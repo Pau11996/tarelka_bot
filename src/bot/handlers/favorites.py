@@ -31,8 +31,22 @@ async def _update_meal_card_keyboard(
     *,
     entry_id: int,
     is_favorited: bool,
+    is_profile_complete: bool | None = None,
 ) -> None:
-    markup = meal_card_keyboard(entry_id, is_favorited=is_favorited)
+    if is_profile_complete is None:
+        if callback.message and callback.message.reply_markup:
+            is_profile_complete = not any(
+                btn.callback_data == "start:begin"
+                for row in callback.message.reply_markup.inline_keyboard
+                for btn in row
+            )
+        else:
+            is_profile_complete = True
+    markup = meal_card_keyboard(
+        entry_id,
+        is_favorited=is_favorited,
+        is_profile_complete=is_profile_complete,
+    )
     try:
         await callback.message.edit_reply_markup(reply_markup=markup)
     except Exception:
@@ -50,10 +64,7 @@ async def show_favorites(
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return
+    await repo.ensure_default_profile(user.id)
 
     favorites = await repo.get_favorites(user.id)
     text = format_favorites_list(favorites)
@@ -92,6 +103,8 @@ async def add_favorite_to_today(callback: CallbackQuery, session, cleanup: Messa
     favorite_id = int(callback.data.split(":")[1])
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    profile = await repo.ensure_default_profile(user.id)
+    is_profile_complete = profile.is_complete()
     favorite = await repo.get_favorite(favorite_id, user.id)
     if favorite is None:
         await callback.answer("Запись не найдена", show_alert=True)
@@ -112,6 +125,7 @@ async def add_favorite_to_today(callback: CallbackQuery, session, cleanup: Messa
             result_text=format_activity_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
+            is_profile_complete=is_profile_complete,
         )
         await callback.answer("Добавлено в сегодня")
         return
@@ -135,6 +149,7 @@ async def add_favorite_to_today(callback: CallbackQuery, session, cleanup: Messa
         result_text=format_analysis_result(result, balance),
         entry_id=entry.id,
         with_meal_actions=True,
+        is_profile_complete=is_profile_complete,
     )
     await callback.answer("Добавлено в сегодня")
 

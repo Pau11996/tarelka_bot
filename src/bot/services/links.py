@@ -83,49 +83,99 @@ def channel_welcome_note() -> str:
     )
 
 
-def feedback_welcome_note() -> str:
-    url = feedback_chat_url()
-    if not url:
-        return ""
-    return (
-        "\n\n💬 Вопросы, идеи и баги — пишите в "
-        f'<a href="{url}">чат поддержки</a>.'
-    )
-
-
 def support_email_link() -> str:
     return f"<code>{SUPPORT_EMAIL}</code>"
 
 
-BOT_COMMANDS = (
-    ("start", "приветствие и меню"),
-    ("today", "дневник за сегодня"),
-    ("stats", "статистика"),
-    ("favorites", "избранные блюда и активности"),
-    ("correct", "исправить или удалить запись"),
-    ("profile", "профиль"),
-    ("premium", "подписка"),
-    ("invite", "пригласить друга"),
-    ("contacts", "контакты и настройки"),
-    ("feedback", "чат поддержки"),
-    ("paysupport", "вопросы по оплате и возвратам"),
-    ("privacy", "какие данные хранятся"),
-    ("notifications_off", "отключить напоминания"),
-    ("notifications_on", "включить напоминания"),
-    ("delete_me", "удалить все данные"),
+def increase_limit_hint() -> str:
+    price_part = (
+        f"{settings.subscription_daily_request_limit} запросов в день "
+        f"за {settings.subscription_price_stars}⭐"
+    )
+    offer = subscription_offer_link()
+    if offer:
+        subscription_part = f"{offer} — {price_part}"
+    else:
+        subscription_part = f"оформите подписку — {price_part}"
+    return f"Чтобы увеличить лимит, {subscription_part}."
+
+
+MENU_COMMANDS = (
+    ("today", "📊 дневник за сегодня"),
+    ("stats", "📈 статистика"),
+    ("favorites", "⭐ избранные блюда и активности"),
+    ("premium", "💎 подписка"),
+    ("profile", "👤 профиль"),
+    ("invite", "🎁 пригласить друга"),
+    ("help", "📖 как пользоваться"),
+    ("contacts", "⚙️ контакты и настройки"),
+    ("start", "👋 приветствие"),
+)
+
+SETTINGS_COMMANDS = (
+    ("feedback", "💬 чат поддержки"),
+    ("paysupport", "💳 вопросы по оплате и возвратам"),
+    ("privacy", "🔒 какие данные хранятся"),
+    ("notifications_off", "🔕 отключить напоминания"),
+    ("notifications_on", "🔔 включить напоминания"),
+    ("delete_me", "🗑 удалить все данные"),
+)
+
+BOT_COMMANDS = MENU_COMMANDS + SETTINGS_COMMANDS
+
+HELP_TEXT = (
+    "📖 Как пользоваться\n\n"
+    "• отправьте фото, голос или текст — посчитаю калории и БЖУ "
+    "или учту активность;\n"
+    "• «Сегодня» — дневной баланс;\n"
+    "• «Статистика» — график за месяц и выбранный день;\n"
+    "• «Избранное» — быстрый повтор блюд и активностей;\n"
+    "• «Профиль» — норма калорий; заполните данные, чтобы она была точнее.\n\n"
+    "Можно начинать сразу: стартовая норма — 2000 ккал.\n"
+    "Часть служебных сообщений удаляется автоматически, "
+    "карточки еды и активности остаются."
+)
+
+ACCURACY_NOTE = (
+    "Бот не претендует на идеальную точность расчётов — "
+    "это инструмент для простого и примерного контроля калорий, БЖУ и полезных веществ."
+)
+
+PRIVACY_NOTE = (
+    "🔒 Для работы дневника хранятся Telegram ID, профиль, записи и результаты анализа. "
+    "Подробнее: /privacy. Удалить все данные: /delete_me."
+)
+
+CLEANUP_NOTE = (
+    "Часть служебных сообщений удаляется автоматически, "
+    "а карточки еды и активности остаются."
 )
 
 
+def format_help() -> str:
+    return HELP_TEXT
+
+
 def format_bot_commands() -> str:
-    lines = ["Команды"]
-    lines.extend(f"/{name} — {description}" for name, description in BOT_COMMANDS)
+    lines = ["Команды", "/help — 📖 как пользоваться"]
+    lines.extend(f"/{name} — {description}" for name, description in SETTINGS_COMMANDS)
     return "\n".join(lines)
 
 
 def format_contacts() -> str:
     feedback = feedback_chat_url()
     channel = channel_url()
-    lines = ["Контакты и настройки", ""]
+    lines = [
+        "Контакты и настройки",
+        "",
+        ACCURACY_NOTE,
+        "",
+        PRIVACY_NOTE,
+        CLEANUP_NOTE,
+        "",
+        increase_limit_hint(),
+        "",
+    ]
     if feedback:
         lines.append(f'💬 Чат поддержки: <a href="{feedback}">открыть</a>.')
     if channel:

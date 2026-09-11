@@ -99,13 +99,21 @@ class DailyBalance:
 
 def calculate_daily_nutrient_targets(profile: Profile) -> DailyNutrientTargets:
     calories = profile.daily_calorie_target
-    protein_g = round(profile.weight_kg * PROTEIN_G_PER_KG[profile.goal], 1)
-    fat_g = round((calories * FAT_CALORIE_SHARE[profile.goal]) / 9, 1)
+    goal = profile.goal or Goal.MAINTAIN
+    sex = profile.sex or Sex.MALE
+
+    if profile.weight_kg is not None:
+        protein_g = round(profile.weight_kg * PROTEIN_G_PER_KG[goal], 1)
+    else:
+        # Incomplete default profile: approximate macros from calorie share only.
+        protein_g = round((calories * 0.25) / 4, 1)
+
+    fat_g = round((calories * FAT_CALORIE_SHARE[goal]) / 9, 1)
     protein_calories = protein_g * 4
     fat_calories = fat_g * 9
     carbs_g = round(max(0.0, (calories - protein_calories - fat_calories) / 4), 1)
 
-    base_targets = MICRONUTRIENT_TARGETS[profile.sex]
+    base_targets = MICRONUTRIENT_TARGETS[sex]
     micronutrients = {
         key: base_targets[key]
         for key in TRACKED_MICRONUTRIENTS

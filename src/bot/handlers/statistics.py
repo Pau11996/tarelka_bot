@@ -72,8 +72,11 @@ def _weight_points(records) -> list[WeightPoint]:
     return [WeightPoint(recorded_at=record.recorded_at, weight_kg=record.weight_kg) for record in records]
 
 
-def _format_weight_caption(points: list[WeightPoint], current_weight: float) -> str:
-    caption = f"⚖️ Динамика веса\nТекущий вес: {current_weight:g} кг"
+def _format_weight_caption(points: list[WeightPoint], current_weight: float | None) -> str:
+    if current_weight is not None:
+        caption = f"⚖️ Динамика веса\nТекущий вес: {current_weight:g} кг"
+    else:
+        caption = "⚖️ Динамика веса"
     if len(points) >= 2:
         first = points[0]
         last = points[-1]
@@ -103,10 +106,7 @@ async def show_statistics_menu(
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return
+    await repo.ensure_default_profile(user.id)
 
     await answer_ephemeral(
         message,
@@ -126,10 +126,7 @@ async def show_month_statistics(
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await callback.answer("Сначала заполните профиль: /profile", show_alert=True)
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     end_date = local_today(user.timezone)
     start_date = end_date - timedelta(days=29)
@@ -154,10 +151,7 @@ async def show_weight_statistics(
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await callback.answer("Сначала заполните профиль: /profile", show_alert=True)
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     records = await repo.get_weight_history(user.id)
     points = _weight_points(records)
@@ -200,11 +194,7 @@ async def show_day_statistics(message: Message, state: FSMContext, session, clea
 
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await state.clear()
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     entries = await repo.get_entries_for_date(user.id, selected_date)
     balance = calculate_daily_balance(profile.daily_calorie_target, entries)

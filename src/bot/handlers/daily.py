@@ -20,10 +20,7 @@ async def show_today(message: Message, state: FSMContext, session, cleanup: Mess
     await state.clear()
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
-    profile = await repo.get_profile(user.id)
-    if profile is None:
-        await answer_ephemeral(message, cleanup, "Сначала заполните профиль: /profile")
-        return
+    profile = await repo.ensure_default_profile(user.id)
 
     today = local_today(user.timezone)
     entries = await repo.get_entries_for_date(user.id, today)

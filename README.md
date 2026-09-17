@@ -33,7 +33,7 @@ landing:8080 → статика + proxy /admin/ → ai_analyzer
 | Сервис | Назначение |
 |--------|------------|
 | `bot` | Telegram-бот, миграции Alembic при старте |
-| `ai_analyzer` | HTTP API анализа (Cursor CLI или OpenAI) + admin API |
+| `ai_analyzer` | HTTP API анализа (OpenAI) + admin API |
 | `landing` | Статический сайт и UI админки |
 
 PostgreSQL в compose **не входит**: укажите доступную БД в `DATABASE_URL` (отдельный контейнер, managed Postgres или локальный инстанс).
@@ -52,7 +52,7 @@ cp .env.example .env
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=taarelka_bot
 DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DB
-CURSOR_API_KEY=...   # если API=false (по умолчанию)
+OPENAI_API_KEY=...
 ```
 
 3. Поднимите сервисы:
@@ -67,31 +67,20 @@ docker compose up --build
 
 ### AI-бэкенд
 
-По умолчанию анализ идёт через **Cursor CLI** (`agent -p`).
+Анализ идёт через **OpenAI API**.
 
 ```env
-API=false
-CURSOR_API_KEY=your-cursor-api-key
-CURSOR_MODEL=cursor-grok-4.5-high-fast
-```
-
-Ключ: [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys.
-
-Альтернатива без API key — OAuth в контейнере:
-
-```bash
-docker compose run --rm -it ai_analyzer agent login
-```
-
-Переключение на **OpenAI**:
-
-```env
-API=true
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-Для **голосового ввода** используется офлайн **Vosk** (русская модель в образе `ai_analyzer`, без `OPENAI_API_KEY`). Нужны `ffmpeg` и модель по пути `VOSK_MODEL_PATH` (по умолчанию `/opt/vosk/model`).
+Если сервер в неподдерживаемом регионе:
+
+```env
+OPENAI_HTTP_PROXY=http://proxy.example.com:8080
+```
+
+Для **голосового ввода** используется офлайн **Vosk** (русская модель в образе `ai_analyzer`). Нужны `ffmpeg` и модель по пути `VOSK_MODEL_PATH` (по умолчанию `/opt/vosk/model`).
 ## Команды и меню
 
 | Команда / кнопка | Что делает |
@@ -198,8 +187,7 @@ TELEGRAM_FEEDBACK_CHAT=https://t.me/+XXXXXXXX
 | `TELEGRAM_BOT_TOKEN` | да | Токен BotFather |
 | `TELEGRAM_BOT_USERNAME` | да* | Username без `@` (*для deep-link и лендинга) |
 | `DATABASE_URL` | да | Async Postgres URL (`postgresql+asyncpg://...`) |
-| `CURSOR_API_KEY` | да, если `API=false` | Ключ Cursor |
-| `OPENAI_API_KEY` | да, если `API=true` | Ключ OpenAI |
+| `OPENAI_API_KEY` | да | Ключ OpenAI |
 | `AI_ANALYZER_URL` | нет | По умолчанию `http://ai_analyzer:8000` в Docker |
 | `DEFAULT_TIMEZONE` | нет | `Europe/Moscow` |
 | `MESSAGE_CLEANUP_TTL_SECONDS` | нет | TTL служебных сообщений (`7200`) |
@@ -208,34 +196,19 @@ TELEGRAM_FEEDBACK_CHAT=https://t.me/+XXXXXXXX
 
 ## Если анализ фото не работает
 
-Ошибка `Failed to reach the Cursor API` значит, что `ai_analyzer` не достучался до Cursor API (не проблема Telegram-бота).
+Ошибка региона или таймаут OpenAI значит, что `ai_analyzer` не достучался до API.
 
-1. Проверьте `CURSOR_API_KEY` в `.env`.
+1. Проверьте `OPENAI_API_KEY` в `.env`.
 2. Пересоберите анализатор:
 
 ```bash
 docker compose up -d --build ai_analyzer
 ```
 
-3. Проверьте сеть из контейнера:
-
-```bash
-docker compose exec ai_analyzer curl -I https://api2.cursor.sh
-docker compose exec ai_analyzer agent -p "reply ok" --output-format text --mode ask --force
-```
-
-4. За корпоративным прокси:
+3. Если сервер в неподдерживаемом регионе, задайте прокси:
 
 ```env
-HTTPS_PROXY=http://your-proxy:port
-HTTP_PROXY=http://your-proxy:port
-NODE_USE_ENV_PROXY=1
-```
-
-5. Либо OAuth:
-
-```bash
-docker compose run --rm -it ai_analyzer agent login
+OPENAI_HTTP_PROXY=http://your-proxy:port
 ```
 
 ## Локальная разработка

@@ -65,6 +65,27 @@ class EntryService:
         balance = calculate_daily_balance(profile.daily_calorie_target, entries)
         return entry, balance
 
+    async def log_unknown_analysis(
+        self,
+        *,
+        user: User,
+        analysis_type: AnalysisType,
+        input_text: str | None,
+        image_path: str | None,
+        raw_response: str,
+        result: AnalysisResult,
+    ) -> None:
+        await self.repo.create_analysis(
+            user_id=user.id,
+            analysis_type=analysis_type,
+            input_text=input_text,
+            image_path=image_path,
+            previous_analysis_id=None,
+            raw_response=raw_response,
+            parsed_json=result.model_dump(),
+            confidence=result.confidence,
+        )
+
     async def save_activity_from_analysis(
         self,
         *,
@@ -209,29 +230,6 @@ class EntryService:
             carbs_g=favorite.carbs_g,
             micronutrients=favorite.micronutrients,
             items=favorite.items,
-        )
-
-        entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
-        return entry, balance
-
-    async def save_activity_from_favorite(
-        self,
-        *,
-        user: User,
-        favorite: FavoriteMeal,
-    ) -> tuple[DayEntry, object]:
-        profile = await self.repo.get_profile(user.id)
-        if profile is None:
-            raise ValueError("Profile not found")
-
-        entry = await self.repo.create_entry(
-            user_id=user.id,
-            entry_date=local_today(user.timezone),
-            entry_type=EntryType.ACTIVITY,
-            title=favorite.title,
-            calories=favorite.calories,
-            duration_minutes=favorite.duration_minutes,
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)

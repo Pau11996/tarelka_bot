@@ -15,6 +15,8 @@ from src.ai_analyzer.env_utils import (
     resolve_http_proxy,
     resolve_openai_reasoning_effort,
     resolve_openai_temperature,
+    resolve_stage_model,
+    resolve_stage_reasoning_effort,
 )
 
 RETRYABLE_MARKERS = (
@@ -33,8 +35,7 @@ def format_openai_error(exc: Exception) -> str:
     if "unsupported_country_region_territory" in message:
         return (
             "OpenAI API недоступен из региона сервера. "
-            "Настройте OPENAI_HTTP_PROXY или HTTPS_PROXY на прокси в поддерживаемой стране, "
-            "либо отключите API=true и используйте Cursor."
+            "Настройте OPENAI_HTTP_PROXY или HTTPS_PROXY на прокси в поддерживаемой стране."
         )
     if "unsupported_value" in message and "temperature" in message:
         return (
@@ -55,7 +56,7 @@ class OpenAIRunner(BaseAnalysisRunner):
     def __init__(self) -> None:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is required when API=true")
+            raise RuntimeError("OPENAI_API_KEY is required")
 
         self.model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         self.timeout = float(os.environ.get("OPENAI_TIMEOUT", "120"))
@@ -91,23 +92,31 @@ class OpenAIRunner(BaseAnalysisRunner):
             "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
         }
 
-    def _completion_kwargs(self, *, content: list[dict]) -> dict:
+    def _completion_kwargs(self, *, content: list[dict], stage: str | None = None) -> dict:
+        model = resolve_stage_model(stage, self.model)
+        reasoning_effort = resolve_stage_reasoning_effort(stage, self.reasoning_effort)
         kwargs = {
-            "model": self.model,
+            "model": model,
             "messages": [{"role": "user", "content": content}],
         }
         if self.temperature is not None:
             kwargs["temperature"] = self.temperature
-        if self.reasoning_effort is not None:
+        if reasoning_effort is not None:
             kwargs["extra_body"] = {
                 "reasoning": {
-                    "effort": self.reasoning_effort,
+                    "effort": reasoning_effort,
                     "exclude": True,
                 }
             }
         return kwargs
 
-    async def run_prompt(self, prompt: str, image_path: str | None = None) -> str:
+    async def run_prompt(
+        self,
+        prompt: str,
+        image_path: str | None = None,
+        *,
+        stage: str | None = None,
+    ) -> str:
         content: list[dict] = [{"type": "text", "text": prompt}]
         if image_path:
             content.append(await asyncio.to_thread(self._image_content, image_path))
@@ -116,7 +125,7 @@ class OpenAIRunner(BaseAnalysisRunner):
         for attempt in range(1, self.max_retries + 1):
             try:
                 response = await self.client.chat.completions.create(
-                    **self._completion_kwargs(content=content),
+                    **self._completion_kwargs(content=content, stage=stage),
                 )
                 message = response.choices[0].message.content
                 if not message or not message.strip():

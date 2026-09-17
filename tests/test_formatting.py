@@ -1,4 +1,8 @@
-from src.bot.services.formatting import format_analysis_result, format_daily_balance
+from src.bot.services.formatting import (
+    format_analysis_result,
+    format_daily_balance,
+    format_unknown_result,
+)
 from src.bot.services.nutrition import DailyBalance, calculate_daily_nutrient_targets
 from src.db.models import ActivityLevel, Goal, Profile, Sex
 from src.shared.schemas import AnalysisResult, NutrientItem
@@ -41,6 +45,41 @@ def test_analysis_card_does_not_include_daily_micronutrients():
     assert "Клетчатка: 1 г | Сахар: 12 г" in text
     assert "йогурт (150 г): 120 ккал, Б 8.0 г | Ж 3.0 г | У 14.0 г" in text
     assert "<b>ОСТАЛОСЬ: 1700 ккал</b>" in text
+
+
+def test_analysis_card_shows_portion_assumed_warning():
+    result = AnalysisResult(
+        type="meal",
+        title="Борщ",
+        items=[NutrientItem(name="борщ", quantity="300 г", calories=120)],
+        total_calories=120,
+        portion_assumed=True,
+    )
+
+    text = format_analysis_result(result)
+
+    assert "Вес не указан — взяты стандартные порции" in text
+    assert "Нажмите «Изменить», чтобы уточнить" in text
+
+
+def test_format_unknown_result_card():
+    result = AnalysisResult(
+        type="unknown",
+        total_calories=0,
+        unknown_reason="На фото нет еды",
+    )
+
+    text = format_unknown_result(result)
+
+    assert "❓ Неизвестный ввод" in text
+    assert "Калории: 0 ккал" in text
+    assert "На фото нет еды" not in text
+    assert "Отправьте фото еды" in text
+    assert text == (
+        "❓ Неизвестный ввод\n"
+        "Калории: 0 ккал\n"
+        "Отправьте фото еды, опишите блюдо текстом или расскажите про тренировку."
+    )
 
 
 def test_daily_balance_can_include_micronutrients():

@@ -58,6 +58,22 @@ def test_parse_analysis_response_items():
     assert result.confidence == 0.8
 
 
+def test_parse_analysis_response_unknown_type():
+    raw = """
+{
+  "type": "unknown",
+  "title": "",
+  "total_calories": 0,
+  "unknown_reason": "Неизвестный ввод",
+  "portion_assumed": false
+}
+"""
+    result = parse_analysis_response(raw)
+    assert result.type == "unknown"
+    assert result.unknown_reason == "Неизвестный ввод"
+    assert result.total_calories == 0
+
+
 def test_extract_json_payload_invalid():
     with pytest.raises(ValueError):
         extract_json_payload("no json here")

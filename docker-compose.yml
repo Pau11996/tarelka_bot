@@ -7,7 +7,6 @@ services:
     env_file:
       - .env
     environment:
-      API: ${API:-false}
       DATABASE_URL: ${DATABASE_URL}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
@@ -15,21 +14,16 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_TOKEN_SECRET: ${ADMIN_TOKEN_SECRET:-}
       AI_ESTIMATED_COST_USD_PER_ANALYSIS: ${AI_ESTIMATED_COST_USD_PER_ANALYSIS:-0}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_TIMEOUT: ${OPENAI_TIMEOUT:-120}
       OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
+      OPENAI_HTTP_PROXY: ${OPENAI_HTTP_PROXY:-}
       VOSK_MODEL_PATH: ${VOSK_MODEL_PATH:-/opt/vosk/model}
-      CURSOR_API_KEY: ${CURSOR_API_KEY}
-      CURSOR_MODEL: ${CURSOR_MODEL:-cursor-grok-4.5-high-fast}
-      CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-600}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}
-      NODE_USE_ENV_PROXY: ${NODE_USE_ENV_PROXY:-1}
-      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     volumes:
-      - cursor_data:/root/.config/cursor
       - ./logs:/opt/logs
     ports:
       - "127.0.0.1:8000:8000"
@@ -93,9 +87,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  cursor_data:
 
 networks:
   default:

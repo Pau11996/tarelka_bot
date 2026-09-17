@@ -161,3 +161,68 @@ async def test_ai_client_analyze_text_after_transcribe_flow(monkeypatch: pytest.
         "http://analyzer:8000/analyze/text",
     ]
     assert raw == "{}"
+
+
+@pytest.mark.asyncio
+async def test_ai_client_analyze_text_stream_reports_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+    events: list[tuple[str, dict]] = []
+
+    class FakeStreamResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        async def aiter_lines(self):
+            yield '{"event": "classified", "type": "activity"}'
+            yield '{"event": "calculate", "type": "activity"}'
+            yield (
+                '{"event": "done", "raw_response": "{}", "parsed": '
+                '{"type": "activity", "title": "Бег", "total_calories": 280, '
+                '"items": [], "micronutrients": {}}}'
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        def stream(self, method, url, json=None):
+            captured["method"] = method
+            captured["url"] = url
+            captured["json"] = json
+            return FakeStreamResponse()
+
+    async def on_progress(event: str, payload: dict) -> None:
+        events.append((event, payload))
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+    client = AIAnalyzerClient(base_url="http://analyzer:8000")
+    raw, result = await client.analyze_text(
+        mode="auto",
+        text="пробежка",
+        on_progress=on_progress,
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["url"] == "http://analyzer:8000/analyze/text"
+    assert captured["json"]["stream"] is True
+    assert events == [
+        ("classified", {"type": "activity"}),
+        ("calculate", {"type": "activity"}),
+    ]
+    assert raw == "{}"
+    assert result.type == "activity"
+    assert result.title == "Бег"

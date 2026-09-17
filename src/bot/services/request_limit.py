@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 from aiogram.types import Message
@@ -12,6 +13,14 @@ from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.nutrition import local_today
 from src.db.models import User
 from src.db.repository import UserRepository
+
+
+@dataclass(frozen=True)
+class RequestGrant:
+    source: str  # "daily" | "bonus"
+
+    def __bool__(self) -> bool:
+        return True
 
 
 def has_active_subscription(user: User, *, now: datetime | None = None) -> bool:
@@ -61,13 +70,13 @@ async def ensure_request_allowed(
     cleanup: MessageCleanupService,
     *,
     track_user: bool = False,
-) -> bool:
+) -> RequestGrant | None:
     if await try_consume_daily_request(repo, user):
-        return True
+        return RequestGrant(source="daily")
     if await repo.try_consume_bonus_request(user.id):
         if (user.bonus_requests or 0) > 0:
             user.bonus_requests -= 1
-        return True
+        return RequestGrant(source="bonus")
 
     await answer_ephemeral(
         message,
@@ -76,4 +85,12 @@ async def ensure_request_allowed(
         reply_markup=subscription_keyboard(is_active=has_active_subscription(user)),
         track_user=track_user,
     )
-    return False
+    return None
+
+
+async def refund_request(repo: UserRepository, user: User, grant: RequestGrant) -> None:
+    if grant.source == "bonus":
+        await repo.refund_bonus_request(user.id)
+        user.bonus_requests = int(user.bonus_requests or 0) + 1
+        return
+    await repo.refund_daily_request(user.id, local_today(user.timezone))

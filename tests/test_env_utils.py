@@ -8,6 +8,8 @@ from src.ai_analyzer.env_utils import (
     resolve_http_proxy,
     resolve_openai_reasoning_effort,
     resolve_openai_temperature,
+    resolve_stage_model,
+    resolve_stage_reasoning_effort,
 )
 
 
@@ -68,3 +70,23 @@ def test_resolve_http_proxy_prefers_openai_specific_proxy(monkeypatch: pytest.Mo
 def test_resolve_http_proxy_adds_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_HTTP_PROXY", "proxy.example.com:8080")
     assert resolve_http_proxy() == "http://proxy.example.com:8080"
+
+
+def test_resolve_stage_model_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_MODEL_CLASSIFY", raising=False)
+    assert resolve_stage_model("classify", "gpt-4o-mini") == "gpt-4o-mini"
+
+
+def test_resolve_stage_model_reads_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_MODEL_CLASSIFY", "gpt-4o")
+    assert resolve_stage_model("classify", "gpt-4o-mini") == "gpt-4o"
+
+
+def test_resolve_stage_reasoning_effort_reads_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT_CALC", "High")
+    assert resolve_stage_reasoning_effort("calc", "medium") == "high"
+
+
+def test_resolve_stage_reasoning_effort_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT_PHOTO", raising=False)
+    assert resolve_stage_reasoning_effort("photo", "low") == "low"

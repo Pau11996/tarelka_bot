@@ -184,6 +184,17 @@ class UserRepository:
         await self.session.commit()
         return True
 
+    async def refund_bonus_request(self, user_id: int) -> None:
+        result = await self.session.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            await self.session.commit()
+            return
+        user.bonus_requests = int(user.bonus_requests or 0) + 1
+        await self.session.commit()
+
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
         result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
         return result.scalar_one_or_none()
@@ -440,6 +451,22 @@ class UserRepository:
         usage.request_count += 1
         await self.session.commit()
         return True
+
+    async def refund_daily_request(self, user_id: int, usage_date: date) -> None:
+        result = await self.session.execute(
+            select(DailyRequestUsage)
+            .where(
+                DailyRequestUsage.user_id == user_id,
+                DailyRequestUsage.usage_date == usage_date,
+            )
+            .with_for_update()
+        )
+        usage = result.scalar_one_or_none()
+        if usage is None:
+            await self.session.commit()
+            return
+        usage.request_count = max(0, int(usage.request_count or 0) - 1)
+        await self.session.commit()
 
     async def activate_subscription(
         self,

@@ -143,10 +143,25 @@ def format_analysis_result(result: AnalysisResult, balance: DailyBalance | None 
                 f"Б {item.protein_g:.1f} г | Ж {item.fat_g:.1f} г | У {item.carbs_g:.1f} г"
             )
 
+    if result.portion_assumed:
+        lines.append(
+            "\nВес не указан — взяты стандартные порции. "
+            "Нажмите «Изменить», чтобы уточнить."
+        )
+
     if balance:
         lines.append(f"\n{format_daily_balance(balance, include_micronutrients=False)}")
 
     return "\n".join(lines)
+
+
+def format_unknown_result(result: AnalysisResult | None = None) -> str:
+    del result
+    return (
+        "❓ Неизвестный ввод\n"
+        "Калории: 0 ккал\n"
+        "Отправьте фото еды, опишите блюдо текстом или расскажите про тренировку."
+    )
 
 
 def format_activity_result(result: AnalysisResult, balance: DailyBalance | None = None) -> str:

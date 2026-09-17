@@ -34,12 +34,14 @@ class AnalysisResult(BaseModel):
     needs_clarification: bool = False
     clarification_question: str | None = None
     duration_minutes: int | None = None
+    portion_assumed: bool = False
+    unknown_reason: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AnalysisResult:
         items = [NutrientItem(**item) for item in data.get("items", [])]
         analysis_type = str(data.get("type", "meal")).lower()
-        if analysis_type not in {"meal", "activity"}:
+        if analysis_type not in {"meal", "activity", "unknown"}:
             analysis_type = "meal"
         raw_micronutrients = data.get("micronutrients") or {}
         micronutrients = {
@@ -60,4 +62,6 @@ class AnalysisResult(BaseModel):
             needs_clarification=False,
             clarification_question=None,
             duration_minutes=data.get("duration_minutes"),
+            portion_assumed=bool(data.get("portion_assumed", False)),
+            unknown_reason=data.get("unknown_reason"),
         )

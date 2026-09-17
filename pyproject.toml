@@ -1,7 +1,7 @@
 [project]
 name = "wellhealth"
 version = "0.1.0"
-description = "Telegram calorie tracking bot with Cursor CLI analysis"
+description = "Telegram calorie tracking bot with OpenAI analysis"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

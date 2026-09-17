@@ -44,3 +44,17 @@ def test_completion_kwargs_omit_reasoning_by_default(monkeypatch: pytest.MonkeyP
     runner = OpenAIRunner()
     kwargs = runner._completion_kwargs(content=[{"type": "text", "text": "hi"}])
     assert "extra_body" not in kwargs
+
+
+def test_completion_kwargs_use_stage_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("OPENAI_MODEL_CLASSIFY", "gpt-4o")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT_CLASSIFY", raising=False)
+    runner = OpenAIRunner()
+    kwargs = runner._completion_kwargs(
+        content=[{"type": "text", "text": "hi"}],
+        stage="classify",
+    )
+    assert kwargs["model"] == "gpt-4o"

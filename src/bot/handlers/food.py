@@ -13,6 +13,7 @@ from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import (
     format_activity_result,
     format_analysis_result,
+    format_unknown_result,
     profile_context,
 )
 from src.bot.services.messaging import (
@@ -24,7 +25,7 @@ from src.bot.services.messaging import (
 )
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.referrals import reward_referrer_after_first_analysis
-from src.bot.services.request_limit import ensure_request_allowed
+from src.bot.services.request_limit import RequestGrant, ensure_request_allowed, refund_request
 from src.bot.states import CorrectionStates, SurveyStates
 from src.db.models import AnalysisType
 from src.db.repository import UserRepository
@@ -45,12 +46,62 @@ VOICE_UNAVAILABLE = (
     "Отправьте описание текстом или фото."
 )
 
+STATUS_CLASSIFY = f"Определяю тип ввода...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_PHOTO_DETAIL = f"Разбираю состав по фото...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_CALCULATE = f"Считаю калории...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_ACTIVITY = f"Анализирую активность...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_ANALYZE_PHOTO = f"Определяю тип ввода...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_ANALYZE_TEXT = f"Определяю тип ввода...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_ANALYZE_VOICE = f"Слушаю голосовое...\n\n{ANALYSIS_DURATION_HINT}"
+
+
+def progress_status_text(
+    event: str,
+    payload: dict,
+    *,
+    transcript: str | None = None,
+) -> str | None:
+    result_type = str(payload.get("type") or "")
+    if event == "classified" and result_type == "activity":
+        body = STATUS_ACTIVITY
+    elif event == "photo_detail":
+        body = STATUS_PHOTO_DETAIL
+    elif event == "calculate" and result_type == "activity":
+        body = STATUS_ACTIVITY
+    elif event == "calculate":
+        body = STATUS_CALCULATE
+    else:
+        return None
+    if transcript:
+        return f"Распознал: {transcript}\n\n{body}"
+    return body
+
 
 async def _delete_status_message(message: Message, status: Message) -> None:
     try:
         await message.bot.delete_message(chat_id=status.chat.id, message_id=status.message_id)
     except Exception:
         pass
+
+
+async def _edit_status_message(message: Message, status: Message, text: str) -> None:
+    try:
+        await message.bot.edit_message_text(
+            chat_id=status.chat.id,
+            message_id=status.message_id,
+            text=text,
+        )
+    except Exception:
+        pass
+
+
+def _progress_handler(message: Message, status: Message, *, transcript: str | None = None):
+    async def on_progress(event: str, payload: dict) -> None:
+        text = progress_status_text(event, payload, transcript=transcript)
+        if text:
+            await _edit_status_message(message, status, text)
+
+    return on_progress
 
 
 async def _require_profile(
@@ -152,6 +203,38 @@ async def send_result_card(
         await answer_ephemeral(message, cleanup, result_text, track_user=False)
 
 
+async def _send_unknown_result(
+    message: Message,
+    cleanup: MessageCleanupService,
+    *,
+    session,
+    user,
+    analysis_type: AnalysisType,
+    input_text: str | None,
+    image_path: str | None,
+    raw: str,
+    result: AnalysisResult,
+    grant: RequestGrant | None,
+) -> None:
+    service = EntryService(session)
+    await service.log_unknown_analysis(
+        user=user,
+        analysis_type=analysis_type,
+        input_text=input_text,
+        image_path=image_path,
+        raw_response=raw,
+        result=result,
+    )
+    if grant is not None:
+        await refund_request(service.repo, user, grant)
+    await answer_ephemeral(
+        message,
+        cleanup,
+        format_unknown_result(result),
+        track_user=False,
+    )
+
+
 async def _save_and_send_text_result(
     message: Message,
     cleanup: MessageCleanupService,
@@ -161,8 +244,24 @@ async def _save_and_send_text_result(
     input_text: str,
     raw: str,
     result: AnalysisResult,
+    grant: RequestGrant | None = None,
     is_profile_complete: bool = True,
 ) -> None:
+    if result.type == "unknown":
+        await _send_unknown_result(
+            message,
+            cleanup,
+            session=session,
+            user=user,
+            analysis_type=AnalysisType.FOOD_TEXT,
+            input_text=input_text,
+            image_path=None,
+            raw=raw,
+            result=result,
+            grant=grant,
+        )
+        return
+
     service = EntryService(session)
     schedule_user_message(cleanup, message, persistent=True)
     if result.type == "activity":
@@ -225,13 +324,14 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    if not await ensure_request_allowed(message, repo, user, cleanup):
+    grant = await ensure_request_allowed(message, repo, user, cleanup)
+    if not grant:
         return
 
     status = await answer_ephemeral(
         message,
         cleanup,
-        f"Анализирую фото...\n\n{ANALYSIS_DURATION_HINT}",
+        STATUS_ANALYZE_PHOTO,
         track_user=False,
     )
 
@@ -248,6 +348,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             filename="upload.jpg",
             text=message.caption,
             profile_context=profile_context(profile),
+            on_progress=_progress_handler(message, status),
         )
     except httpx.HTTPError:
         logger.exception("Photo analysis request failed")
@@ -257,6 +358,23 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             cleanup,
             ANALYSIS_UNAVAILABLE,
             track_user=False,
+        )
+        return
+
+    await _delete_status_message(message, status)
+
+    if result.type == "unknown":
+        await _send_unknown_result(
+            message,
+            cleanup,
+            session=session,
+            user=user,
+            analysis_type=AnalysisType.FOOD_PHOTO,
+            input_text=message.caption,
+            image_path=None,
+            raw=raw,
+            result=result,
+            grant=grant,
         )
         return
 
@@ -275,7 +393,6 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             service.repo,
             referred_user_id=user.id,
         )
-        await _delete_status_message(message, status)
         await _delete_original_and_send_photo_result(
             message,
             cleanup,
@@ -300,7 +417,6 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         service.repo,
         referred_user_id=user.id,
     )
-    await _delete_status_message(message, status)
     await _delete_original_and_send_photo_result(
         message,
         cleanup,
@@ -332,13 +448,14 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
+    grant = await ensure_request_allowed(message, repo, user, cleanup, track_user=True)
+    if not grant:
         return
 
     status = await answer_ephemeral(
         message,
         cleanup,
-        f"Слушаю голосовое...\n\n{ANALYSIS_DURATION_HINT}",
+        STATUS_ANALYZE_VOICE,
         track_user=False,
     )
 
@@ -367,23 +484,18 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         await answer_ephemeral(message, cleanup, VOICE_NOT_RECOGNIZED, track_user=False)
         return
 
-    try:
-        await message.bot.edit_message_text(
-            chat_id=status.chat.id,
-            message_id=status.message_id,
-            text=(
-                f"Распознал: {transcript}\n\n"
-                f"Анализирую...\n\n{ANALYSIS_DURATION_HINT}"
-            ),
-        )
-    except Exception:
-        pass
+    await _edit_status_message(
+        message,
+        status,
+        f"Распознал: {transcript}\n\n{STATUS_CLASSIFY}",
+    )
 
     try:
         raw, result = await ai_client.analyze_text(
             mode="auto",
             text=transcript,
             profile_context=profile_context(profile),
+            on_progress=_progress_handler(message, status, transcript=transcript),
         )
     except httpx.HTTPError:
         logger.exception("Voice analysis request failed")
@@ -405,6 +517,7 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         input_text=transcript,
         raw=raw,
         result=result,
+        grant=grant,
         is_profile_complete=profile.is_complete(),
     )
 
@@ -426,13 +539,14 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
+    grant = await ensure_request_allowed(message, repo, user, cleanup, track_user=True)
+    if not grant:
         return
 
     status = await answer_ephemeral(
         message,
         cleanup,
-        f"Анализирую описание...\n\n{ANALYSIS_DURATION_HINT}",
+        STATUS_ANALYZE_TEXT,
         track_user=False,
     )
 
@@ -441,6 +555,7 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
             mode="auto",
             text=message.text,
             profile_context=profile_context(profile),
+            on_progress=_progress_handler(message, status),
         )
     except httpx.HTTPError:
         logger.exception("Text analysis request failed")
@@ -462,5 +577,6 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         input_text=message.text,
         raw=raw,
         result=result,
+        grant=grant,
         is_profile_complete=profile.is_complete(),
     )

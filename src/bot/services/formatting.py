@@ -78,20 +78,61 @@ def _format_macro_ratio(consumed: float, target: float) -> str:
     return f"{consumed:.1f} / {target:.1f} г"
 
 
+def format_day_word(count: int) -> str:
+    n = abs(count) % 100
+    if 11 <= n <= 14:
+        return "дней"
+    n = abs(count) % 10
+    if n == 1:
+        return "день"
+    if 2 <= n <= 4:
+        return "дня"
+    return "дней"
+
+
+def format_calorie_bar(
+    consumed: float,
+    target: float,
+    *,
+    activity_bonus: float = 0,
+    width: int = 10,
+) -> str:
+    budget = target + activity_bonus
+    if budget <= 0:
+        filled = width if consumed > 0 else 0
+    elif consumed <= 0:
+        filled = 0
+    elif consumed >= budget:
+        filled = width
+    else:
+        filled = min(round(consumed / budget * width), width - 1)
+    filled_mark = "🟥" if consumed > budget else "🟩"
+    bar = filled_mark * filled + "⬜" * (width - filled)
+    line = f"{bar}  {consumed:.0f} / {budget:.0f} ккал"
+    if consumed > budget:
+        line += f"\n+{consumed - budget:.0f} ккал сверх нормы"
+    return line
+
+
 def format_daily_balance(
     balance: DailyBalance,
     *,
     include_micronutrients: bool = True,
     profile: Profile | None = None,
+    streak: int | None = None,
 ) -> str:
+    streak_value = streak if streak is not None else balance.streak
     text = (
         f"📊 Дневной баланс\n"
         f"Норма: {balance.target:.0f} ккал\n"
         f"Съедено: {balance.consumed:.0f} ккал\n"
         f"Активность: +{balance.activity_bonus:.0f} ккал\n"
         f"\n<b>ОСТАЛОСЬ: {balance.remaining:.0f} ккал</b>\n\n"
-        f"БЖУ за день:\n"
+        f"{format_calorie_bar(balance.consumed, balance.target, activity_bonus=balance.activity_bonus)}"
     )
+    if streak_value is not None:
+        text += f"\nСерия: {streak_value} {format_day_word(streak_value)}"
+    text += "\n\nБЖУ за день:\n"
     if profile is not None:
         targets = calculate_daily_nutrient_targets(profile)
         text += (
@@ -122,7 +163,12 @@ def format_daily_balance(
     return text
 
 
-def format_analysis_result(result: AnalysisResult, balance: DailyBalance | None = None) -> str:
+def format_analysis_result(
+    result: AnalysisResult,
+    balance: DailyBalance | None = None,
+    *,
+    streak: int | None = None,
+) -> str:
     title = escape(result.title or "Анализ")
     lines = [f"🍽 {title}", f"Калории: {result.total_calories:.0f} ккал"]
     lines.append(
@@ -150,7 +196,9 @@ def format_analysis_result(result: AnalysisResult, balance: DailyBalance | None 
         )
 
     if balance:
-        lines.append(f"\n{format_daily_balance(balance, include_micronutrients=False)}")
+        lines.append(
+            f"\n{format_daily_balance(balance, include_micronutrients=False, streak=streak)}"
+        )
 
     return "\n".join(lines)
 
@@ -164,7 +212,12 @@ def format_unknown_result(result: AnalysisResult | None = None) -> str:
     )
 
 
-def format_activity_result(result: AnalysisResult, balance: DailyBalance | None = None) -> str:
+def format_activity_result(
+    result: AnalysisResult,
+    balance: DailyBalance | None = None,
+    *,
+    streak: int | None = None,
+) -> str:
     lines = [
         f"🏃 {escape(result.title or 'Активность')}",
         f"Сожжено: {result.total_calories:.0f} ккал",
@@ -172,7 +225,9 @@ def format_activity_result(result: AnalysisResult, balance: DailyBalance | None 
     if result.duration_minutes:
         lines.append(f"Длительность: {result.duration_minutes} мин")
     if balance:
-        lines.append(f"\n{format_daily_balance(balance, include_micronutrients=False)}")
+        lines.append(
+            f"\n{format_daily_balance(balance, include_micronutrients=False, streak=streak)}"
+        )
     return "\n".join(lines)
 
 

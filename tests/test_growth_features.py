@@ -12,7 +12,7 @@ from src.bot.handlers.data_management import delete_confirmation_keyboard, priva
 from src.bot.handlers.referrals import invite_keyboard
 from src.bot.handlers.start import WELCOME_INTRO
 from src.bot.services.links import PRIVACY_NOTE
-from src.bot.services.reengagement import REENGAGEMENT_TEXT
+from src.bot.services.diary_nudges import EVENING_NUDGE_TEXT, REVIVE_NUDGE_TEXT
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import limit_welcome_note
 from src.db.models import User
@@ -70,9 +70,17 @@ def test_landing_has_pricing_and_no_missing_demo_asset() -> None:
     assert "demo-meal.jpg" not in template
     assert "${FREE_DAILY_LIMIT}" in template
     assert "${SUBSCRIPTION_PRICE_STARS}" in template
+    assert "${REFERRAL_BONUS_REQUESTS}" in template
     assert "/privacy.html" in template
     assert "/terms.html" in template
-
+    assert "2000 ккал" in template
+    assert "/invite" in template
+    assert "/favorites" in template
+    assert "клетчатк" in template.lower()
+    assert "сахар" in template.lower()
+    assert "не продлевается" in template
+    assert "активность текстом, голосом или фото" not in template
+    assert "По фото распознаётся только еда" in template
 
 def test_delete_confirmation_requires_explicit_callback() -> None:
     callbacks = [
@@ -125,8 +133,9 @@ def test_limit_welcome_note_shows_bonus_requests(monkeypatch: pytest.MonkeyPatch
     assert "Чтобы увеличить лимит" not in note
 
 
-def test_reengagement_message_has_opt_out() -> None:
-    assert "/notifications_off" in REENGAGEMENT_TEXT
+def test_diary_nudge_messages_have_opt_out() -> None:
+    assert "/notifications_off" in EVENING_NUDGE_TEXT
+    assert "/notifications_off" in REVIVE_NUDGE_TEXT
 
 
 @pytest.mark.asyncio

@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${LANDING_TITLE} — учёт калорий и БЖУ в Telegram</title>
-    <meta name="description" content="Telegram-бот для учёта калорий, белков, жиров и углеводов. Отправьте фото, голосовое или описание блюда — бот примерно оценит нутриенты и покажет дневной баланс.">
-    <meta property="og:title" content="${LANDING_TITLE} — учёт калорий в Telegram">
-    <meta property="og:description" content="Сфотографируйте еду — бот примерно оценит калории и БЖУ. Без установки приложений.">
+    <meta name="description" content="Telegram-бот для учёта калорий, БЖУ, клетчатки и сахара. Отправьте фото, голосовое или текст — бот примерно оценит блюдо или активность и покажет дневной баланс. Без отдельного приложения.">
+    <meta property="og:title" content="${LANDING_TITLE} — учёт калорий и БЖУ в Telegram">
+    <meta property="og:description" content="Фото, голос или текст — примерный расчёт калорий и БЖУ прямо в Telegram. Стартовая норма 2000 ккал, профиль по желанию.">
     <meta property="og:type" content="website">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
@@ -38,18 +38,19 @@
                     <span class="eyebrow">Telegram-бот для питания</span>
                     <h1>Считайте калории и&nbsp;БЖУ прямо в&nbsp;Telegram</h1>
                     <p class="hero-lead">
-                        Отправьте фото еды, голосовое, описание блюда или активность — ${LANDING_TITLE} сам определит тип записи,
-                        примерно оценит нутриенты и обновит дневной баланс. Без отдельного приложения и сложных таблиц.
+                        ${LANDING_TITLE} помогает худеть, набирать вес или просто контролировать питание.
+                        Отправьте фото еды, голосовое или текст — бот примерно оценит калории, БЖУ, клетчатку и сахар,
+                        отличит еду от активности и обновит дневной баланс. Профиль не обязателен: можно начинать сразу.
                     </p>
                     <div class="hero-actions">
                         <a class="button button-primary" href="https://t.me/${TELEGRAM_BOT_USERNAME}?start=landing_hero" target="_blank" rel="noopener noreferrer">
-                            Отправить первое фото бесплатно
+                            Открыть бота бесплатно
                         </a>
                         <a class="button button-secondary" href="#how">
                             Как пользоваться
                         </a>
                     </div>
-                    <p class="hero-note">${FREE_DAILY_LIMIT} AI-запросов в день бесплатно · расчёт примерный · без отдельного приложения</p>
+                    <p class="hero-note">${FREE_DAILY_LIMIT} AI-запросов в день · расчёт примерный · стартовая норма 2000 ккал</p>
                 </div>
 
                 <div class="phone-card" aria-label="Пример работы бота">
@@ -68,17 +69,19 @@
                             <p>🍽 Рис с курицей и томатами</p>
                             <p>Калории: 412 ккал</p>
                             <p>БЖУ: Б 28.1 г | Ж 3.3 г | У 64.0 г</p>
+                            <p>Клетчатка: 2.1 г | Сахар: 3.4 г</p>
                             <p class="analysis-section">Состав:</p>
-                            <p>• вареный белый рис (220 г): 286 ккал, Б 5.9 г | Ж 0.7 г | У 62.0 г</p>
-                            <p>• куриная грудка (70 г): 116 ккал, Б 21.7 г | Ж 2.5 г | У 0.0 г</p>
-                            <p>• тушеные томаты или томатный соус (35 г): 10 ккал, Б 0.5 г | Ж 0.1 г | У 2.0 г</p>
+                            <p>• варёный белый рис (220 г): 286 ккал</p>
+                            <p>• куриная грудка (70 г): 116 ккал</p>
+                            <p>• тушёные томаты (35 г): 10 ккал</p>
                             <p class="analysis-section">📊 Дневной баланс</p>
-                            <p>Норма: 1600 ккал</p>
+                            <p>Норма: 2000 ккал</p>
                             <p>Съедено: 544 ккал</p>
                             <p>Активность: +0 ккал</p>
-                            <p class="analysis-remaining">ОСТАЛОСЬ: 1056 ккал</p>
-                            <p>БЖУ за день:</p>
-                            <p>Б: 29.8 г | Ж: 3.8 г | У: 96.6 г</p>
+                            <p class="analysis-remaining">ОСТАЛОСЬ: 1456 ккал</p>
+                            <p class="analysis-bar">███░░░░░░░  544 / 2000 ккал</p>
+                            <p>Серия: 3 дня</p>
+                            <p>БЖУ за день: Б 29.8 г | Ж 3.8 г | У 96.6 г</p>
                         </div>
                     </div>
                 </div>
@@ -89,43 +92,53 @@
             <div class="container">
                 <div class="section-header">
                     <h2>Что умеет бот</h2>
-                    <p>Всё необходимое для ежедневного учёта питания — в одном Telegram-чате.</p>
+                    <p>Ежедневный учёт питания и активности — в одном Telegram-чате, без отдельных приложений.</p>
                 </div>
                 <div class="features-grid">
                     <article class="feature-card">
                         <div class="feature-icon" aria-hidden="true">📷</div>
                         <h3>Анализ по фото</h3>
-                        <p>Сфотографируйте тарелку — бот примерно оценит блюдо, калории, белки, жиры и углеводы.</p>
+                        <p>Сфотографируйте тарелку — бот примерно оценит порции, калории, БЖУ, клетчатку и сахар.</p>
                     </article>
                     <article class="feature-card">
-                        <div class="feature-icon" aria-hidden="true">✍️</div>
-                        <h3>Текстовый ввод</h3>
-                        <p>Опишите еду или активность словами, если фото нет под рукой.</p>
-                    </article>
-                    <article class="feature-card">
-                        <div class="feature-icon" aria-hidden="true">🎙️</div>
-                        <h3>Голосовой ввод</h3>
-                        <p>Надиктуйте, что съели или какую активность выполнили.</p>
+                        <div class="feature-icon" aria-hidden="true">✍️🎙️</div>
+                        <h3>Текст и голос</h3>
+                        <p>Опишите еду или тренировку словами либо надиктуйте голосовое до 60 секунд.</p>
                     </article>
                     <article class="feature-card">
                         <div class="feature-icon" aria-hidden="true">📊</div>
                         <h3>Дневной баланс</h3>
-                        <p>Раздел «Сегодня» показывает съеденное, сожжённое и остаток до вашей нормы.</p>
+                        <p>«Сегодня» показывает съеденное, активность, остаток, шкалу калорий и серию дней подряд.</p>
                     </article>
                     <article class="feature-card">
                         <div class="feature-icon" aria-hidden="true">📈</div>
                         <h3>Статистика</h3>
-                        <p>График калорий за месяц и подробная карточка за выбранный день.</p>
+                        <p>График калорий за месяц, карточка за выбранный день и история веса.</p>
                     </article>
                     <article class="feature-card">
                         <div class="feature-icon" aria-hidden="true">⭐</div>
                         <h3>Избранное</h3>
-                        <p>Частые блюда можно сохранить и добавлять в дневник в один клик.</p>
+                        <p>Сохраняйте частые блюда и активности и добавляйте их в дневник без AI-лимита.</p>
                     </article>
                     <article class="feature-card">
                         <div class="feature-icon" aria-hidden="true">👤</div>
-                        <h3>Персональный профиль</h3>
-                        <p>Вес, рост, цель, активность и индивидуальная норма калорий.</p>
+                        <h3>Профиль по желанию</h3>
+                        <p>Вес, рост, возраст, пол, цель и активность — персональная норма примерно за минуту. Можно начинать со стартовых 2000 ккал.</p>
+                    </article>
+                    <article class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">✏️</div>
+                        <h3>Правки записей</h3>
+                        <p>Кнопки «Редактировать» и «Удалить» на карточке или команда /correct для недавней еды.</p>
+                    </article>
+                    <article class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">🎁</div>
+                        <h3>Приглашения</h3>
+                        <p>Поделитесь ссылкой: после первого AI-анализа друга вы получите ${REFERRAL_BONUS_REQUESTS} бонусных запроса.</p>
+                    </article>
+                    <article class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">🔔</div>
+                        <h3>Напоминания</h3>
+                        <p>Вечером, если день пустой, и через 3 дня без записей. Отключить: /notifications_off.</p>
                     </article>
                 </div>
             </div>
@@ -135,28 +148,28 @@
             <div class="container">
                 <div class="section-header">
                     <h2>Как начать</h2>
-                    <p>Запуск занимает пару минут — дальше достаточно отправлять фото или текст.</p>
+                    <p>Достаточно открыть бота и отправить первую запись — профиль можно заполнить позже.</p>
                 </div>
                 <div class="steps-grid">
                     <article class="step-card">
                         <span class="step-number">1</span>
                         <h3>Откройте бота</h3>
-                        <p>Нажмите «Запустить бота» и выполните команду /start в Telegram.</p>
+                        <p>Нажмите «Открыть в Telegram» и выполните /start.</p>
                     </article>
                     <article class="step-card">
                         <span class="step-number">2</span>
-                        <h3>Заполните профиль</h3>
-                        <p>Укажите параметры и цель — бот рассчитает вашу норму калорий.</p>
+                        <h3>Отправьте первую запись</h3>
+                        <p>Фото еды, голосовое или текст. Стартовая норма — 2000 ккал, можно начинать сразу.</p>
                     </article>
                     <article class="step-card">
                         <span class="step-number">3</span>
-                        <h3>Отправляйте записи</h3>
-                        <p>Фото еды, голосовое, описание блюда или активность — бот сам определит тип записи.</p>
+                        <h3>Заполните профиль по желанию</h3>
+                        <p>Около минуты — и бот рассчитает персональную норму калорий под вашу цель.</p>
                     </article>
                     <article class="step-card">
                         <span class="step-number">4</span>
                         <h3>Следите за прогрессом</h3>
-                        <p>Смотрите баланс за день, статистику за месяц и сохраняйте любимые блюда.</p>
+                        <p>Смотрите /today и серию дней, открывайте /stats, сохраняйте избранное.</p>
                     </article>
                 </div>
             </div>
@@ -166,14 +179,22 @@
             <div class="container">
                 <div class="section-header">
                     <h2>Команды бота</h2>
-                    <p>Основные действия доступны через меню и команды.</p>
+                    <p>Основные действия — в меню команд Telegram.</p>
                 </div>
                 <div class="commands">
-                    <span class="command-pill">/start</span>
-                    <span class="command-pill">/profile</span>
-                    <span class="command-pill">/today</span>
-                    <span class="command-pill">/correct</span>
+                    <span class="command-pill"><code>/today</code> дневник за сегодня</span>
+                    <span class="command-pill"><code>/stats</code> статистика</span>
+                    <span class="command-pill"><code>/favorites</code> избранное</span>
+                    <span class="command-pill"><code>/premium</code> подписка</span>
+                    <span class="command-pill"><code>/profile</code> профиль</span>
+                    <span class="command-pill"><code>/invite</code> пригласить друга</span>
+                    <span class="command-pill"><code>/help</code> как пользоваться</span>
+                    <span class="command-pill"><code>/contacts</code> контакты и настройки</span>
+                    <span class="command-pill"><code>/start</code> приветствие</span>
                 </div>
+                <p class="commands-note">
+                    <code>/correct</code> — правка недавней еды через AI; такой запрос считается в дневной лимит.
+                </p>
             </div>
         </section>
 
@@ -182,17 +203,20 @@
                 <div class="section-header">
                     <span class="eyebrow">Прозрачные условия</span>
                     <h2>Начните бесплатно</h2>
-                    <p>Бесплатного лимита достаточно, чтобы проверить все основные сценарии до покупки.</p>
+                    <p>
+                        Оплата подписки — через Telegram Stars. В дневной лимит входят фото, голос, текст и AI-правки;
+                        избранное лимит не тратит. За приглашения начисляются бонусные запросы сверх дневного лимита.
+                    </p>
                 </div>
                 <div class="pricing-options">
                     <article class="pricing-option">
                         <h3>Бесплатно</h3>
-                        <strong>0 Stars</strong>
+                        <strong>0 Telegram Stars</strong>
                         <p>${FREE_DAILY_LIMIT} AI-запросов в день: фото, голос, текст и исправления.</p>
                     </article>
                     <article class="pricing-option pricing-option-primary">
                         <h3>Подписка</h3>
-                        <strong>${SUBSCRIPTION_PRICE_STARS} Stars / ${SUBSCRIPTION_DURATION_DAYS} дней</strong>
+                        <strong>${SUBSCRIPTION_PRICE_STARS} Telegram Stars / ${SUBSCRIPTION_DURATION_DAYS} дней</strong>
                         <p>${SUBSCRIPTION_DAILY_LIMIT} AI-запросов в день. Подписка не продлевается автоматически.</p>
                     </article>
                 </div>
@@ -210,12 +234,32 @@
                         <p>Нет. Всё работает в Telegram — на телефоне, планшете и в десктопной версии.</p>
                     </article>
                     <article class="faq-item">
+                        <h3>Нужно ли заполнять профиль?</h3>
+                        <p>Нет. Можно сразу отправлять записи со стартовой нормой 2000 ккал. Профиль уточнит норму под вашу цель.</p>
+                    </article>
+                    <article class="faq-item">
                         <h3>Можно ли учитывать тренировки?</h3>
-                        <p>Да. Отправьте активность текстом, голосом или фото — бот учтёт сожжённые калории в балансе.</p>
+                        <p>Да. Опишите активность текстом или голосом — бот учтёт сожжённые калории в балансе. По фото распознаётся только еда.</p>
+                    </article>
+                    <article class="faq-item">
+                        <h3>Насколько точны расчёты?</h3>
+                        <p>Бот не претендует на идеальную точность — это инструмент для простого и примерного контроля калорий, БЖУ и полезных веществ. Он не заменяет врача или специалиста по питанию.</p>
                     </article>
                     <article class="faq-item">
                         <h3>Что если бот ошибся в расчёте?</h3>
                         <p>Используйте /correct или кнопку «Редактировать» на карточке записи, чтобы поправить результат.</p>
+                    </article>
+                    <article class="faq-item">
+                        <h3>Есть ли ограничение на голосовые?</h3>
+                        <p>Да. Голосовое сообщение должно быть не длиннее 60 секунд.</p>
+                    </article>
+                    <article class="faq-item">
+                        <h3>Как отключить напоминания?</h3>
+                        <p>Команда /notifications_off. Включить обратно: /notifications_on. Сообщения об оплате могут приходить отдельно.</p>
+                    </article>
+                    <article class="faq-item">
+                        <h3>Как оплачивается подписка?</h3>
+                        <p>Через Telegram Stars внутри Telegram. Автоматического продления нет. Вопросы по оплате — /paysupport.</p>
                     </article>
                     <article class="faq-item">
                         <h3>Какие данные вы храните?</h3>
@@ -231,7 +275,8 @@
                 <div class="cta-box">
                     <div>
                         <h2>Начните вести дневник питания сегодня</h2>
-                        <p>Откройте ${LANDING_TITLE} в Telegram и отправьте первое фото еды.</p>
+                        <p>Откройте ${LANDING_TITLE} в Telegram и отправьте первое фото, голосовое или текст.</p>
+                        <p class="cta-disclaimer">Расчёт примерный. Сервис не заменяет врача или специалиста по питанию.</p>
                     </div>
                     <a class="button button-secondary" href="https://t.me/${TELEGRAM_BOT_USERNAME}?start=landing_footer" target="_blank" rel="noopener noreferrer">
                         Перейти в Telegram
@@ -243,7 +288,7 @@
 
     <footer class="site-footer">
         <div class="container footer-inner">
-            <span>© ${LANDING_TITLE}. Telegram-бот для учёта калорий и БЖУ.</span>
+            <span>© ${LANDING_TITLE}. Telegram-бот для учёта калорий и БЖУ. Расчёт примерный.</span>
             <div class="footer-links">
                 <a href="https://t.me/${TELEGRAM_BOT_USERNAME}?start=landing_footer_link" target="_blank" rel="noopener noreferrer">@${TELEGRAM_BOT_USERNAME}</a>
                 <a href="/privacy.html">Данные и конфиденциальность</a>

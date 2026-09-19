@@ -15,6 +15,7 @@ from src.db.models import (
     DailyRequestUsage,
     DailyUserActivity,
     DayEntry,
+    DiaryNudge,
     EntryType,
     FavoriteMeal,
     MarketingCampaign,
@@ -323,6 +324,15 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
+    async def get_distinct_entry_dates(self, user_id: int) -> list[date]:
+        result = await self.session.execute(
+            select(DayEntry.entry_date)
+            .where(DayEntry.user_id == user_id)
+            .distinct()
+            .order_by(DayEntry.entry_date.desc())
+        )
+        return list(result.scalars().all())
+
     async def get_entries_for_period(self, user_id: int, start_date: date, end_date: date) -> list[DayEntry]:
         result = await self.session.execute(
             select(DayEntry)
@@ -521,43 +531,62 @@ class UserRepository:
         await self.session.refresh(user)
         return user
 
-    async def get_users_needing_reengagement(
+    async def get_diary_nudge_candidates(
         self,
         *,
         now: datetime | None = None,
-        inactivity_days: int = 3,
-    ) -> list[User]:
+    ) -> list[tuple[User, date]]:
         current = now or datetime.now(timezone.utc)
-        inactive_before = current - timedelta(days=max(1, inactivity_days))
-        has_entry = (
-            select(DayEntry.id)
-            .where(DayEntry.user_id == User.id)
-            .correlate(User)
-            .exists()
+        utc_today = current.date()
+        # entry_date is the user's local calendar day; a 5-day UTC window covers
+        # evening (yesterday) and revive (3 days ago) across timezones.
+        window_start = utc_today - timedelta(days=5)
+        window_end = utc_today + timedelta(days=1)
+        last_entry = (
+            select(
+                DayEntry.user_id.label("user_id"),
+                func.max(DayEntry.entry_date).label("last_entry_date"),
+            )
+            .group_by(DayEntry.user_id)
+            .subquery()
         )
         result = await self.session.execute(
-            select(User).where(
+            select(User, last_entry.c.last_entry_date).join(
+                last_entry, last_entry.c.user_id == User.id
+            ).where(
                 User.notifications_enabled.is_(True),
-                User.last_active_at <= inactive_before,
-                has_entry,
-                or_(
-                    User.reengagement_last_sent_at.is_(None),
-                    User.reengagement_last_sent_at < User.last_active_at,
-                ),
+                last_entry.c.last_entry_date >= window_start,
+                last_entry.c.last_entry_date <= window_end,
             )
         )
-        return list(result.scalars().all())
+        return [(user, last_entry_date) for user, last_entry_date in result.all()]
 
-    async def mark_reengagement_sent(
+    async def claim_diary_nudge(
         self,
-        user: User,
         *,
+        user_id: int,
+        kind: str,
+        last_entry_date: date,
+        local_date: date,
         now: datetime | None = None,
-    ) -> User:
-        user.reengagement_last_sent_at = now or datetime.now(timezone.utc)
+    ) -> bool:
+        sent_at = now or datetime.now(timezone.utc)
+        stmt = (
+            pg_insert(DiaryNudge)
+            .values(
+                user_id=user_id,
+                kind=kind,
+                last_entry_date=last_entry_date,
+                local_date=local_date,
+                sent_at=sent_at,
+            )
+            .on_conflict_do_nothing(constraint="uq_diary_nudges_user_kind_last_entry")
+            .returning(DiaryNudge.id)
+        )
+        result = await self.session.execute(stmt)
+        claimed = result.scalar_one_or_none() is not None
         await self.session.commit()
-        await self.session.refresh(user)
-        return user
+        return claimed
 
     async def list_marketing_campaigns(self) -> list[MarketingCampaign]:
         result = await self.session.execute(

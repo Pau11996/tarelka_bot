@@ -22,9 +22,8 @@ class Settings(BaseSettings):
     subscription_reminder_days_before: int = 2
     subscription_reminder_interval_seconds: int = 3600
     referral_bonus_requests: int = 3
-    reengagement_enabled: bool = False
-    reengagement_inactivity_days: int = 3
-    reengagement_interval_seconds: int = 6 * 60 * 60
+    diary_nudges_enabled: bool = True
+    diary_nudges_interval_seconds: int = 20 * 60
     support_email: str = "help.4posts@gmail.com"
     database_url: str = "postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth"
     ai_analyzer_url: str = "http://localhost:8000"

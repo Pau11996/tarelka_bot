@@ -113,6 +113,7 @@ class User(Base):
     survey_response: Mapped[SurveyResponse | None] = relationship(
         back_populates="user", uselist=False
     )
+    diary_nudges: Mapped[list[DiaryNudge]] = relationship(back_populates="user")
 
 
 class Profile(Base):
@@ -233,6 +234,27 @@ class DailyRequestUsage(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="daily_request_usage")
+
+
+class DiaryNudge(Base):
+    __tablename__ = "diary_nudges"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "kind",
+            "last_entry_date",
+            name="uq_diary_nudges_user_kind_last_entry",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    last_entry_date: Mapped[date] = mapped_column(Date)
+    local_date: Mapped[date] = mapped_column(Date, index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="diary_nudges")
 
 
 class DailyUserActivity(Base):

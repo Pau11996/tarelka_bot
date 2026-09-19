@@ -26,7 +26,7 @@ from src.bot.handlers import (
 )
 from src.bot.services.links import MENU_COMMANDS
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.bot.services.reengagement import run_reengagement_loop
+from src.bot.services.diary_nudges import run_diary_nudges_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
 from src.db.repository import UserRepository
 from src.db.session import async_session_factory
@@ -107,8 +107,8 @@ async def main() -> None:
     await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
     asyncio.create_task(run_subscription_reminder_loop(bot))
-    if settings.reengagement_enabled:
-        asyncio.create_task(run_reengagement_loop(bot))
+    if settings.diary_nudges_enabled:
+        asyncio.create_task(run_diary_nudges_loop(bot))
     await dp.start_polling(bot)
 
 

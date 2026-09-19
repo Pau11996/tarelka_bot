@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bot.services.nutrition import calculate_daily_balance, local_today
+from src.bot.services.nutrition import (
+    DailyBalance,
+    calculate_daily_balance,
+    calculate_logging_streak,
+    local_today,
+)
 from src.db.models import AnalysisType, DayEntry, EntryType, FavoriteMeal, User
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult
@@ -12,13 +19,26 @@ class EntryService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = UserRepository(session)
 
+    async def _balance_with_streak(
+        self,
+        user: User,
+        target: float,
+        entries: list[DayEntry],
+    ) -> DailyBalance:
+        balance = calculate_daily_balance(target, entries)
+        today = local_today(user.timezone)
+        dates = await self.repo.get_distinct_entry_dates(user.id)
+        return replace(balance, streak=calculate_logging_streak(dates, today))
+
     async def get_balance(self, user: User) -> tuple[float, object]:
         profile = await self.repo.get_profile(user.id)
         if profile is None:
             raise ValueError("Profile not found")
         today = local_today(user.timezone)
         entries = await self.repo.get_entries_for_date(user.id, today)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
         return profile.daily_calorie_target, balance
 
     async def save_meal_from_analysis(
@@ -62,7 +82,9 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
         return entry, balance
 
     async def log_unknown_analysis(
@@ -122,7 +144,9 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
         return entry, balance
 
     async def update_meal_from_correction(
@@ -165,7 +189,9 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        return calculate_daily_balance(profile.daily_calorie_target, entries)
+        return await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
 
     async def update_activity_from_correction(
         self,
@@ -207,7 +233,9 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        return calculate_daily_balance(profile.daily_calorie_target, entries)
+        return await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
 
     async def save_meal_from_favorite(
         self,
@@ -233,7 +261,9 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
         return entry, balance
 
     async def save_activity_from_favorite(
@@ -256,5 +286,7 @@ class EntryService:
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
-        balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
         return entry, balance

@@ -1,5 +1,6 @@
 from src.bot.services.formatting import (
     format_analysis_result,
+    format_calorie_bar,
     format_daily_balance,
     format_unknown_result,
 )
@@ -160,3 +161,84 @@ def test_analysis_card_escapes_html_values():
 
     assert "Рыба &lt;test&gt;" in text
     assert "соус &amp; сыр (&lt;50 г&gt;)" in text
+
+
+def test_calorie_bar_matches_example_ratio():
+    assert format_calorie_bar(1640, 2000) == "🟩🟩🟩🟩🟩🟩🟩🟩⬜⬜  1640 / 2000 ккал"
+
+
+def test_calorie_bar_includes_activity_in_budget():
+    assert format_calorie_bar(0, 1804, activity_bonus=250) == "⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜  0 / 2054 ккал"
+    assert format_calorie_bar(1640, 2000, activity_bonus=400) == "🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜  1640 / 2400 ккал"
+
+
+def test_calorie_bar_overflow_keeps_full_scale():
+    text = format_calorie_bar(2180, 2000)
+    assert text.startswith("🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥  2180 / 2000 ккал")
+    assert "+180 ккал сверх нормы" in text
+    assert text.count("🟥") == 10
+    assert "⬜" not in text.split("\n", 1)[0]
+
+
+def test_calorie_bar_overflow_uses_activity_budget():
+    text = format_calorie_bar(2300, 2000, activity_bonus=200)
+    assert text.startswith("🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥  2300 / 2200 ккал")
+    assert "+100 ккал сверх нормы" in text
+
+
+def test_daily_balance_shows_bar_and_streak():
+    balance = DailyBalance(
+        target=2000,
+        consumed=1640,
+        activity_bonus=0,
+        remaining=360,
+        protein_g=10,
+        fat_g=5,
+        carbs_g=40,
+        micronutrients={},
+    )
+
+    text = format_daily_balance(balance, include_micronutrients=False, streak=4)
+
+    assert "🟩🟩🟩🟩🟩🟩🟩🟩⬜⬜  1640 / 2000 ккал" in text
+    assert "Серия: 4 дня" in text
+
+
+def test_daily_balance_bar_adds_activity_to_budget():
+    balance = DailyBalance(
+        target=1804,
+        consumed=0,
+        activity_bonus=250,
+        remaining=2054,
+        protein_g=0,
+        fat_g=0,
+        carbs_g=0,
+        micronutrients={},
+    )
+
+    text = format_daily_balance(balance, include_micronutrients=False, streak=1)
+
+    assert "⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜  0 / 2054 ккал" in text
+    assert "0 / 1804" not in text
+
+
+def test_analysis_card_includes_bar_and_streak_from_balance():
+    balance = DailyBalance(
+        target=2000,
+        consumed=300,
+        activity_bonus=0,
+        remaining=1700,
+        protein_g=10,
+        fat_g=5,
+        carbs_g=40,
+        micronutrients={},
+        streak=1,
+    )
+    result = AnalysisResult(type="meal", title="Йогурт", total_calories=120)
+
+    text = format_analysis_result(result, balance)
+
+    assert "⬜" in text
+    assert "300 / 2000 ккал" in text
+    assert "Серия: 1 день" in text
+

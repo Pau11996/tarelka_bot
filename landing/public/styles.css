@@ -345,6 +345,12 @@ img {
     font-weight: 700;
 }
 
+.analysis-bar {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.02em;
+    color: var(--text);
+}
+
 .bubble-bot strong {
     display: block;
     margin-bottom: 0.35rem;
@@ -509,12 +515,33 @@ img {
 }
 
 .command-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     padding: 0.55rem 0.9rem;
     border-radius: 999px;
     background: var(--bg);
     border: 1px solid var(--border);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.command-pill code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.commands-note {
+    margin: 1rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.commands-note code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+    color: var(--text);
 }
 
 .cta {
@@ -541,6 +568,12 @@ img {
 .cta-box p {
     margin: 0;
     opacity: 0.92;
+}
+
+.cta-disclaimer {
+    margin-top: 0.65rem !important;
+    font-size: 0.9rem;
+    opacity: 0.82 !important;
 }
 
 .cta-box .button-secondary {

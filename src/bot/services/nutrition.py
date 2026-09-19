@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from src.db.models import ActivityLevel, DayEntry, EntryType, Goal, Profile, Sex
 from src.shared.schemas import TRACKED_MICRONUTRIENTS
@@ -95,6 +96,7 @@ class DailyBalance:
     fat_g: float
     carbs_g: float
     micronutrients: dict[str, float]
+    streak: int | None = None
 
 
 def calculate_daily_nutrient_targets(profile: Profile) -> DailyNutrientTargets:
@@ -160,6 +162,21 @@ def calculate_daily_balance(target: float, entries: list[DayEntry]) -> DailyBala
         carbs_g=carbs_g,
         micronutrients=micronutrients,
     )
+
+
+def calculate_logging_streak(entry_dates: Iterable[date], today: date) -> int:
+    dates = set(entry_dates)
+    if not dates:
+        return 0
+    latest = max(dates)
+    if latest < today - timedelta(days=1):
+        return 0
+    streak = 0
+    cursor = latest
+    while cursor in dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
 
 
 def local_today(timezone_name: str) -> date:

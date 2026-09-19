@@ -7,6 +7,7 @@ from src.bot.services.nutrition import (
     calculate_daily_balance,
     calculate_daily_nutrient_targets,
     calculate_daily_target,
+    calculate_logging_streak,
 )
 from src.db.models import ActivityLevel, DayEntry, EntryType, Goal, Profile, Sex
 
@@ -110,3 +111,27 @@ def test_calculate_daily_nutrient_targets():
     assert targets.micronutrients["fiber_g"] == 35.0
     assert targets.micronutrients["sugar_g"] == 62.5
     assert "iron_mg" not in targets.micronutrients
+
+
+def test_logging_streak_counts_consecutive_days_including_at_risk_today():
+    today = date(2026, 9, 17)
+    dates = {date(2026, 9, 14), date(2026, 9, 15), date(2026, 9, 16)}
+    assert calculate_logging_streak(dates, today) == 3
+
+
+def test_logging_streak_includes_today():
+    today = date(2026, 9, 17)
+    dates = {date(2026, 9, 15), date(2026, 9, 16), date(2026, 9, 17)}
+    assert calculate_logging_streak(dates, today) == 3
+
+
+def test_logging_streak_is_zero_when_last_entry_is_two_days_ago():
+    today = date(2026, 9, 17)
+    dates = {date(2026, 9, 14), date(2026, 9, 15)}
+    assert calculate_logging_streak(dates, today) == 0
+
+
+def test_logging_streak_is_one_when_only_yesterday():
+    today = date(2026, 9, 17)
+    assert calculate_logging_streak({date(2026, 9, 16)}, today) == 1
+

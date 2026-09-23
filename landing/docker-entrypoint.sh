@@ -10,6 +10,9 @@ set -eu
 : "${SUBSCRIPTION_PRICE_STARS:=150}"
 : "${SUBSCRIPTION_DURATION_DAYS:=30}"
 : "${REFERRAL_BONUS_REQUESTS:=3}"
+: "${LANDING_HOST:=tarelkaa.by}"
+LANDING_ORIGIN="${LANDING_ORIGIN:-https://${LANDING_HOST}}"
+LANDING_ORIGIN="${LANDING_ORIGIN%/}"
 
 : "${TELEGRAM_FEEDBACK_CHAT:=}"
 
@@ -31,16 +34,40 @@ export TELEGRAM_BOT_USERNAME LANDING_TITLE SUPPORT_EMAIL LEGAL_OPERATOR_NAME
 export FREE_DAILY_LIMIT SUBSCRIPTION_DAILY_LIMIT SUBSCRIPTION_PRICE_STARS SUBSCRIPTION_DURATION_DAYS
 export REFERRAL_BONUS_REQUESTS
 export FEEDBACK_LINK_HTML FEEDBACK_NAV_HTML FEEDBACK_FAQ_HTML
+export LANDING_HOST LANDING_ORIGIN
 
-envsubst '${TELEGRAM_BOT_USERNAME} ${LANDING_TITLE} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS} ${REFERRAL_BONUS_REQUESTS} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML}' \
+envsubst '${LANDING_HOST}' \
+    < /opt/nginx.conf.template \
+    > /etc/nginx/conf.d/default.conf
+
+cat > /usr/share/nginx/html/robots.txt <<EOF
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /health
+
+Sitemap: ${LANDING_ORIGIN}/sitemap.xml
+EOF
+
+cat > /usr/share/nginx/html/sitemap.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${LANDING_ORIGIN}/</loc></url>
+  <url><loc>${LANDING_ORIGIN}/privacy.html</loc></url>
+  <url><loc>${LANDING_ORIGIN}/terms.html</loc></url>
+</urlset>
+EOF
+
+envsubst '${TELEGRAM_BOT_USERNAME} ${LANDING_TITLE} ${LANDING_ORIGIN} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS} ${REFERRAL_BONUS_REQUESTS} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML}' \
     < /usr/share/nginx/html/index.template.html \
     > /usr/share/nginx/html/index.html
 
-envsubst '${LANDING_TITLE} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME}' \
+envsubst '${LANDING_TITLE} ${LANDING_ORIGIN} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME}' \
     < /usr/share/nginx/html/privacy.template.html \
     > /usr/share/nginx/html/privacy.html
 
-envsubst '${LANDING_TITLE} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS}' \
+envsubst '${LANDING_TITLE} ${LANDING_ORIGIN} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME} ${FREE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_DURATION_DAYS}' \
     < /usr/share/nginx/html/terms.template.html \
     > /usr/share/nginx/html/terms.html
 

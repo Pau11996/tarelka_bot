@@ -1,9 +1,19 @@
 server {
     listen 80;
-    server_name _;
+    server_name www.${LANDING_HOST};
+
+    return 301 https://${LANDING_HOST}$request_uri;
+}
+
+server {
+    listen 80 default_server;
+    server_name ${LANDING_HOST} _;
+
+    # TLS terminates on the VPS nginx. Relative redirects keep https://tarelkaa.by/index.html
+    # on https instead of bouncing to http://.
+    absolute_redirect off;
 
     root /usr/share/nginx/html;
-    index index.html;
 
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
@@ -13,6 +23,22 @@ server {
     # Docker DNS: resolve at request time so nginx can start
     # before ai_analyzer is registered on the network.
     resolver 127.0.0.11 valid=10s ipv6=off;
+
+    error_page 404 /404.html;
+
+    location = /404.html {
+        internal;
+    }
+
+    # / is served from index.html directly. A public /index.html redirects
+    # so the same page is not indexed twice.
+    location = / {
+        try_files /index.html =404;
+    }
+
+    location = /index.html {
+        return 301 /;
+    }
 
     location /admin/ {
         set $analyzer_upstream http://ai_analyzer:8000;
@@ -28,10 +54,6 @@ server {
         return 404;
     }
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
     location = /admin.html {
         add_header Cache-Control "no-store";
         add_header X-Content-Type-Options "nosniff" always;
@@ -44,11 +66,16 @@ server {
     location ~* \.(css|js|svg|png|jpg|jpeg|gif|ico|woff2?)$ {
         expires 7d;
         add_header Cache-Control "public, immutable";
+        try_files $uri =404;
     }
 
     location = /health {
         access_log off;
         return 200 "ok\n";
         add_header Content-Type text/plain;
+    }
+
+    location / {
+        try_files $uri =404;
     }
 }

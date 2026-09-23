@@ -75,6 +75,8 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
       TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
       LANDING_TITLE: ${LANDING_TITLE:-ТАРЕЛКА}
+      LANDING_HOST: ${LANDING_HOST:-tarelkaa.by}
+      LANDING_ORIGIN: ${LANDING_ORIGIN:-https://tarelkaa.by}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help.4posts@gmail.com}
       LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-Администратор сервиса ТАРЕЛКА}
       FREE_DAILY_LIMIT: ${DAILY_REQUEST_LIMIT:-6}

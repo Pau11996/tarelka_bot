@@ -81,6 +81,19 @@ def test_landing_has_pricing_and_no_missing_demo_asset() -> None:
     assert "не продлевается" in template
     assert "активность текстом, голосом или фото" not in template
     assert "По фото распознаётся только еда" in template
+    assert "Калории по фото в Telegram" in template
+    assert "Считайте калории по" in template
+    assert 'rel="canonical" href="${LANDING_ORIGIN}/"' in template
+    assert "og:url" in template
+
+    nginx = (Path(__file__).parents[1] / "landing/nginx.conf.template").read_text()
+    entrypoint = (Path(__file__).parents[1] / "landing/docker-entrypoint.sh").read_text()
+    assert "/index.html;" not in nginx
+    assert "try_files $uri =404;" in nginx
+    assert "www.${LANDING_HOST}" in nginx
+    assert "robots.txt" in entrypoint
+    assert "sitemap.xml" in entrypoint
+    assert (Path(__file__).parents[1] / "landing/public/404.html").is_file()
 
 def test_delete_confirmation_requires_explicit_callback() -> None:
     callbacks = [

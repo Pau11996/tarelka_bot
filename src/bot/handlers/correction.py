@@ -34,11 +34,11 @@ def _format_current_items(items: list[dict] | None) -> str:
     if not items:
         return "Текущий состав не сохранен."
 
-    lines = ["Текущий состав:"]
+    lines = []
     for item in items:
         name = escape(str(item.get("name", "компонент")))
         quantity = escape(str(item.get("quantity") or "вес не указан"))
-        lines.append(f"• {name}: {quantity}")
+        lines.append(f"{name} {quantity}")
     return "\n".join(lines)
 
 
@@ -94,6 +94,7 @@ async def choose_entry_for_correction(
         correct_entry_id=entry_id,
         prompt_chat_id=callback.message.chat.id,
         prompt_message_id=callback.message.message_id,
+        current_items_message_id=None,
     )
     await edit_ephemeral(
         callback,
@@ -133,16 +134,21 @@ async def edit_meal_card(
         )
     else:
         prompt_text = (
-            f"{_format_current_items(entry.items)}\n\n"
             "Отправьте исправленный состав и граммовки одним сообщением.\n"
-            "Например: «рис 180 г, курица 120 г, соус 30 г»."
+            "Например: «рис 180 г, курица 120 г, соус 30 г».\n"
+            "Текущий состав:"
         )
     prompt_message = await callback.message.answer(prompt_text)
     schedule_bot_message(cleanup, prompt_message)
     await state.update_data(
         prompt_chat_id=prompt_message.chat.id,
         prompt_message_id=prompt_message.message_id,
+        current_items_message_id=None,
     )
+    if entry.entry_type == EntryType.MEAL:
+        items_message = await callback.message.answer(_format_current_items(entry.items))
+        schedule_bot_message(cleanup, items_message)
+        await state.update_data(current_items_message_id=items_message.message_id)
     await callback.answer()
 
 
@@ -259,6 +265,7 @@ async def apply_correction(
     messages_to_delete = [
         (data.get("card_chat_id"), data.get("card_message_id")),
         (data.get("prompt_chat_id"), data.get("prompt_message_id")),
+        (data.get("prompt_chat_id"), data.get("current_items_message_id")),
         (message.chat.id, message.message_id),
         (status_message.chat.id, status_message.message_id),
     ]

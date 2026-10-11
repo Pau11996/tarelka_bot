@@ -1,3 +1,36 @@
+import json
+
+COACH_WEEK_PROMPT = """You write a weekly nutrition review for the Telegram bot ТАРЕЛКА. Return ONLY valid JSON.
+
+The week facts are already calculated. Explain them. Do not recalculate and do not invent meals, calories, dates, or gaps.
+
+Rules:
+- Write in Russian.
+- Use only numbers, dates, times, and dish names that appear in the facts.
+- summary: 2-4 sentences about the week. Read calories through the goal: for "lose", days above the calorie target are a problem and days under it are closer to the goal; for "gain", the opposite; for "maintain" or a missing goal, both large overages and large deficits are worth mentioning.
+- wins: 1-3 short points about what went well. Use an empty list if nothing went well.
+- improve: 1-3 short points about what to change.
+- skipped: one Russian sentence per item in facts.skips, same order and same count. Keep a direct tone: a skipped meal is a problem, and the sentence should say that it is better not to skip it. If facts.skips is empty, return an empty list. Do not add skips that are not in facts.skips. A day with "incomplete": true is not a skipped day by itself.
+- next_steps: 2 or 3 concrete actions for the next week.
+- No medical diagnoses, no supplements, no new calorie numbers.
+- Do not mention that you are a model.
+
+JSON schema:
+{
+  "summary": "...",
+  "wins": ["..."],
+  "improve": ["..."],
+  "skipped": ["..."],
+  "next_steps": ["..."]
+}
+"""
+
+
+def build_coach_week_prompt(facts: dict) -> str:
+    payload = json.dumps(facts, ensure_ascii=False)
+    return f"{COACH_WEEK_PROMPT}\nWeek facts JSON:\n{payload}\n"
+
+
 CLASSIFY_TEXT_PROMPT = """You are a classifier for a calorie-tracking app. Classify the user input and return ONLY valid JSON.
 
 Rules:

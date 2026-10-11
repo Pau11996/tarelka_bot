@@ -15,10 +15,12 @@ def test_menu_commands_include_contacts_invite_and_start_last() -> None:
     assert "contacts" in names
     assert "invite" in names
     assert "help" in names
+    assert "week" in names
     assert names[-1] == "start"
     assert "correct" not in names
     assert [description for _name, description in MENU_COMMANDS] == [
         "📊 дневник за сегодня",
+        "🍽 разбор недели",
         "📈 статистика",
         "⭐ избранные блюда и активности",
         "💎 подписка",

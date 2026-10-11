@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.bot.config import settings
 from src.shared.logging_config import setup_logging
 from src.bot.handlers import (
+    coach,
     correction,
     daily,
     data_management,
@@ -26,6 +27,7 @@ from src.bot.handlers import (
 )
 from src.bot.services.links import MENU_COMMANDS
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.coach import run_coach_reviews_loop
 from src.bot.services.diary_nudges import run_diary_nudges_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
 from src.db.repository import UserRepository
@@ -85,6 +87,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(survey.router)
     dp.include_router(daily.router)
     dp.include_router(statistics.router)
+    dp.include_router(coach.router)
     dp.include_router(favorites.router)
     dp.include_router(correction.router)
     dp.include_router(food.router)
@@ -109,6 +112,8 @@ async def main() -> None:
     asyncio.create_task(run_subscription_reminder_loop(bot))
     if settings.diary_nudges_enabled:
         asyncio.create_task(run_diary_nudges_loop(bot))
+    if settings.coach_reviews_enabled:
+        asyncio.create_task(run_coach_reviews_loop(bot))
     await dp.start_polling(bot)
 
 

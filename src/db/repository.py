@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from src.db.models import (
     AnalysisType,
     DailyRequestUsage,
     DailyUserActivity,
+    CoachReview,
     DayEntry,
     DiaryNudge,
     EntryType,
@@ -677,6 +678,75 @@ class UserRepository:
         claimed = result.scalar_one_or_none() is not None
         await self.session.commit()
         return claimed
+
+    async def get_coach_review(self, user_id: int, week_start: date) -> CoachReview | None:
+        result = await self.session.execute(
+            select(CoachReview).where(
+                CoachReview.user_id == user_id,
+                CoachReview.week_start == week_start,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save_coach_review(
+        self,
+        *,
+        user_id: int,
+        week_start: date,
+        facts: dict[str, Any],
+        review_text: str,
+        refresh_used: bool | None,
+    ) -> CoachReview:
+        review = await self.get_coach_review(user_id, week_start)
+        if review is None:
+            review = CoachReview(
+                user_id=user_id,
+                week_start=week_start,
+                facts=facts,
+                review_text=review_text,
+                refresh_used=bool(refresh_used),
+            )
+            self.session.add(review)
+        else:
+            review.facts = facts
+            review.review_text = review_text
+            if refresh_used is not None:
+                review.refresh_used = refresh_used
+        await self.session.commit()
+        await self.session.refresh(review)
+        return review
+
+    async def claim_coach_push(
+        self,
+        *,
+        user_id: int,
+        week_start: date,
+        now: datetime | None = None,
+    ) -> bool:
+        sent_at = now or datetime.now(timezone.utc)
+        result = await self.session.execute(
+            update(CoachReview)
+            .where(
+                CoachReview.user_id == user_id,
+                CoachReview.week_start == week_start,
+                CoachReview.push_sent_at.is_(None),
+            )
+            .values(push_sent_at=sent_at)
+            .returning(CoachReview.id)
+        )
+        claimed = result.scalar_one_or_none() is not None
+        await self.session.commit()
+        return claimed
+
+    async def list_coach_push_candidates(self, *, now: datetime) -> list[User]:
+        result = await self.session.execute(
+            select(User).where(
+                User.notifications_enabled.is_(True),
+                User.subscription_until.is_not(None),
+                User.subscription_until > now,
+            )
+        )
+        return list(result.scalars().all())
 
     async def list_marketing_campaigns(self) -> list[MarketingCampaign]:
         result = await self.session.execute(

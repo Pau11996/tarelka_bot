@@ -1,4 +1,5 @@
 from src.bot.handlers import (
+    coach,
     correction,
     daily,
     data_management,
@@ -13,6 +14,7 @@ from src.bot.handlers import (
 )
 
 __all__ = [
+    "coach",
     "correction",
     "daily",
     "data_management",

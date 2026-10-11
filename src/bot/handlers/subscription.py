@@ -32,19 +32,26 @@ def format_payment_support() -> str:
     return "\n".join(lines)
 
 
+def format_subscription_benefits() -> str:
+    return (
+        f"• {settings.subscription_daily_request_limit} запросов в день "
+        "(фото, голос, текст и исправления);\n"
+        "• ИИ-помощник по питанию: разбор недели — что получилось, "
+        "что улучшить и где пропущен приём пищи. Команда /week."
+    )
+
+
 def format_subscription_status(user) -> str:
+    benefits = format_subscription_benefits()
     if has_active_subscription(user):
         until = user.subscription_until.astimezone(timezone.utc).strftime("%d.%m.%Y")
-        return (
-            f"Подписка активна до {until}.\n\n"
-            f"Доступно {settings.subscription_daily_request_limit} запросов в день "
-            "(фото, голос, текст и исправления)."
-        )
+        return f"Подписка активна до {until}.\n\n{benefits}"
     return (
-        f"Подписка не активна.\n\n"
-        f"Бесплатно: {settings.daily_request_limit} запросов в день.\n"
-        f"С подпиской: {settings.subscription_daily_request_limit} запросов в день "
-        f"на {settings.subscription_duration_days} дней за {settings.subscription_price_stars}⭐.\n"
+        "Подписка не активна.\n\n"
+        f"Бесплатно: {settings.daily_request_limit} запросов в день.\n\n"
+        f"С подпиской на {settings.subscription_duration_days} дней "
+        f"за {settings.subscription_price_stars}⭐:\n"
+        f"{benefits}\n\n"
         "Автоматического продления нет."
     )
 
@@ -89,7 +96,8 @@ async def buy_subscription(callback: CallbackQuery) -> None:
         title="Подписка ТАРЕЛКА",
         description=(
             f"{settings.subscription_daily_request_limit} запросов в день "
-            f"на {settings.subscription_duration_days} дней"
+            f"на {settings.subscription_duration_days} дней. "
+            "ИИ-помощник разберёт неделю: что улучшить и где пропущен приём пищи."
         ),
         payload=SUBSCRIPTION_PAYLOAD,
         currency="XTR",
@@ -131,7 +139,8 @@ async def successful_payment(message: Message, session, cleanup: MessageCleanupS
         message,
         cleanup,
         f"Подписка активирована до {until}.\n\n"
-        f"Теперь доступно {settings.subscription_daily_request_limit} запросов в день.",
+        f"Теперь доступно {settings.subscription_daily_request_limit} запросов в день.\n"
+        "ИИ-помощник по питанию: /week — разбор недели, что улучшить и где пропущен приём.",
         reply_markup=subscription_keyboard(is_active=True),
         track_user=False,
     )

@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     referral_bonus_requests: int = 3
     diary_nudges_enabled: bool = True
     diary_nudges_interval_seconds: int = 20 * 60
+    coach_reviews_enabled: bool = True
+    coach_reviews_interval_seconds: int = 20 * 60
     support_email: str = "help.4posts@gmail.com"
     database_url: str = "postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth"
     ai_analyzer_url: str = "http://localhost:8000"

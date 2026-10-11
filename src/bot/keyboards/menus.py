@@ -127,6 +127,14 @@ def statistics_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def coach_refresh_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Обновить", callback_data="coach:refresh")]
+        ]
+    )
+
+
 def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
     button_text = (
         f"Продлить за {settings.subscription_price_stars}⭐"

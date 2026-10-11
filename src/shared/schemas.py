@@ -11,6 +11,14 @@ TRACKED_MICRONUTRIENTS: dict[str, str] = {
 }
 
 
+class CoachWeekReview(BaseModel):
+    summary: str
+    wins: list[str] = Field(default_factory=list)
+    improve: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+
+
 class NutrientItem(BaseModel):
     name: str
     quantity: str | None = None

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from src.bot.config import settings
-from src.shared.schemas import AnalysisResult
+from src.shared.schemas import AnalysisResult, CoachWeekReview
 
 ProgressHandler = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -82,6 +82,16 @@ class AIAnalyzerClient:
             async with client.stream("POST", url, data=data, files=files) as response:
                 response.raise_for_status()
                 return await _read_analysis_stream(response, on_progress)
+
+    async def coach_week(self, facts: dict[str, Any]) -> CoachWeekReview:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(
+                f"{self.base_url}/coach/week",
+                json={"facts": facts},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return CoachWeekReview.model_validate(data["review"])
 
     async def transcribe(
         self,

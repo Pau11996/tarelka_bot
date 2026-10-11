@@ -5,7 +5,7 @@ import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from src.ai_analyzer.parsing import extract_json_payload, parse_analysis_response
+from src.ai_analyzer.parsing import extract_json_payload, parse_analysis_response, parse_coach_review
 from src.ai_analyzer.prompts import (
     ACTIVITY_CALCULATION_PROMPT,
     CLASSIFY_PHOTO_PROMPT,
@@ -14,8 +14,9 @@ from src.ai_analyzer.prompts import (
     CORRECTION_PROMPT,
     MEAL_CALCULATION_PROMPT,
     PHOTO_DETAIL_PROMPT,
+    build_coach_week_prompt,
 )
-from src.shared.schemas import AnalysisResult
+from src.shared.schemas import AnalysisResult, CoachWeekReview
 
 _TRUTHY = {"true", "1", "yes", "on"}
 PHOTO_NO_FOOD_REASON = "На фото нет еды"
@@ -394,3 +395,7 @@ class BaseAnalysisRunner:
         )
         raw = await self.run_prompt(prompt, image_path=image_path)
         return parse_analysis_response(raw)
+
+    async def write_week_review(self, facts: dict[str, Any]) -> CoachWeekReview:
+        raw = await self.run_prompt(build_coach_week_prompt(facts))
+        return parse_coach_review(raw)

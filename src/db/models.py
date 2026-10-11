@@ -137,6 +137,9 @@ class User(Base):
     diary_nudges: Mapped[list[DiaryNudge]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    coach_reviews: Mapped[list[CoachReview]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Profile(Base):
@@ -278,6 +281,27 @@ class DiaryNudge(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="diary_nudges")
+
+
+class CoachReview(Base):
+    __tablename__ = "coach_reviews"
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start", name="uq_coach_reviews_user_week"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    week_start: Mapped[date] = mapped_column(Date, index=True)
+    facts: Mapped[dict[str, Any]] = mapped_column(json_column())
+    review_text: Mapped[str] = mapped_column(Text)
+    refresh_used: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    push_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="coach_reviews")
 
 
 class DailyUserActivity(Base):

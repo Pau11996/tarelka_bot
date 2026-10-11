@@ -23,7 +23,7 @@ from src.ai_analyzer.transcribe import (
 from src.shared.logging_config import setup_logging
 from src.ai_analyzer.openai_runner import extra_image_paths
 from src.ai_analyzer.runner_factory import create_analysis_runner
-from src.shared.schemas import AnalysisResult
+from src.shared.schemas import AnalysisResult, CoachWeekReview
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,15 @@ class AnalyzeResponse(BaseModel):
 
 class TranscribeResponse(BaseModel):
     text: str
+
+
+class CoachWeekRequest(BaseModel):
+    facts: dict[str, Any]
+
+
+class CoachWeekResponse(BaseModel):
+    raw_response: str
+    review: CoachWeekReview
 
 
 def _delete_upload(image_path: str | None) -> None:
@@ -170,6 +179,17 @@ async def transcribe(audio: UploadFile = File(...)) -> TranscribeResponse:
     except Exception as exc:
         logger.exception("Transcription failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/coach/week", response_model=CoachWeekResponse)
+async def coach_week(request: CoachWeekRequest) -> CoachWeekResponse:
+    try:
+        review = await runner.write_week_review(request.facts)
+    except Exception as exc:
+        logger.exception("Week review failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    raw = json.dumps(review.model_dump(), ensure_ascii=False)
+    return CoachWeekResponse(raw_response=raw, review=review)
 
 
 @app.post("/analyze/text")

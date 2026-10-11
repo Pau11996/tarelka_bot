@@ -4,6 +4,7 @@ import asyncio
 import base64
 import mimetypes
 import os
+from contextvars import ContextVar
 
 import httpx
 from openai import AsyncOpenAI
@@ -18,6 +19,8 @@ from src.ai_analyzer.env_utils import (
     resolve_stage_model,
     resolve_stage_reasoning_effort,
 )
+
+extra_image_paths: ContextVar[tuple[str, ...]] = ContextVar("extra_image_paths", default=())
 
 RETRYABLE_MARKERS = (
     "Connection error",
@@ -118,8 +121,10 @@ class OpenAIRunner(BaseAnalysisRunner):
         stage: str | None = None,
     ) -> str:
         content: list[dict] = [{"type": "text", "text": prompt}]
-        if image_path:
-            content.append(await asyncio.to_thread(self._image_content, image_path))
+        paths = [image_path] if image_path else []
+        paths.extend(path for path in extra_image_paths.get() if path not in paths)
+        for path in paths:
+            content.append(await asyncio.to_thread(self._image_content, path))
 
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):

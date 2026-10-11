@@ -34,6 +34,9 @@ class Settings(BaseSettings):
         return normalize_async_database_url(value)
     default_timezone: str = "Europe/Moscow"
     message_cleanup_ttl_seconds: int = 2 * 60 * 60
+    mobile_jwt_secret: str = "dev-mobile-jwt-secret-change-me"
+    mobile_login_ttl_seconds: int = 300
+    mobile_token_ttl_days: int = 30
 
 
 settings = Settings()

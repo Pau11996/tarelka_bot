@@ -63,6 +63,16 @@ async def try_consume_daily_request(repo: UserRepository, user: User, usage_date
     return await repo.try_consume_daily_request(user.id, day, limit)
 
 
+async def consume_request_grant(repo: UserRepository, user: User) -> RequestGrant | None:
+    if await try_consume_daily_request(repo, user):
+        return RequestGrant(source="daily")
+    if await repo.try_consume_bonus_request(user.id):
+        if (user.bonus_requests or 0) > 0:
+            user.bonus_requests -= 1
+        return RequestGrant(source="bonus")
+    return None
+
+
 async def ensure_request_allowed(
     message: Message,
     repo: UserRepository,
@@ -71,12 +81,9 @@ async def ensure_request_allowed(
     *,
     track_user: bool = False,
 ) -> RequestGrant | None:
-    if await try_consume_daily_request(repo, user):
-        return RequestGrant(source="daily")
-    if await repo.try_consume_bonus_request(user.id):
-        if (user.bonus_requests or 0) > 0:
-            user.bonus_requests -= 1
-        return RequestGrant(source="bonus")
+    grant = await consume_request_grant(repo, user)
+    if grant is not None:
+        return grant
 
     await answer_ephemeral(
         message,

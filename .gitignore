@@ -19,3 +19,8 @@ promo
 .agents
 research
 competitor-profiles
+mobile/node_modules/
+mobile/.expo/
+output
+.name
+skills-lock.json

@@ -18,6 +18,7 @@ from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.request_limit import limit_welcome_note
 from src.bot.states import ProfileStates
 from src.db.repository import DEFAULT_DAILY_CALORIE_TARGET, UserRepository
+from src.mobile_api.login_codes import LOGIN_EXPIRED, app_login_code
 
 router = Router()
 
@@ -71,6 +72,18 @@ async def cmd_start(
         telegram_id=message.from_user.id,
         timezone=settings.default_timezone,
     )
+    login_code = app_login_code(command.args)
+    if login_code is not None:
+        linked = await repo.attach_mobile_login(login_code, user.id)
+        await repo.ensure_default_profile(user.id)
+        text = (
+            "Вход в приложение подтверждён. Вернитесь в ТАРЕЛКУ."
+            if linked
+            else LOGIN_EXPIRED
+        )
+        await answer_persistent_with_menu(message, text, cleanup=cleanup)
+        return
+
     if command.args == "premium":
         await show_subscription_screen(message, user, cleanup)
         return

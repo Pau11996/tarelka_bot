@@ -51,12 +51,15 @@ class AIAnalyzerClient:
         mode: str,
         image_bytes: bytes,
         filename: str,
+        extra_images: list[tuple[bytes, str]] | None = None,
         text: str | None = None,
         profile_context: dict[str, Any] | None = None,
         previous_result: dict[str, Any] | None = None,
         on_progress: ProgressHandler | None = None,
     ) -> tuple[str, AnalysisResult]:
-        files = {"image": (filename, image_bytes, "image/jpeg")}
+        files = [("image", (filename, image_bytes, "image/jpeg"))]
+        for extra_bytes, extra_name in extra_images or []:
+            files.append(("images", (extra_name, extra_bytes, "image/jpeg")))
         data: dict[str, str] = {"mode": mode}
         if text:
             data["text"] = text

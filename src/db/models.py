@@ -17,9 +17,15 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy import JSON
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def json_column() -> JSON:
+    """JSONB on PostgreSQL, plain JSON where the test database is SQLite."""
+    return JSON().with_variant(JSONB(), "postgresql")
 
 
 class Base(DeclarativeBase):
@@ -99,21 +105,38 @@ class User(Base):
     bonus_requests: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    profile: Mapped[Profile | None] = relationship(back_populates="user", uselist=False)
-    entries: Mapped[list[DayEntry]] = relationship(back_populates="user")
-    favorites: Mapped[list[FavoriteMeal]] = relationship(back_populates="user")
-    daily_request_usage: Mapped[list[DailyRequestUsage]] = relationship(back_populates="user")
-    daily_activity: Mapped[list[DailyUserActivity]] = relationship(back_populates="user")
-    weight_history: Mapped[list[WeightHistory]] = relationship(back_populates="user")
-    payments: Mapped[list[Payment]] = relationship(back_populates="user")
+    profile: Mapped[Profile | None] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    entries: Mapped[list[DayEntry]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    favorites: Mapped[list[FavoriteMeal]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    daily_request_usage: Mapped[list[DailyRequestUsage]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    daily_activity: Mapped[list[DailyUserActivity]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    weight_history: Mapped[list[WeightHistory]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    payments: Mapped[list[Payment]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    analyses: Mapped[list[AIAnalysis]] = relationship(
+        cascade="all, delete-orphan",
+        foreign_keys="AIAnalysis.user_id",
+    )
+    mobile_logins: Mapped[list[MobileLoginChallenge]] = relationship(cascade="all, delete-orphan")
     referrer: Mapped[User | None] = relationship(
         remote_side=[id],
         foreign_keys=[referred_by_user_id],
     )
     survey_response: Mapped[SurveyResponse | None] = relationship(
-        back_populates="user", uselist=False
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    diary_nudges: Mapped[list[DiaryNudge]] = relationship(back_populates="user")
+    diary_nudges: Mapped[list[DiaryNudge]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Profile(Base):
@@ -175,8 +198,8 @@ class DayEntry(Base):
     protein_g: Mapped[float] = mapped_column(Float, default=0.0)
     fat_g: Mapped[float] = mapped_column(Float, default=0.0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0.0)
-    micronutrients: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    items: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    micronutrients: Mapped[dict[str, Any] | None] = mapped_column(json_column(), nullable=True)
+    items: Mapped[list[dict[str, Any]] | None] = mapped_column(json_column(), nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ai_analysis_id: Mapped[int | None] = mapped_column(ForeignKey("ai_analyses.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -200,7 +223,7 @@ class AIAnalysis(Base):
         ForeignKey("ai_analyses.id"), nullable=True
     )
     raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
-    parsed_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    parsed_json: Mapped[dict[str, Any] | None] = mapped_column(json_column(), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -297,8 +320,8 @@ class FavoriteMeal(Base):
     protein_g: Mapped[float] = mapped_column(Float, default=0.0)
     fat_g: Mapped[float] = mapped_column(Float, default=0.0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0.0)
-    micronutrients: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    items: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    micronutrients: Mapped[dict[str, Any] | None] = mapped_column(json_column(), nullable=True)
+    items: Mapped[list[dict[str, Any]] | None] = mapped_column(json_column(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="favorites")
@@ -336,3 +359,15 @@ class MarketingCampaign(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class MobileLoginChallenge(Base):
+    __tablename__ = "mobile_login_challenges"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

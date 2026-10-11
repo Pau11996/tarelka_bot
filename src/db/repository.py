@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -19,6 +20,7 @@ from src.db.models import (
     EntryType,
     FavoriteMeal,
     MarketingCampaign,
+    MobileLoginChallenge,
     Payment,
     Profile,
     SurveyResponse,
@@ -27,6 +29,18 @@ from src.db.models import (
 )
 
 DEFAULT_DAILY_CALORIE_TARGET = 2000.0
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _mobile_login_open(challenge: MobileLoginChallenge, now: datetime) -> bool:
+    if challenge.consumed_at is not None:
+        return False
+    return _as_utc(challenge.expires_at) > now
 
 
 class UserRepository:
@@ -199,6 +213,82 @@ class UserRepository:
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
         result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
         return result.scalar_one_or_none()
+
+    async def get_user_by_id(self, user_id: int) -> User | None:
+        result = await self.session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+    async def create_mobile_login(self, *, ttl_seconds: int, now: datetime | None = None) -> MobileLoginChallenge:
+        current = now or datetime.now(timezone.utc)
+        challenge = MobileLoginChallenge(
+            id=str(uuid.uuid4()),
+            expires_at=current + timedelta(seconds=ttl_seconds),
+        )
+        self.session.add(challenge)
+        await self.session.commit()
+        await self.session.refresh(challenge)
+        return challenge
+
+    async def attach_mobile_login(
+        self,
+        code: str,
+        user_id: int,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        current = now or datetime.now(timezone.utc)
+        challenge = await self._lock_mobile_login(code)
+        linked = (
+            challenge is not None
+            and _mobile_login_open(challenge, current)
+            and (challenge.user_id is None or challenge.user_id == user_id)
+        )
+        if linked and challenge is not None:
+            challenge.user_id = user_id
+        await self.session.commit()
+        return linked
+
+    async def poll_mobile_login(
+        self,
+        code: str,
+        *,
+        now: datetime | None = None,
+    ) -> tuple[str, int | None]:
+        current = now or datetime.now(timezone.utc)
+        challenge = await self._lock_mobile_login(code)
+        if challenge is None:
+            return "missing", None
+        user_id: int | None = None
+        if challenge.consumed_at is not None:
+            status = "consumed"
+        elif _as_utc(challenge.expires_at) <= current:
+            status = "expired"
+        elif challenge.user_id is None:
+            status = "pending"
+        else:
+            challenge.consumed_at = current
+            user_id = challenge.user_id
+            status = "ready"
+        await self.session.commit()
+        return status, user_id
+
+    async def _lock_mobile_login(self, code: str) -> MobileLoginChallenge | None:
+        result = await self.session.execute(
+            select(MobileLoginChallenge)
+            .where(MobileLoginChallenge.id == code)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def get_daily_request_count(self, user_id: int, usage_date: date) -> int:
+        result = await self.session.execute(
+            select(DailyRequestUsage.request_count).where(
+                DailyRequestUsage.user_id == user_id,
+                DailyRequestUsage.usage_date == usage_date,
+            )
+        )
+        value = result.scalar_one_or_none()
+        return int(value or 0)
 
     async def get_profile(self, user_id: int) -> Profile | None:
         result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))

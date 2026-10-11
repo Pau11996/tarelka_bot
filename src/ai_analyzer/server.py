@@ -21,6 +21,7 @@ from src.ai_analyzer.transcribe import (
     transcribe_audio,
 )
 from src.shared.logging_config import setup_logging
+from src.ai_analyzer.openai_runner import extra_image_paths
 from src.ai_analyzer.runner_factory import create_analysis_runner
 from src.shared.schemas import AnalysisResult
 
@@ -200,30 +201,48 @@ async def analyze_image(
     profile_context: str | None = Form(None),
     previous_result: str | None = Form(None),
     image: UploadFile = File(...),
+    images: list[UploadFile] | None = File(None),
     stream: bool = Form(False),
 ):
     content = await image.read()
     suffix = os.path.splitext(image.filename or "upload.jpg")[1] or ".jpg"
     image_path = save_upload(f"{uuid.uuid4().hex}{suffix}", content)
+    extra_paths: list[str] = []
+    for extra in images or []:
+        extra_content = await extra.read()
+        if not extra_content:
+            continue
+        extra_suffix = os.path.splitext(extra.filename or "upload.jpg")[1] or ".jpg"
+        extra_paths.append(save_upload(f"{uuid.uuid4().hex}{extra_suffix}", extra_content))
+
+    def cleanup() -> None:
+        _delete_upload(image_path)
+        for path in extra_paths:
+            _delete_upload(path)
+
     try:
         profile = json.loads(profile_context) if profile_context else None
         prev = json.loads(previous_result) if previous_result else None
     except json.JSONDecodeError as exc:
-        _delete_upload(image_path)
+        cleanup()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async def run(on_progress: ProgressCallback) -> AnalysisResult:
-        return await _run_analysis(
-            mode=mode,
-            text=text,
-            image_path=image_path,
-            profile_context=profile,
-            previous_result=prev,
-            on_progress=on_progress,
-        )
+        token = extra_image_paths.set(tuple(extra_paths))
+        try:
+            return await _run_analysis(
+                mode=mode,
+                text=text,
+                image_path=image_path,
+                profile_context=profile,
+                previous_result=prev,
+                on_progress=on_progress,
+            )
+        finally:
+            extra_image_paths.reset(token)
 
     if stream is True:
-        return _stream_analysis(run, cleanup=lambda: _delete_upload(image_path))
+        return _stream_analysis(run, cleanup=cleanup)
     try:
         result = await run(None)
         return _analyze_response(result)
@@ -231,7 +250,7 @@ async def analyze_image(
         logger.exception("Image analysis failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
-        _delete_upload(image_path)
+        cleanup()
 
 
 def main() -> None:

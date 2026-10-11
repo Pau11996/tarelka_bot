@@ -32,5 +32,12 @@ services:
       ai_analyzer:
         condition: service_healthy
 
+  mobile_api:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai_analyzer:
+        condition: service_healthy
+
 volumes:
   postgres_data:

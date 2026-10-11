@@ -131,13 +131,8 @@ img {
 .logo-mark {
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    background: linear-gradient(135deg, var(--accent), #3ecf79);
-    color: #fff;
-    font-size: 1.2rem;
-    box-shadow: 0 10px 24px rgba(31, 157, 85, 0.25);
+    display: block;
+    object-fit: contain;
 }
 
 .nav {

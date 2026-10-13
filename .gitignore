@@ -24,4 +24,6 @@ mobile/.expo/
 output
 .name
 skills-lock.json
-/data/
+data/green_by_products.full.sqlite
+*.sqlite-shm
+*.sqlite-wal

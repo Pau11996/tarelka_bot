@@ -91,6 +91,47 @@ def test_daily_balance_with_meals_and_activity():
     assert "sodium_mg" not in balance.micronutrients
 
 
+def test_daily_balance_sums_water_without_touching_calories():
+    entries = [
+        DayEntry(
+            id=1,
+            user_id=1,
+            entry_date=date.today(),
+            entry_type=EntryType.MEAL,
+            title="Овсянка",
+            calories=300,
+            protein_g=10,
+            fat_g=5,
+            carbs_g=40,
+            meal_slot="breakfast",
+        ),
+        DayEntry(
+            id=2,
+            user_id=1,
+            entry_date=date.today(),
+            entry_type=EntryType.WATER,
+            title="Стакан воды",
+            calories=50,
+            volume_ml=250,
+        ),
+        DayEntry(
+            id=3,
+            user_id=1,
+            entry_date=date.today(),
+            entry_type=EntryType.WATER,
+            title="Бутылка воды",
+            calories=0,
+            volume_ml=500,
+        ),
+    ]
+
+    balance = calculate_daily_balance(2000, entries)
+
+    assert balance.consumed == 300
+    assert balance.water_ml == 750
+    assert balance.remaining == 1700
+
+
 def test_calculate_daily_nutrient_targets():
     profile = Profile(
         id=1,

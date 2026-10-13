@@ -7,13 +7,14 @@ from aiogram import Bot
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai_analyzer.products import BARCODE_FAILURES
 from src.bot.config import settings
 from src.bot.services.ai_client import AIAnalyzerClient
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import profile_context
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import consume_request_grant, format_limit_reached_message, refund_request
-from src.db.models import AnalysisType, EntryType, User
+from src.db.models import AnalysisType, DIARY_ENTRY_TYPES, EntryType, User
 from src.db.repository import UserRepository
 from src.mobile_api.serializers import balance_out, entry_out
 from src.shared.schemas import AnalysisResult
@@ -27,6 +28,12 @@ UNKNOWN_MESSAGE = (
 ANALYSIS_UNAVAILABLE = "Анализ временно недоступен. Попробуйте ещё раз."
 VOICE_NOT_RECOGNIZED = "Не удалось распознать речь. Попробуйте ещё раз или напишите текстом."
 VOICE_UNAVAILABLE = "Голосовой ввод временно недоступен. Отправьте описание текстом или фото."
+
+
+def unknown_message(result: AnalysisResult) -> str:
+    if result.unknown_reason in BARCODE_FAILURES:
+        return result.unknown_reason or UNKNOWN_MESSAGE
+    return UNKNOWN_MESSAGE
 
 
 def _analysis_type(*, result: AnalysisResult, has_image: bool) -> AnalysisType:
@@ -150,13 +157,22 @@ class AnalysisService:
             await refund_request(self.repo, user, grant)
             return {
                 "status": "unknown",
-                "message": UNKNOWN_MESSAGE,
+                "message": unknown_message(result),
                 "result": result.model_dump(),
             }
 
         try:
             if result.type == "activity":
                 entry, balance = await self.entries.save_activity_from_analysis(
+                    user=user,
+                    analysis_type=analysis_type,
+                    input_text=input_text,
+                    image_path=None,
+                    raw_response=raw,
+                    result=result,
+                )
+            elif result.type == "water":
+                entry, balance = await self.entries.save_water_from_analysis(
                     user=user,
                     analysis_type=analysis_type,
                     input_text=input_text,
@@ -187,7 +203,7 @@ class AnalysisService:
 
     async def correct(self, user: User, entry_id: int, text: str) -> dict:
         entry = await self.repo.get_entry(entry_id, user.id)
-        if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+        if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
             raise HTTPException(status_code=404, detail="Запись не найдена")
 
         grant = await consume_request_grant(self.repo, user)
@@ -200,7 +216,12 @@ class AnalysisService:
             if analysis is not None and analysis.parsed_json:
                 previous = analysis.parsed_json
 
-        mode = "activity" if entry.entry_type == EntryType.ACTIVITY else "meal"
+        if entry.entry_type == EntryType.ACTIVITY:
+            mode = "activity"
+        elif entry.entry_type == EntryType.WATER:
+            mode = "water"
+        else:
+            mode = "meal"
         try:
             raw, result = await self.ai.analyze_text(
                 mode=mode,
@@ -219,13 +240,21 @@ class AnalysisService:
             await refund_request(self.repo, user, grant)
             return {
                 "status": "unknown",
-                "message": UNKNOWN_MESSAGE,
+                "message": unknown_message(result),
                 "result": result.model_dump(),
             }
 
         try:
             if entry.entry_type == EntryType.ACTIVITY:
                 balance = await self.entries.update_activity_from_correction(
+                    user=user,
+                    entry=entry,
+                    correction_text=text,
+                    raw_response=raw,
+                    result=result,
+                )
+            elif entry.entry_type == EntryType.WATER:
+                balance = await self.entries.update_water_from_correction(
                     user=user,
                     entry=entry,
                     correction_text=text,

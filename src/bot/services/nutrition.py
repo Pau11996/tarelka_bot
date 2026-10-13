@@ -96,6 +96,7 @@ class DailyBalance:
     fat_g: float
     carbs_g: float
     micronutrients: dict[str, float]
+    water_ml: float = 0.0
     streak: int | None = None
 
 
@@ -138,6 +139,7 @@ def calculate_daily_balance(target: float, entries: list[DayEntry]) -> DailyBala
     fat_g = 0.0
     carbs_g = 0.0
     micronutrients = {key: 0.0 for key in TRACKED_MICRONUTRIENTS}
+    water_ml = 0.0
 
     for entry in entries:
         if entry.entry_type == EntryType.MEAL:
@@ -150,6 +152,8 @@ def calculate_daily_balance(target: float, entries: list[DayEntry]) -> DailyBala
                     micronutrients[key] += float(entry.micronutrients.get(key, 0) or 0)
         elif entry.entry_type == EntryType.ACTIVITY:
             activity_bonus += entry.calories
+        elif entry.entry_type == EntryType.WATER:
+            water_ml += float(entry.volume_ml or 0)
 
     remaining = target - consumed + activity_bonus
     return DailyBalance(
@@ -161,6 +165,7 @@ def calculate_daily_balance(target: float, entries: list[DayEntry]) -> DailyBala
         fat_g=fat_g,
         carbs_g=carbs_g,
         micronutrients=micronutrients,
+        water_ml=water_ml,
     )
 
 

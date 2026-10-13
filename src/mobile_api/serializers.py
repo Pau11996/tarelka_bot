@@ -25,6 +25,8 @@ def entry_out(entry: DayEntry) -> dict:
         "micronutrients": entry.micronutrients,
         "items": entry.items,
         "duration_minutes": entry.duration_minutes,
+        "meal_slot": entry.meal_slot,
+        "volume_ml": entry.volume_ml,
         "created_at": _iso(entry.created_at),
     }
 
@@ -39,6 +41,7 @@ def balance_out(balance: DailyBalance) -> dict:
         "fat_g": balance.fat_g,
         "carbs_g": balance.carbs_g,
         "micronutrients": balance.micronutrients,
+        "water_ml": balance.water_ml,
         "streak": balance.streak,
     }
 
@@ -77,6 +80,7 @@ def favorite_out(favorite: FavoriteMeal) -> dict:
         "micronutrients": favorite.micronutrients,
         "items": favorite.items,
         "duration_minutes": favorite.duration_minutes,
+        "volume_ml": favorite.volume_ml,
         "source_entry_id": favorite.source_entry_id,
         "created_at": _iso(favorite.created_at),
     }

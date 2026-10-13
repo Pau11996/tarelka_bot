@@ -2,10 +2,12 @@ from src.bot.services.formatting import (
     format_analysis_result,
     format_calorie_bar,
     format_daily_balance,
+    format_entry_list,
     format_unknown_result,
+    format_water_result,
 )
 from src.bot.services.nutrition import DailyBalance, calculate_daily_nutrient_targets
-from src.db.models import ActivityLevel, Goal, Profile, Sex
+from src.db.models import ActivityLevel, DayEntry, EntryType, Goal, Profile, Sex
 from src.shared.schemas import AnalysisResult, NutrientItem
 
 
@@ -81,6 +83,42 @@ def test_format_unknown_result_card():
         "Калории: 0 ккал\n"
         "Отправьте фото еды, опишите блюдо текстом или расскажите про тренировку."
     )
+
+
+def test_format_barcode_failure_shows_reason():
+    from src.ai_analyzer.products import PRODUCT_NOT_FOUND
+
+    result = AnalysisResult(
+        type="unknown",
+        total_calories=0,
+        unknown_reason=PRODUCT_NOT_FOUND,
+    )
+
+    text = format_unknown_result(result)
+
+    assert PRODUCT_NOT_FOUND in text
+    assert "Запись в дневник не добавлена." in text
+    assert "Неизвестный ввод" not in text
+
+
+def test_format_estimated_catalog_meal_mentions_missing_label():
+    from src.ai_analyzer.products import ESTIMATE_ASSUMPTION
+
+    result = AnalysisResult(
+        type="meal",
+        title="Творог",
+        total_calories=180,
+        protein_g=18,
+        fat_g=9,
+        carbs_g=3,
+        portion_assumed=False,
+        assumptions=[ESTIMATE_ASSUMPTION],
+    )
+
+    text = format_analysis_result(result)
+
+    assert ESTIMATE_ASSUMPTION in text
+    assert "Вес не указан" not in text
 
 
 def test_daily_balance_can_include_micronutrients():
@@ -241,4 +279,80 @@ def test_analysis_card_includes_bar_and_streak_from_balance():
     assert "⬜" in text
     assert "300 / 2000 ккал" in text
     assert "Серия: 1 день" in text
+
+
+def test_daily_balance_shows_water_total():
+    balance = DailyBalance(
+        target=2000,
+        consumed=300,
+        activity_bonus=0,
+        remaining=1700,
+        protein_g=0,
+        fat_g=0,
+        carbs_g=0,
+        micronutrients={},
+        water_ml=750,
+    )
+
+    text = format_daily_balance(balance, include_micronutrients=False)
+
+    assert "Вода: 750 мл" in text
+
+
+def test_entry_list_shows_meal_slot_and_water():
+    entries = [
+        DayEntry(
+            id=1,
+            user_id=1,
+            entry_type=EntryType.MEAL,
+            title="овсянка",
+            calories=320,
+            meal_slot="breakfast",
+        ),
+        DayEntry(
+            id=2,
+            user_id=1,
+            entry_type=EntryType.MEAL,
+            title="яблоко",
+            calories=80,
+        ),
+        DayEntry(
+            id=3,
+            user_id=1,
+            entry_type=EntryType.WATER,
+            title="Стакан воды",
+            calories=0,
+            volume_ml=250,
+        ),
+    ]
+
+    text = format_entry_list(entries)
+
+    assert "🍽 Завтрак · овсянка: -320 ккал" in text
+    assert "🍽 яблоко: -80 ккал" in text
+    assert "Завтрак · яблоко" not in text
+    assert "💧 Стакан воды: 250 мл" in text
+
+
+def test_analysis_card_prefixes_named_meal():
+    result = AnalysisResult(type="meal", title="овсянка", total_calories=320, meal_slot="breakfast")
+
+    text = format_analysis_result(result)
+
+    assert "🍽 Завтрак · овсянка" in text
+
+
+def test_water_card_shows_volume():
+    result = AnalysisResult(
+        type="water",
+        title="Стакан воды",
+        volume_ml=250,
+        portion_assumed=True,
+    )
+
+    text = format_water_result(result)
+
+    assert "💧 Стакан воды" in text
+    assert "Объём: 250 мл" in text
+    assert "взято 250 мл" in text
 

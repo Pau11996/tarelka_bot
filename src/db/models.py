@@ -62,6 +62,10 @@ class ActivityLevel(str, PyEnum):
 class EntryType(str, PyEnum):
     MEAL = "meal"
     ACTIVITY = "activity"
+    WATER = "water"
+
+
+DIARY_ENTRY_TYPES = {EntryType.MEAL, EntryType.ACTIVITY, EntryType.WATER}
 
 
 class AnalysisType(str, PyEnum):
@@ -204,6 +208,8 @@ class DayEntry(Base):
     micronutrients: Mapped[dict[str, Any] | None] = mapped_column(json_column(), nullable=True)
     items: Mapped[list[dict[str, Any]] | None] = mapped_column(json_column(), nullable=True)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meal_slot: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    volume_ml: Mapped[float | None] = mapped_column(Float, nullable=True)
     ai_analysis_id: Mapped[int | None] = mapped_column(ForeignKey("ai_analyses.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -341,6 +347,7 @@ class FavoriteMeal(Base):
     title: Mapped[str] = mapped_column(String(255))
     calories: Mapped[float] = mapped_column(Float)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    volume_ml: Mapped[float | None] = mapped_column(Float, nullable=True)
     protein_g: Mapped[float] = mapped_column(Float, default=0.0)
     fat_g: Mapped[float] = mapped_column(Float, default=0.0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0.0)

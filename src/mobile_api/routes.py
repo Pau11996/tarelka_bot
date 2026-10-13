@@ -20,7 +20,7 @@ from src.bot.services.nutrition import (
     local_today,
 )
 from src.bot.services.request_limit import effective_daily_request_limit, has_active_subscription
-from src.db.models import ActivityLevel, EntryType, Goal, Sex, User
+from src.db.models import ActivityLevel, DIARY_ENTRY_TYPES, EntryType, Goal, Sex, User
 from src.db.repository import UserRepository
 from src.db.session import get_session
 from src.mobile_api.analysis import AnalysisService
@@ -217,7 +217,7 @@ async def favorite_entry(
 ) -> dict:
     repo = UserRepository(session)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+    if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
         raise HTTPException(status_code=404, detail="Запись не найдена")
     existing = await repo.get_favorite_by_source_entry(user.id, entry.id)
     if existing is not None:
@@ -242,6 +242,8 @@ async def log_favorite(
     service = EntryService(session)
     if favorite.entry_type == EntryType.ACTIVITY:
         entry, balance = await service.save_activity_from_favorite(user=user, favorite=favorite)
+    elif favorite.entry_type == EntryType.WATER:
+        entry, balance = await service.save_water_from_favorite(user=user, favorite=favorite)
     else:
         entry, balance = await service.save_meal_from_favorite(user=user, favorite=favorite)
     return {"entry": entry_out(entry), "balance": balance_out(balance)}

@@ -73,9 +73,14 @@ ACTIVITY_CALC_RESPONSE = """
 
 
 class FakeRunner(BaseAnalysisRunner):
-    def __init__(self, responses: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        responses: dict[str, str] | None = None,
+        fallback: str = MEAL_CALC_RESPONSE,
+    ) -> None:
         self.calls: list[tuple[str, str | None, str | None]] = []
         self.responses = responses or {}
+        self.fallback = fallback
 
     async def run_prompt(
         self,
@@ -87,7 +92,7 @@ class FakeRunner(BaseAnalysisRunner):
         self.calls.append((prompt, image_path, stage))
         if stage and stage in self.responses:
             return self.responses[stage]
-        return MEAL_CALC_RESPONSE
+        return self.fallback
 
 
 def test_single_call_enabled_defaults_to_true(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,8 +127,12 @@ async def test_analyze_food_single_call_uses_one_prompt(
 
     assert result.type == "meal"
     assert result.title == "Омлет"
-    assert len(runner.calls) == 1
-    prompt, image_path, stage = runner.calls[0]
+    assert len(runner.calls) == 2
+    classify_prompt, classify_image, classify_stage = runner.calls[0]
+    assert classify_stage == "classify"
+    assert "barcode" in classify_prompt
+    assert classify_image == "/tmp/omelet.jpg"
+    prompt, image_path, stage = runner.calls[1]
     assert "visual recognition, nutrition, and fitness calculation engine" in prompt
     assert "User description: омлет из двух яиц" in prompt
     assert image_path == "/tmp/omelet.jpg"
@@ -477,3 +486,363 @@ def test_analysis_result_from_dict_keeps_unknown() -> None:
     assert result.type == "unknown"
     assert result.unknown_reason == "Неизвестный ввод"
     assert result.portion_assumed is False
+
+
+WATER_CALC_RESPONSE = """
+{
+  "type": "water",
+  "title": "Стакан воды",
+  "items": [],
+  "total_calories": 12,
+  "protein_g": 1,
+  "fat_g": 0,
+  "carbs_g": 0,
+  "micronutrients": {},
+  "meal_slot": "breakfast",
+  "volume_ml": 500,
+  "confidence": 0.9,
+  "assumptions": [],
+  "needs_clarification": false,
+  "clarification_question": null,
+  "duration_minutes": null,
+  "portion_assumed": false,
+  "unknown_reason": null
+}
+"""
+
+
+def test_analysis_result_water_drops_calories_and_slot() -> None:
+    result = AnalysisResult.from_dict(
+        {
+            "type": "water",
+            "title": "Вода",
+            "total_calories": 40,
+            "meal_slot": "breakfast",
+            "protein_g": 3,
+            "items": [{"name": "вода", "calories": 0}],
+        }
+    )
+    assert result.type == "water"
+    assert result.total_calories == 0
+    assert result.protein_g == 0
+    assert result.items == []
+    assert result.meal_slot is None
+    assert result.volume_ml == 250
+    assert result.portion_assumed is True
+
+
+def test_analysis_result_meal_slot_from_russian_name() -> None:
+    named = AnalysisResult.from_dict({"type": "meal", "title": "Овсянка", "meal_slot": "завтрак"})
+    assert named.meal_slot == "breakfast"
+    assert named.volume_ml is None
+
+    missing = AnalysisResult.from_dict({"type": "meal", "title": "Овсянка"})
+    assert missing.meal_slot is None
+
+    unknown_slot = AnalysisResult.from_dict({"type": "meal", "title": "Овсянка", "meal_slot": "brunch"})
+    assert unknown_slot.meal_slot is None
+
+
+def test_analysis_result_activity_drops_meal_slot() -> None:
+    result = AnalysisResult.from_dict(
+        {"type": "activity", "title": "Бег", "meal_slot": "breakfast", "volume_ml": 250}
+    )
+    assert result.meal_slot is None
+    assert result.volume_ml is None
+
+
+@pytest.mark.asyncio
+async def test_staged_meal_slot_survives_calc_without_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_SINGLE_CALL", "false")
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {
+                    "type": "meal",
+                    "title": "Овсянка",
+                    "meal_slot": "breakfast",
+                    "unknown_reason": None,
+                    "confidence": 0.9,
+                }
+            ),
+            "calc": MEAL_CALC_RESPONSE,
+        }
+    )
+
+    result = await runner.analyze_auto(text="завтрак овсянка", image_path=None)
+
+    assert result.type == "meal"
+    assert result.meal_slot == "breakfast"
+    assert result.title == "Омлет"
+
+
+@pytest.mark.asyncio
+async def test_staged_meal_without_slot_stays_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_SINGLE_CALL", "false")
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {"type": "meal", "title": "Омлет", "meal_slot": None, "confidence": 0.9}
+            ),
+            "calc": MEAL_CALC_RESPONSE,
+        }
+    )
+
+    result = await runner.analyze_auto(text="омлет", image_path=None)
+
+    assert result.type == "meal"
+    assert result.meal_slot is None
+
+
+@pytest.mark.asyncio
+async def test_staged_water_text_uses_volume_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_SINGLE_CALL", "false")
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {"type": "water", "title": "Вода", "meal_slot": None, "confidence": 0.95}
+            ),
+            "calc": WATER_CALC_RESPONSE,
+        }
+    )
+
+    result = await runner.analyze_auto(text="бутылка воды 0.5", image_path=None)
+
+    assert result.type == "water"
+    assert result.volume_ml == 500
+    assert result.total_calories == 0
+    assert result.meal_slot is None
+    assert result.portion_assumed is False
+    assert [stage for _, _, stage in runner.calls] == ["classify", "calc"]
+    assert "drinking-water log" in runner.calls[1][0]
+
+
+@pytest.mark.asyncio
+async def test_staged_water_photo_is_not_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_SINGLE_CALL", "false")
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {"type": "water", "title": "Стакан воды", "confidence": 0.9}
+            ),
+            "photo": json.dumps(
+                {
+                    "type": "water",
+                    "title": "Стакан воды",
+                    "components": [],
+                    "volume_ml": 250,
+                    "confidence": 0.8,
+                    "assumptions": [],
+                    "unknown_reason": None,
+                }
+            ),
+            "calc": WATER_CALC_RESPONSE,
+        }
+    )
+
+    result = await runner.analyze_auto(text=None, image_path="/tmp/water.jpg")
+
+    assert result.type == "water"
+    assert result.volume_ml == 500
+    assert [stage for _, _, stage in runner.calls] == ["classify", "photo", "calc"]
+    assert "volume_ml" in runner.calls[2][0]
+
+
+def _barcode_runner(monkeypatch: pytest.MonkeyPatch, product, barcode: str) -> FakeRunner:
+    monkeypatch.setenv("AI_SINGLE_CALL", "true")
+    monkeypatch.setattr("src.ai_analyzer.analysis_runner.lookup_product", lambda code: product)
+    return FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {
+                    "type": "barcode",
+                    "barcode": barcode,
+                    "meal_slot": "breakfast",
+                    "confidence": 0.95,
+                }
+            )
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_barcode_with_label_does_not_calculate_from_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import LABEL_ASSUMPTION, CatalogProduct
+
+    product = CatalogProduct(
+        title="Творог 5%",
+        brand="Савушкин",
+        weight_g=180,
+        volume="200 г",
+        energy_cost="белки-10,0 г; жиры-5,0 г; углеводы-3,0 г; 150 ккал",
+    )
+    runner = _barcode_runner(monkeypatch, product, "4600536004105")
+
+    result = await runner.analyze_auto(text="завтрак", image_path="/tmp/code.jpg")
+
+    assert result.type == "meal"
+    assert result.title == "Савушкин Творог 5%"
+    assert result.meal_slot == "breakfast"
+    assert result.total_calories == 300
+    assert result.protein_g == 20
+    assert result.fat_g == 10
+    assert result.carbs_g == 6
+    assert result.portion_assumed is False
+    assert result.assumptions == [LABEL_ASSUMPTION]
+    assert [stage for _, _, stage in runner.calls] == ["classify"]
+
+
+@pytest.mark.asyncio
+async def test_barcode_zero_calorie_food_stays_a_meal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import CatalogProduct
+
+    product = CatalogProduct(
+        title="Жевательная резинка",
+        brand="",
+        weight_g=14,
+        volume="",
+        energy_cost="белки 0 г; жиры 0 г; углеводы 0 г; 0 ккал",
+    )
+    runner = _barcode_runner(monkeypatch, product, "4600536004105")
+
+    result = await runner.analyze_auto(text=None, image_path="/tmp/code.jpg")
+
+    assert result.type == "meal"
+    assert result.total_calories == 0
+    assert result.meal_slot == "breakfast"
+
+
+@pytest.mark.asyncio
+async def test_barcode_mineral_water_goes_to_water_tracker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import CatalogProduct
+
+    product = CatalogProduct(
+        title="Минеральная вода Нарзан газ",
+        brand="",
+        weight_g=1037,
+        volume="1л",
+        energy_cost="белки - 0,0 г; жиры - 0,0 г; улеводы - 0,0 г; энергетическая ценность -0,0 ккал",
+    )
+    runner = _barcode_runner(monkeypatch, product, "4600536004105")
+
+    result = await runner.analyze_auto(text=None, image_path="/tmp/code.jpg")
+
+    assert result.type == "water"
+    assert result.volume_ml == 1000
+    assert result.portion_assumed is False
+    assert result.meal_slot is None
+    assert result.total_calories == 0
+
+
+@pytest.mark.asyncio
+async def test_barcode_without_calories_estimates_from_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import ESTIMATE_ASSUMPTION, CatalogProduct
+
+    product = CatalogProduct(
+        title="Творог",
+        brand="",
+        weight_g=200,
+        volume="",
+        energy_cost="",
+    )
+    runner = _barcode_runner(monkeypatch, product, "4600536004105")
+
+    result = await runner.analyze_food(text="завтрак", image_path="/tmp/code.jpg")
+
+    assert result.type == "meal"
+    assert result.title == "Омлет"
+    assert result.meal_slot == "breakfast"
+    assert ESTIMATE_ASSUMPTION in result.assumptions
+    assert result.portion_assumed is False
+    assert [stage for _, _, stage in runner.calls] == ["classify", "calc"]
+    assert runner.calls[1][1] is None
+    assert "Творог" in runner.calls[1][0]
+    assert "200 г" in runner.calls[1][0]
+    assert "/tmp/code.jpg" not in runner.calls[1][0]
+
+
+@pytest.mark.asyncio
+async def test_barcode_missing_from_catalog_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import PRODUCT_NOT_FOUND
+
+    runner = _barcode_runner(monkeypatch, None, "4600536004105")
+
+    result = await runner.analyze_auto(text=None, image_path="/tmp/code.jpg")
+
+    assert result.type == "unknown"
+    assert result.unknown_reason == PRODUCT_NOT_FOUND
+    assert [stage for _, _, stage in runner.calls] == ["classify"]
+
+
+@pytest.mark.asyncio
+async def test_barcode_unreadable_checksum_refunds_without_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import BARCODE_UNREADABLE
+
+    seen: list[str] = []
+
+    def fail_lookup(code: str):
+        seen.append(code)
+        raise AssertionError("lookup must not run")
+
+    monkeypatch.setenv("AI_SINGLE_CALL", "false")
+    monkeypatch.setattr("src.ai_analyzer.analysis_runner.lookup_product", fail_lookup)
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {"type": "barcode", "barcode": "4600536004106", "confidence": 0.4}
+            )
+        }
+    )
+
+    result = await runner.analyze_activity(text=None, image_path="/tmp/code.jpg")
+
+    assert result.type == "unknown"
+    assert result.unknown_reason == BARCODE_UNREADABLE
+    assert seen == []
+    assert [stage for _, _, stage in runner.calls] == ["classify"]
+
+
+@pytest.mark.asyncio
+async def test_barcode_database_missing_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import PRODUCT_DB_UNAVAILABLE
+
+    def missing(_code: str):
+        raise FileNotFoundError("catalog")
+
+    monkeypatch.setenv("AI_SINGLE_CALL", "true")
+    monkeypatch.setattr("src.ai_analyzer.analysis_runner.lookup_product", missing)
+    runner = FakeRunner(
+        responses={
+            "classify": json.dumps(
+                {"type": "barcode", "barcode": "4600536004105", "confidence": 0.9}
+            )
+        }
+    )
+
+    result = await runner.analyze_auto(text=None, image_path="/tmp/code.jpg")
+
+    assert result.unknown_reason == PRODUCT_DB_UNAVAILABLE
+    assert [stage for _, _, stage in runner.calls] == ["classify"]
+

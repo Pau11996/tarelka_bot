@@ -11,6 +11,7 @@ from src.bot.services.formatting import (
     format_activity_result,
     format_analysis_result,
     format_favorites_list,
+    format_water_result,
 )
 from src.bot.services.messaging import (
     answer_ephemeral,
@@ -19,7 +20,7 @@ from src.bot.services.messaging import (
     schedule_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.db.models import EntryType
+from src.db.models import DIARY_ENTRY_TYPES, EntryType
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult, NutrientItem
 
@@ -78,7 +79,7 @@ async def add_meal_to_favorites(callback: CallbackQuery, session) -> None:
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+    if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -123,6 +124,24 @@ async def add_favorite_to_today(callback: CallbackQuery, session, cleanup: Messa
             callback.message,
             cleanup,
             result_text=format_activity_result(result, balance),
+            entry_id=entry.id,
+            with_meal_actions=True,
+            is_profile_complete=is_profile_complete,
+        )
+        await callback.answer("Добавлено в сегодня")
+        return
+
+    if favorite.entry_type == EntryType.WATER:
+        entry, balance = await service.save_water_from_favorite(user=user, favorite=favorite)
+        result = AnalysisResult(
+            type="water",
+            title=favorite.title,
+            volume_ml=favorite.volume_ml,
+        )
+        await send_result_card(
+            callback.message,
+            cleanup,
+            result_text=format_water_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
             is_profile_complete=is_profile_complete,

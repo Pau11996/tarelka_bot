@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api, apiFailureMessage } from "../../api";
 import { useAuth } from "../../auth";
-import { kcal } from "../../format";
+import { kcal, ml } from "../../format";
 import { colors } from "../../theme";
 import type { Favorite } from "../../types";
 import { ErrorText, ScreenTitle } from "../../ui";
@@ -62,9 +62,13 @@ export default function FavoritesScreen() {
           <Pressable key={item.id} style={styles.row} onPress={() => void logFavorite(item)}>
             <View style={styles.rowText}>
               <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.muted}>{item.entry_type === "activity" ? "Активность" : "Еда"}</Text>
+              <Text style={styles.muted}>
+                {item.entry_type === "activity" ? "Активность" : item.entry_type === "water" ? "Вода" : "Еда"}
+              </Text>
             </View>
-            <Text style={styles.calories}>{kcal(item.calories)}</Text>
+            <Text style={styles.calories}>
+              {item.entry_type === "water" ? ml(item.volume_ml ?? 0) : kcal(item.calories)}
+            </Text>
             <Pressable onPress={() => void remove(item)} hitSlop={8}>
               <Text style={styles.remove}>Удалить</Text>
             </Pressable>

@@ -135,6 +135,31 @@ def coach_refresh_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def week_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="AI анализ пищевых привычек за неделю",
+                    callback_data="coach:habits",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Подбор ПП продуктов под ваш рацион",
+                    callback_data="coach:pp",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Аналитика активности",
+                    callback_data="coach:activity",
+                )
+            ],
+        ]
+    )
+
+
 def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
     button_text = (
         f"Продлить за {settings.subscription_price_stars}⭐"

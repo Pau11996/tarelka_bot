@@ -236,6 +236,7 @@ export default function ChatScreen() {
           const message = sent[entry.id];
           const when = clock(entry.created_at);
           const activity = entry.entry_type === "activity";
+          const water = entry.entry_type === "water";
           const revised = previousCalories[entry.id] !== undefined;
           return <View key={entry.id} style={s.exchange}>
             {message ? <View style={s.userGroup}>
@@ -247,9 +248,10 @@ export default function ChatScreen() {
               {message.text ? <View style={s.userBubble}><Text style={s.bodyText}>{message.text}</Text></View> : null}
               {when ? <Text style={s.time}>{when}</Text> : null}
             </View> : null}
-            {revised && !activity ? <View style={s.assistantBubble}><Text style={s.bodyText}>Уточнила порцию.</Text></View> : null}
-            <EntryCard entry={entry} disabled={busy} fromPhoto={Boolean(message?.photos?.length)} previousCalories={previousCalories[entry.id]} time={when} onCorrect={() => correct(entry)} />
-            {activity ? <View style={s.assistantBubble}><Text style={s.bodyText}>Отлично! Записала в дневник.</Text></View> : null}
+            {revised && !activity && !water ? <View style={s.assistantBubble}><Text style={s.bodyText}>Уточнила порцию.</Text></View> : null}
+            {revised && water ? <View style={s.assistantBubble}><Text style={s.bodyText}>Уточнила объём.</Text></View> : null}
+            <EntryCard entry={entry} disabled={busy} fromPhoto={Boolean(message?.photos?.length)} previousCalories={water ? undefined : previousCalories[entry.id]} time={when} onCorrect={() => correct(entry)} />
+            {(activity || water) && !revised ? <View style={s.assistantBubble}><Text style={s.bodyText}>Отлично! Записала в дневник.</Text></View> : null}
             {notedId === entry.id ? <View style={s.note}><Text style={s.noteText}>Любую запись можно исправить прямо в чате.</Text></View> : null}
           </View>;
         })}

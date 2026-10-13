@@ -78,6 +78,7 @@ class EntryService:
             carbs_g=result.carbs_g,
             micronutrients=result.micronutrients,
             items=[item.model_dump() for item in result.items],
+            meal_slot=result.meal_slot,
             ai_analysis_id=analysis.id,
         )
 
@@ -185,6 +186,8 @@ class EntryService:
             micronutrients=result.micronutrients,
             items=[item.model_dump() for item in result.items],
             duration_minutes=entry.duration_minutes,
+            meal_slot=result.meal_slot if result.meal_slot is not None else entry.meal_slot,
+            volume_ml=None,
             ai_analysis_id=analysis.id,
         )
 
@@ -229,6 +232,8 @@ class EntryService:
             micronutrients=None,
             items=None,
             duration_minutes=result.duration_minutes,
+            meal_slot=None,
+            volume_ml=None,
             ai_analysis_id=analysis.id,
         )
 
@@ -283,6 +288,120 @@ class EntryService:
             title=favorite.title,
             calories=favorite.calories,
             duration_minutes=favorite.duration_minutes,
+        )
+
+        entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
+        return entry, balance
+
+    async def save_water_from_analysis(
+        self,
+        *,
+        user: User,
+        analysis_type: AnalysisType,
+        input_text: str | None,
+        image_path: str | None,
+        raw_response: str,
+        result: AnalysisResult,
+    ) -> tuple[DayEntry, object]:
+        profile = await self.repo.get_profile(user.id)
+        if profile is None:
+            raise ValueError("Profile not found")
+
+        analysis = await self.repo.create_analysis(
+            user_id=user.id,
+            analysis_type=analysis_type,
+            input_text=input_text,
+            image_path=image_path,
+            previous_analysis_id=None,
+            raw_response=raw_response,
+            parsed_json=result.model_dump(),
+            confidence=result.confidence,
+        )
+
+        entry = await self.repo.create_entry(
+            user_id=user.id,
+            entry_date=local_today(user.timezone),
+            entry_type=EntryType.WATER,
+            title=result.title or "Вода",
+            calories=0.0,
+            volume_ml=result.volume_ml,
+            ai_analysis_id=analysis.id,
+        )
+
+        entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
+        balance = await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
+        return entry, balance
+
+    async def update_water_from_correction(
+        self,
+        *,
+        user: User,
+        entry: DayEntry,
+        correction_text: str,
+        raw_response: str,
+        result: AnalysisResult,
+        image_path: str | None = None,
+    ) -> object:
+        profile = await self.repo.get_profile(user.id)
+        if profile is None:
+            raise ValueError("Profile not found")
+
+        previous_analysis_id = entry.ai_analysis_id
+        analysis = await self.repo.create_analysis(
+            user_id=user.id,
+            analysis_type=AnalysisType.CORRECTION,
+            input_text=correction_text,
+            image_path=image_path,
+            previous_analysis_id=previous_analysis_id,
+            raw_response=raw_response,
+            parsed_json=result.model_dump(),
+            confidence=result.confidence,
+        )
+        volume_ml = result.volume_ml if result.type == "water" and result.volume_ml else entry.volume_ml
+        title = result.title if result.type == "water" and result.title else entry.title
+
+        await self.repo.update_entry(
+            entry,
+            title=title,
+            calories=0.0,
+            protein_g=0.0,
+            fat_g=0.0,
+            carbs_g=0.0,
+            micronutrients=None,
+            items=None,
+            duration_minutes=None,
+            meal_slot=None,
+            volume_ml=volume_ml,
+            ai_analysis_id=analysis.id,
+        )
+
+        entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)
+        return await self._balance_with_streak(
+            user, profile.daily_calorie_target, entries
+        )
+
+    async def save_water_from_favorite(
+        self,
+        *,
+        user: User,
+        favorite: FavoriteMeal,
+    ) -> tuple[DayEntry, object]:
+        profile = await self.repo.get_profile(user.id)
+        if profile is None:
+            raise ValueError("Profile not found")
+
+        entry = await self.repo.create_entry(
+            user_id=user.id,
+            entry_date=local_today(user.timezone),
+            entry_type=EntryType.WATER,
+            title=favorite.title,
+            calories=0.0,
+            volume_ml=favorite.volume_ml,
         )
 
         entries = await self.repo.get_entries_for_date(user.id, entry.entry_date)

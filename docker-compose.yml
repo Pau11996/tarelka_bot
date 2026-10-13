@@ -23,8 +23,10 @@ services:
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,ai_analyzer,bot}
+      PRODUCT_DB_PATH: /opt/data/green_by_products.sqlite
     volumes:
       - ./logs:/opt/logs
+      - ./data:/opt/data:ro
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -73,10 +75,12 @@ services:
       - "${LANDING_PORT:-8080}:80"
     environment:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
+      LANDING_BOT_USERNAME: ${LANDING_BOT_USERNAME:-taarelka_bot}
       TELEGRAM_FEEDBACK_CHAT: ${TELEGRAM_FEEDBACK_CHAT:-}
       LANDING_TITLE: ${LANDING_TITLE:-ТАРЕЛКА}
       LANDING_HOST: ${LANDING_HOST:-tarelkaa.by}
       LANDING_ORIGIN: ${LANDING_ORIGIN:-https://tarelkaa.by}
+      GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-G-DBX8MSSJDK}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help.4posts@gmail.com}
       LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-Администратор сервиса ТАРЕЛКА}
       FREE_DAILY_LIMIT: ${DAILY_REQUEST_LIMIT:-6}

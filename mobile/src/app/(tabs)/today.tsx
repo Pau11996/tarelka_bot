@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api, apiFailureMessage } from "../../api";
 import { useAuth } from "../../auth";
-import { grams, kcal } from "../../format";
+import { grams, kcal, mealHeading, ml } from "../../format";
 import { colors } from "../../theme";
 import type { DayView, Entry } from "../../types";
 import { ErrorText, PrimaryButton, ScreenTitle } from "../../ui";
@@ -74,6 +74,7 @@ function BalanceCard({ day }: { day: DayView }) {
       <Text style={styles.muted}>
         съедено {kcal(balance.consumed)}
         {balance.activity_bonus > 0 ? ` · активность ${kcal(balance.activity_bonus)}` : ""}
+        {` · вода ${ml(balance.water_ml ?? 0)}`}
         {balance.streak ? ` · серия ${balance.streak} дн.` : ""}
       </Text>
       <View style={styles.macros}>
@@ -98,13 +99,17 @@ function Macro({ label, value, target }: { label: string; value: string; target:
 
 function EntryRow({ entry, onPress }: { entry: Entry; onPress: () => void }) {
   const activity = entry.entry_type === "activity";
+  const water = entry.entry_type === "water";
+  const title = activity || water ? entry.title : mealHeading(entry.title, entry.meal_slot);
+  const kind = water ? "Вода" : activity ? "Активность" : "Еда";
+  const amount = water ? ml(entry.volume_ml ?? 0) : activity ? `−${kcal(entry.calories)}` : kcal(entry.calories);
   return (
     <Pressable onPress={onPress} style={styles.row}>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{entry.title}</Text>
-        <Text style={styles.muted}>{activity ? "Активность" : "Еда"}</Text>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.muted}>{kind}</Text>
       </View>
-      <Text style={styles.rowCalories}>{activity ? `−${kcal(entry.calories)}` : kcal(entry.calories)}</Text>
+      <Text style={styles.rowCalories}>{amount}</Text>
     </Pressable>
   );
 }

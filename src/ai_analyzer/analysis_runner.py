@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -14,9 +15,33 @@ from src.ai_analyzer.prompts import (
     CORRECTION_PROMPT,
     MEAL_CALCULATION_PROMPT,
     PHOTO_DETAIL_PROMPT,
+    WATER_CALCULATION_PROMPT,
     build_coach_week_prompt,
 )
-from src.shared.schemas import AnalysisResult, CoachWeekReview
+from src.ai_analyzer.products import (
+    BARCODE_UNREADABLE,
+    ESTIMATE_ASSUMPTION,
+    LABEL_ASSUMPTION,
+    PRODUCT_DB_UNAVAILABLE,
+    PRODUCT_NOT_FOUND,
+    CatalogProduct,
+    LabelNutrition,
+    barcode_digits,
+    ean_checksum_ok,
+    is_plain_water,
+    lookup_product,
+    package_grams,
+    parse_energy_cost,
+    product_title,
+    volume_ml,
+)
+from src.shared.schemas import (
+    AnalysisResult,
+    CoachWeekReview,
+    NutrientItem,
+    apply_typed_result,
+    normalize_meal_slot,
+)
 
 _TRUTHY = {"true", "1", "yes", "on"}
 PHOTO_NO_FOOD_REASON = "На фото нет еды"
@@ -54,6 +79,65 @@ def _unknown_result(
         needs_clarification=False,
         clarification_question=None,
     )
+
+
+def _meal_from_label(
+    title: str,
+    product: CatalogProduct,
+    label: LabelNutrition,
+    meal_slot: str | None,
+    confidence: float,
+) -> AnalysisResult:
+    grams, assumed = package_grams(product.volume, product.weight_g)
+    factor = grams / label.basis_g
+    calories = round(label.kcal * factor, 1)
+    protein_g = round(label.protein_g * factor, 1)
+    fat_g = round(label.fat_g * factor, 1)
+    carbs_g = round(label.carbs_g * factor, 1)
+    fiber_g = round(label.fiber_g * factor, 1)
+    quantity = f"{grams:.0f} г"
+    result = AnalysisResult(
+        type="meal",
+        title=title,
+        items=[
+            NutrientItem(
+                name=title,
+                quantity=quantity,
+                calories=calories,
+                protein_g=protein_g,
+                fat_g=fat_g,
+                carbs_g=carbs_g,
+            )
+        ],
+        total_calories=calories,
+        protein_g=protein_g,
+        fat_g=fat_g,
+        carbs_g=carbs_g,
+        micronutrients={"fiber_g": fiber_g, "sugar_g": 0.0},
+        confidence=confidence,
+        assumptions=[LABEL_ASSUMPTION],
+        meal_slot=meal_slot,
+        portion_assumed=assumed,
+        needs_clarification=False,
+        clarification_question=None,
+    )
+    return apply_typed_result(result)
+
+
+def _water_from_catalog(title: str, product: CatalogProduct, confidence: float) -> AnalysisResult:
+    milliliters = volume_ml(product.volume)
+    assumed = milliliters is None
+    result = AnalysisResult(
+        type="water",
+        title=title,
+        confidence=confidence,
+        assumptions=["Объём из базы продуктов."] if not assumed else ["Объём воды в базе не указан."],
+        volume_ml=milliliters,
+        portion_assumed=assumed,
+        needs_clarification=False,
+        clarification_question=None,
+    )
+    return apply_typed_result(result)
 
 
 _BODY_METRIC_KEYS = ("weight_kg", "height_cm", "age", "sex", "activity_level")
@@ -158,6 +242,11 @@ class BaseAnalysisRunner:
                 f"{_format_body_metrics(profile_context)}"
                 f"Identification JSON:\n{json.dumps(identification, ensure_ascii=False)}\n"
             )
+        elif result_type == "water":
+            prompt = (
+                f"{WATER_CALCULATION_PROMPT}\n"
+                f"Identification JSON:\n{json.dumps(identification, ensure_ascii=False)}\n"
+            )
         else:
             prompt = (
                 f"{MEAL_CALCULATION_PROMPT}\n"
@@ -199,6 +288,8 @@ class BaseAnalysisRunner:
             result.carbs_g = 0.0
             result.items = []
             result.portion_assumed = False
+            result.meal_slot = None
+            result.volume_ml = None
             if not result.unknown_reason:
                 result.unknown_reason = DEFAULT_UNKNOWN_REASON
             result.needs_clarification = False
@@ -206,6 +297,7 @@ class BaseAnalysisRunner:
             return result
         if forced_type:
             result.type = forced_type
+        result = apply_typed_result(result)
         result.needs_clarification = False
         result.clarification_question = None
         return result
@@ -218,16 +310,19 @@ class BaseAnalysisRunner:
         profile_context: dict | None = None,
         forced_type: str | None = None,
         on_progress: ProgressCallback = None,
+        classification: dict | None = None,
     ) -> AnalysisResult:
-        classification = await self._classify(
-            text=text,
-            image_path=image_path,
-            profile_context=profile_context,
-        )
+        if classification is None:
+            classification = await self._classify(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+            )
         classified_type = str(classification.get("type", "unknown")).lower()
         confidence = float(classification.get("confidence", 0) or 0)
         title = str(classification.get("title") or "")
         unknown_reason = classification.get("unknown_reason")
+        classified_slot = normalize_meal_slot(classification.get("meal_slot"))
 
         async def _unknown(
             *,
@@ -249,7 +344,7 @@ class BaseAnalysisRunner:
                 reason=str(unknown_reason) if unknown_reason else DEFAULT_UNKNOWN_REASON,
             )
 
-        if classified_type not in {"meal", "activity"}:
+        if classified_type not in {"meal", "activity", "water"}:
             return await _unknown(reason=DEFAULT_UNKNOWN_REASON)
 
         result_type = forced_type if forced_type else classified_type
@@ -281,9 +376,14 @@ class BaseAnalysisRunner:
                     confidence=float(detail.get("confidence", confidence) or confidence),
                 )
             identification["title"] = str(detail.get("title") or title)
-            identification["components"] = list(detail.get("components") or [])
             identification["assumptions"] = list(detail.get("assumptions") or [])
             identification["confidence"] = float(detail.get("confidence", confidence) or confidence)
+            if result_type == "water":
+                identification["volume_ml"] = detail.get("volume_ml")
+                identification["meal_slot"] = None
+            else:
+                identification["components"] = list(detail.get("components") or [])
+                identification["meal_slot"] = classified_slot
             if result_type == "activity":
                 identification["activity"] = detail.get("activity") or {
                     "name": identification["title"],
@@ -297,8 +397,12 @@ class BaseAnalysisRunner:
                     "duration_minutes": classification.get("duration_minutes"),
                     "intensity": classification.get("intensity"),
                 }
+            elif result_type == "water":
+                identification["volume_ml"] = classification.get("volume_ml")
+                identification["meal_slot"] = None
             else:
                 identification["components"] = list(classification.get("components") or [])
+                identification["meal_slot"] = classified_slot
 
         await _notify_progress(on_progress, "calculate", type=result_type)
         result = await self._calculate(
@@ -307,6 +411,107 @@ class BaseAnalysisRunner:
             profile_context=profile_context,
         )
         result.type = result_type
+        result = apply_typed_result(result)
+        if result.type == "meal" and result.meal_slot is None:
+            result.meal_slot = classified_slot
+        result.needs_clarification = False
+        result.clarification_question = None
+        result.unknown_reason = None
+        return result
+
+    async def _analyze_image(
+        self,
+        *,
+        text: str | None,
+        image_path: str,
+        profile_context: dict | None,
+        input_label: str = "User input",
+        forced_type: str | None = None,
+        on_progress: ProgressCallback = None,
+    ) -> AnalysisResult:
+        classification = await self._classify(
+            text=text,
+            image_path=image_path,
+            profile_context=profile_context,
+        )
+        if str(classification.get("type", "")).lower() == "barcode":
+            return await self._resolve_barcode(
+                classification,
+                text=text,
+                on_progress=on_progress,
+            )
+        if single_call_enabled():
+            return await self._analyze_single(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label=input_label,
+                forced_type=forced_type,
+            )
+        return await self._analyze_staged(
+            text=text,
+            image_path=image_path,
+            profile_context=profile_context,
+            forced_type=forced_type,
+            on_progress=on_progress,
+            classification=classification,
+        )
+
+    async def _resolve_barcode(
+        self,
+        classification: dict,
+        *,
+        text: str | None,
+        on_progress: ProgressCallback,
+    ) -> AnalysisResult:
+        confidence = float(classification.get("confidence", 0) or 0)
+        meal_slot = normalize_meal_slot(classification.get("meal_slot"))
+        del text
+        await _notify_progress(on_progress, "classified", type="barcode")
+        code = barcode_digits(classification.get("barcode"))
+        if not ean_checksum_ok(code):
+            return _unknown_result(unknown_reason=BARCODE_UNREADABLE, confidence=confidence)
+
+        try:
+            product = lookup_product(code)
+        except (FileNotFoundError, sqlite3.Error):
+            return _unknown_result(unknown_reason=PRODUCT_DB_UNAVAILABLE, confidence=confidence)
+        if product is None:
+            return _unknown_result(unknown_reason=PRODUCT_NOT_FOUND, confidence=confidence)
+
+        label = parse_energy_cost(product.energy_cost)
+        title = product_title(product.title, product.brand)
+        if label is not None and is_plain_water(title, label):
+            return _water_from_catalog(title, product, confidence)
+        if label is not None:
+            return _meal_from_label(title, product, label, meal_slot, confidence)
+
+        await _notify_progress(on_progress, "calculate", type="meal")
+        grams, assumed = package_grams(product.volume, product.weight_g)
+        quantity = f"{grams:.0f} г"
+        identification = {
+            "type": "meal",
+            "title": title,
+            "meal_slot": meal_slot,
+            "components": [{"name": title, "estimated_weight_g": grams}],
+        }
+        description = (
+            f"Упаковка продукта из базы: {title}. "
+            f"Вес упаковки: {quantity}. "
+            "В базе нет пригодной таблицы КБЖУ. Оцени калории и БЖУ всей упаковки."
+        )
+        result = await self._calculate(
+            identification=identification,
+            text=description,
+            profile_context=None,
+        )
+        result.type = "meal"
+        result = apply_typed_result(result)
+        result.meal_slot = meal_slot
+        result.title = result.title or title
+        result.portion_assumed = assumed
+        if ESTIMATE_ASSUMPTION not in result.assumptions:
+            result.assumptions.append(ESTIMATE_ASSUMPTION)
         result.needs_clarification = False
         result.clarification_question = None
         result.unknown_reason = None
@@ -320,6 +525,15 @@ class BaseAnalysisRunner:
         profile_context: dict | None = None,
         on_progress: ProgressCallback = None,
     ) -> AnalysisResult:
+        if image_path:
+            return await self._analyze_image(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="meal",
+                on_progress=on_progress,
+            )
         if single_call_enabled():
             return await self._analyze_single(
                 text=text,
@@ -344,6 +558,13 @@ class BaseAnalysisRunner:
         profile_context: dict | None = None,
         on_progress: ProgressCallback = None,
     ) -> AnalysisResult:
+        if image_path:
+            return await self._analyze_image(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                on_progress=on_progress,
+            )
         if single_call_enabled():
             return await self._analyze_single(
                 text=text,
@@ -357,6 +578,39 @@ class BaseAnalysisRunner:
             on_progress=on_progress,
         )
 
+    async def analyze_water(
+        self,
+        *,
+        text: str | None,
+        image_path: str | None,
+        profile_context: dict | None = None,
+        on_progress: ProgressCallback = None,
+    ) -> AnalysisResult:
+        if image_path:
+            return await self._analyze_image(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="water",
+                on_progress=on_progress,
+            )
+        if single_call_enabled():
+            return await self._analyze_single(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="water",
+            )
+        return await self._analyze_staged(
+            text=text,
+            image_path=image_path,
+            profile_context=profile_context,
+            forced_type="water",
+            on_progress=on_progress,
+        )
+
     async def analyze_activity(
         self,
         *,
@@ -365,6 +619,15 @@ class BaseAnalysisRunner:
         profile_context: dict | None = None,
         on_progress: ProgressCallback = None,
     ) -> AnalysisResult:
+        if image_path:
+            return await self._analyze_image(
+                text=text,
+                image_path=image_path,
+                profile_context=profile_context,
+                input_label="User description",
+                forced_type="activity",
+                on_progress=on_progress,
+            )
         if single_call_enabled():
             return await self._analyze_single(
                 text=text,

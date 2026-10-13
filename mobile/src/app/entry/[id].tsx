@@ -4,7 +4,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { api, apiFailureMessage } from "../../api";
 import { useAuth } from "../../auth";
-import { grams, kcal } from "../../format";
+import { grams, kcal, mealHeading, ml } from "../../format";
 import { colors } from "../../theme";
 import type { AnalyzeResponse, Entry } from "../../types";
 import { ErrorText, Field, PrimaryButton, SecondaryButton } from "../../ui";
@@ -101,18 +101,23 @@ export default function EntryScreen() {
   }
 
   const activity = entry.entry_type === "activity";
+  const water = entry.entry_type === "water";
+  const title = activity || water ? entry.title : mealHeading(entry.title, entry.meal_slot);
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>{entry.title}</Text>
-      <Text style={styles.calories}>{activity ? `Сожжено ${kcal(entry.calories)}` : kcal(entry.calories)}</Text>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.calories}>
+        {water ? ml(entry.volume_ml ?? 0) : activity ? `Сожжено ${kcal(entry.calories)}` : kcal(entry.calories)}
+      </Text>
       {activity && entry.duration_minutes ? <Text style={styles.muted}>{entry.duration_minutes} мин</Text> : null}
-      {!activity ? (
+      {!activity && !water ? (
         <Text style={styles.muted}>
           Б {grams(entry.protein_g)} · Ж {grams(entry.fat_g)} · У {grams(entry.carbs_g)}
         </Text>
       ) : null}
-      {entry.items?.map((item, index) => (
+      {!water
+        ? entry.items?.map((item, index) => (
         <View key={`${item.name}-${index}`} style={styles.item}>
           <Text style={styles.itemTitle}>{item.name}</Text>
           <Text style={styles.muted}>
@@ -120,11 +125,18 @@ export default function EntryScreen() {
             {kcal(item.calories)}
           </Text>
         </View>
-      ))}
+      ))
+        : null}
       <Field
         value={correction}
         onChangeText={setCorrection}
-        placeholder={activity ? "Например: пробежка 45 минут" : "Например: рис 180 г, курица 120 г"}
+        placeholder={
+          water
+            ? "Например: 500 мл"
+            : activity
+              ? "Например: пробежка 45 минут"
+              : "Например: рис 180 г, курица 120 г"
+        }
         multiline
         style={styles.multiline}
       />

@@ -14,6 +14,7 @@ from src.bot.services.formatting import (
     format_activity_result,
     format_analysis_result,
     format_unknown_result,
+    format_water_result,
     profile_context,
 )
 from src.bot.services.messaging import (
@@ -50,6 +51,8 @@ STATUS_CLASSIFY = f"Определяю тип ввода...\n\n{ANALYSIS_DURATIO
 STATUS_PHOTO_DETAIL = f"Разбираю состав по фото...\n\n{ANALYSIS_DURATION_HINT}"
 STATUS_CALCULATE = f"Считаю калории...\n\n{ANALYSIS_DURATION_HINT}"
 STATUS_ACTIVITY = f"Анализирую активность...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_WATER = f"Считаю воду...\n\n{ANALYSIS_DURATION_HINT}"
+STATUS_BARCODE = f"Ищу продукт по штрихкоду...\n\n{ANALYSIS_DURATION_HINT}"
 STATUS_ANALYZE_PHOTO = f"Определяю тип ввода...\n\n{ANALYSIS_DURATION_HINT}"
 STATUS_ANALYZE_TEXT = f"Определяю тип ввода...\n\n{ANALYSIS_DURATION_HINT}"
 STATUS_ANALYZE_VOICE = f"Слушаю голосовое...\n\n{ANALYSIS_DURATION_HINT}"
@@ -62,12 +65,20 @@ def progress_status_text(
     transcript: str | None = None,
 ) -> str | None:
     result_type = str(payload.get("type") or "")
-    if event == "classified" and result_type == "activity":
+    if event == "classified" and result_type == "barcode":
+        body = STATUS_BARCODE
+    elif event == "classified" and result_type == "activity":
         body = STATUS_ACTIVITY
+    elif event == "classified" and result_type == "water":
+        body = STATUS_WATER
+    elif event == "photo_detail" and result_type == "water":
+        body = STATUS_WATER
     elif event == "photo_detail":
         body = STATUS_PHOTO_DETAIL
     elif event == "calculate" and result_type == "activity":
         body = STATUS_ACTIVITY
+    elif event == "calculate" and result_type == "water":
+        body = STATUS_WATER
     elif event == "calculate":
         body = STATUS_CALCULATE
     else:
@@ -288,6 +299,30 @@ async def _save_and_send_text_result(
         )
         return
 
+    if result.type == "water":
+        entry, balance = await service.save_water_from_analysis(
+            user=user,
+            analysis_type=AnalysisType.FOOD_TEXT,
+            input_text=input_text,
+            image_path=None,
+            raw_response=raw,
+            result=result,
+        )
+        await reward_referrer_after_first_analysis(
+            message.bot,
+            service.repo,
+            referred_user_id=user.id,
+        )
+        await send_result_card(
+            message,
+            cleanup,
+            result_text=format_water_result(result, balance),
+            entry_id=entry.id,
+            with_meal_actions=True,
+            is_profile_complete=is_profile_complete,
+        )
+        return
+
     entry, balance = await service.save_meal_from_analysis(
         user=user,
         analysis_type=AnalysisType.FOOD_TEXT,
@@ -398,6 +433,31 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             cleanup,
             photo_file_id=photo_file_id,
             result_text=format_activity_result(result, balance),
+            entry_id=entry.id,
+            with_meal_actions=True,
+            is_profile_complete=profile.is_complete(),
+        )
+        return
+
+    if result.type == "water":
+        entry, balance = await service.save_water_from_analysis(
+            user=user,
+            analysis_type=AnalysisType.FOOD_PHOTO,
+            input_text=message.caption,
+            image_path=photo_file_id,
+            raw_response=raw,
+            result=result,
+        )
+        await reward_referrer_after_first_analysis(
+            message.bot,
+            service.repo,
+            referred_user_id=user.id,
+        )
+        await _delete_original_and_send_photo_result(
+            message,
+            cleanup,
+            photo_file_id=photo_file_id,
+            result_text=format_water_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
             is_profile_complete=profile.is_complete(),

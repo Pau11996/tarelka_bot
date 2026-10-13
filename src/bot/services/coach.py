@@ -219,6 +219,62 @@ def format_period_label(start: date, end: date) -> str:
     )
 
 
+def _count_phrase(count: int, one: str, few: str, many: str) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        word = one
+    elif count % 10 in {2, 3, 4} and count % 100 not in {12, 13, 14}:
+        word = few
+    else:
+        word = many
+    return f"{count} {word}"
+
+
+def format_activity_report(entries: list[DayEntry], *, start: date, end: date) -> str:
+    activities = [
+        entry
+        for entry in entries
+        if entry.entry_type == EntryType.ACTIVITY and start <= _entry_day(entry) <= end
+    ]
+    period = escape(format_period_label(start, end))
+    if not activities:
+        return (
+            f"<b>Активность {period}</b>\n"
+            "За эту неделю тренировок пока нет.\n\n"
+            "Отправьте текстом или голосом, что делали: пробежка, зал, ходьба."
+        )
+
+    by_day: dict[date, list[DayEntry]] = defaultdict(list)
+    for entry in activities:
+        by_day[_entry_day(entry)].append(entry)
+    total_minutes = sum(entry.duration_minutes or 0 for entry in activities)
+    total_calories = sum(entry.calories for entry in activities)
+    summary = (
+        f"<b>Активность {period}</b>\n"
+        f"{_count_phrase(len(activities), 'запись', 'записи', 'записей')} "
+        f"за {_count_phrase(len(by_day), 'день', 'дня', 'дней')}. "
+        f"Сожжено {total_calories:.0f} ккал"
+    )
+    if total_minutes:
+        summary += f", {total_minutes} мин"
+    lines = [summary + "."]
+    for day in sorted(by_day):
+        lines.append(f"\n<b>{escape(format_day_label(day))}</b>")
+        day_entries = sorted(
+            by_day[day],
+            key=lambda entry: entry.created_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+        for entry in day_entries:
+            parts = [escape(entry.title or "Активность")]
+            if entry.duration_minutes:
+                parts.append(f"{entry.duration_minutes} мин")
+            parts.append(f"{entry.calories:.0f} ккал")
+            lines.append("• " + ", ".join(parts))
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        return text[:3990].rstrip() + "…"
+    return text
+
+
 def _skip_text(day: DayDigest) -> list[str]:
     label = format_day_label(day.day)
     lines: list[str] = []

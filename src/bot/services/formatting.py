@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from html import escape
 
+from src.ai_analyzer.products import BARCODE_FAILURES, ESTIMATE_ASSUMPTION
 from src.db.models import DayEntry, EntryType, FavoriteMeal, Profile
 from src.bot.services.nutrition import DailyBalance, calculate_daily_nutrient_targets
-from src.shared.schemas import AnalysisResult, TRACKED_MICRONUTRIENTS
+from src.shared.schemas import MEAL_SLOTS, AnalysisResult, TRACKED_MICRONUTRIENTS
 
 
 SEX_LABELS = {
@@ -127,6 +128,7 @@ def format_daily_balance(
         f"Норма: {balance.target:.0f} ккал\n"
         f"Съедено: {balance.consumed:.0f} ккал\n"
         f"Активность: +{balance.activity_bonus:.0f} ккал\n"
+        f"Вода: {balance.water_ml:.0f} мл\n"
         f"\n<b>ОСТАЛОСЬ: {balance.remaining:.0f} ккал</b>\n\n"
         f"{format_calorie_bar(balance.consumed, balance.target, activity_bonus=balance.activity_bonus)}"
     )
@@ -163,13 +165,20 @@ def format_daily_balance(
     return text
 
 
+def format_meal_title(title: str, meal_slot: str | None) -> str:
+    label = MEAL_SLOTS.get(meal_slot or "")
+    if label:
+        return f"{label} · {title}"
+    return title
+
+
 def format_analysis_result(
     result: AnalysisResult,
     balance: DailyBalance | None = None,
     *,
     streak: int | None = None,
 ) -> str:
-    title = escape(result.title or "Анализ")
+    title = escape(format_meal_title(result.title or "Анализ", result.meal_slot))
     lines = [f"🍽 {title}", f"Калории: {result.total_calories:.0f} ккал"]
     lines.append(
         f"БЖУ: Б {result.protein_g:.1f} г | Ж {result.fat_g:.1f} г | У {result.carbs_g:.1f} г"
@@ -195,6 +204,9 @@ def format_analysis_result(
             "Нажмите «Изменить», чтобы уточнить."
         )
 
+    if ESTIMATE_ASSUMPTION in result.assumptions:
+        lines.append(f"\n{ESTIMATE_ASSUMPTION}")
+
     if balance:
         lines.append(
             f"\n{format_daily_balance(balance, include_micronutrients=False, streak=streak)}"
@@ -204,7 +216,13 @@ def format_analysis_result(
 
 
 def format_unknown_result(result: AnalysisResult | None = None) -> str:
-    del result
+    reason = result.unknown_reason if result is not None else None
+    if reason in BARCODE_FAILURES:
+        return (
+            f"❓ {reason}\n"
+            "Калории: 0 ккал\n"
+            "Запись в дневник не добавлена."
+        )
     return (
         "❓ Неизвестный ввод\n"
         "Калории: 0 ккал\n"
@@ -231,19 +249,52 @@ def format_activity_result(
     return "\n".join(lines)
 
 
+def format_water_result(
+    result: AnalysisResult,
+    balance: DailyBalance | None = None,
+    *,
+    streak: int | None = None,
+) -> str:
+    volume = result.volume_ml or 0
+    lines = [
+        f"💧 {escape(result.title or 'Вода')}",
+        f"Объём: {volume:.0f} мл",
+    ]
+    if result.portion_assumed:
+        lines.append(
+            "\nОбъём не указан — взято 250 мл. "
+            "Нажмите «Изменить», чтобы уточнить."
+        )
+    if balance:
+        lines.append(
+            f"\n{format_daily_balance(balance, include_micronutrients=False, streak=streak)}"
+        )
+    return "\n".join(lines)
+
+
 def format_entry_list(entries: list[DayEntry]) -> str:
     if not entries:
         return "За сегодня записей пока нет."
 
     lines = ["📝 Записи за сегодня:"]
     for entry in entries:
-        prefix = "🍽" if entry.entry_type == EntryType.MEAL else "🏃"
-        sign = "-" if entry.entry_type == EntryType.MEAL else "+"
-        lines.append(f"{prefix} {escape(entry.title)}: {sign}{entry.calories:.0f} ккал")
+        if entry.entry_type == EntryType.WATER:
+            lines.append(f"💧 {escape(entry.title)}: {(entry.volume_ml or 0):.0f} мл")
+            continue
+        if entry.entry_type == EntryType.MEAL:
+            title = escape(format_meal_title(entry.title, entry.meal_slot))
+            lines.append(f"🍽 {title}: -{entry.calories:.0f} ккал")
+            continue
+        lines.append(f"🏃 {escape(entry.title)}: +{entry.calories:.0f} ккал")
     return "\n".join(lines)
 
 
 def format_favorite_meal(favorite: FavoriteMeal) -> str:
+    if favorite.entry_type == EntryType.WATER:
+        return (
+            f"💧 {escape(favorite.title)}\n"
+            f"Объём: {(favorite.volume_ml or 0):.0f} мл"
+        )
     lines = [
         f"🍽 {escape(favorite.title)}",
         f"Калории: {favorite.calories:.0f} ккал",
@@ -273,6 +324,11 @@ def format_favorites_list(favorites: list[FavoriteMeal]) -> str:
 
     lines = ["⭐ Избранное", ""]
     for index, favorite in enumerate(favorites, start=1):
+        if favorite.entry_type == EntryType.WATER:
+            lines.append(
+                f"{index}. 💧 {escape(favorite.title)} — {(favorite.volume_ml or 0):.0f} мл"
+            )
+            continue
         prefix = "🍽" if favorite.entry_type == EntryType.MEAL else "🏃"
         lines.append(f"{index}. {prefix} {escape(favorite.title)} — {favorite.calories:.0f} ккал")
     lines.append("\nНажмите ➕, чтобы добавить запись в сегодняшний дневник.")

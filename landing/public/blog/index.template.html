@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блог о калориях, порциях и дневнике питания | ${LANDING_TITLE}</title>
+    <meta name="description" content="Как считать калории по фото и по рецепту, оценивать порции и вести дневник питания. Практические статьи, калькулятор порции и бесплатный шаблон.">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <link rel="canonical" href="${LANDING_ORIGIN}/blog/">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ru_RU">
+    <meta property="og:site_name" content="${LANDING_TITLE}">
+    <meta property="og:title" content="Блог о калориях, порциях и дневнике питания">
+    <meta property="og:description" content="Как считать калории по фото и по рецепту, оценивать порции и вести дневник питания. Практические статьи, калькулятор порции и бесплатный шаблон.">
+    <meta property="og:url" content="${LANDING_ORIGIN}/blog/">
+    <meta property="og:image" content="${LANDING_ORIGIN}/images/social-home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Блог о калориях, порциях и дневнике питания">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Блог о калориях, порциях и дневнике питания">
+    <meta name="twitter:description" content="Как считать калории по фото и по рецепту, оценивать порции и вести дневник питания. Практические статьи, калькулятор порции и бесплатный шаблон.">
+    <meta name="twitter:image" content="${LANDING_ORIGIN}/images/social-home.png">
+    <meta name="theme-color" content="#1a4030">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/home.css">
+    <link rel="stylesheet" href="/blog.css">
+    <script src="/home.js" defer></script>
+    
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "${LANDING_ORIGIN}/#organization",
+      "name": "${LANDING_TITLE}",
+      "url": "${LANDING_ORIGIN}/about/",
+      "logo": "${LANDING_ORIGIN}/logo-mark.svg",
+      "sameAs": [
+        "https://t.me/${LANDING_BOT_USERNAME}"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "${LANDING_ORIGIN}/#website",
+      "name": "${LANDING_TITLE}",
+      "url": "${LANDING_ORIGIN}/",
+      "inLanguage": "ru",
+      "publisher": {
+        "@id": "${LANDING_ORIGIN}/#organization"
+      }
+    },
+    {
+      "@type": "CollectionPage",
+      "@id": "${LANDING_ORIGIN}/blog/#page",
+      "url": "${LANDING_ORIGIN}/blog/",
+      "name": "Блог о калориях и дневнике питания",
+      "inLanguage": "ru",
+      "isPartOf": {
+        "@id": "${LANDING_ORIGIN}/#website"
+      },
+      "mainEntity": {
+        "@id": "${LANDING_ORIGIN}/blog/#blog"
+      }
+    },
+    {
+      "@type": "Blog",
+      "@id": "${LANDING_ORIGIN}/blog/#blog",
+      "name": "Блог ${LANDING_TITLE}",
+      "url": "${LANDING_ORIGIN}/blog/",
+      "publisher": {
+        "@id": "${LANDING_ORIGIN}/#organization"
+      },
+      "blogPost": [
+        {
+          "@id": "${LANDING_ORIGIN}/blog/tochnost-kalorij-po-foto/#article",
+          "@type": "BlogPosting",
+          "headline": "Насколько точен подсчёт калорий по фото",
+          "url": "${LANDING_ORIGIN}/blog/tochnost-kalorij-po-foto/"
+        },
+        {
+          "@id": "${LANDING_ORIGIN}/blog/kalorijnost-gotovogo-blyuda/#article",
+          "@type": "BlogPosting",
+          "headline": "Как рассчитать калорийность готового блюда",
+          "url": "${LANDING_ORIGIN}/blog/kalorijnost-gotovogo-blyuda/"
+        },
+        {
+          "@id": "${LANDING_ORIGIN}/blog/dnevnik-pitaniya/#article",
+          "@type": "BlogPosting",
+          "headline": "Как вести дневник питания: пример и шаблон на неделю",
+          "url": "${LANDING_ORIGIN}/blog/dnevnik-pitaniya/"
+        }
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Главная",
+          "item": "${LANDING_ORIGIN}/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Блог",
+          "item": "${LANDING_ORIGIN}/blog/"
+        }
+      ]
+    }
+  ]
+}
+    </script>
+    ${GA_TAG_HTML}
+</head>
+<body class="landing-page journal-page" id="top">
+    <a class="lp-skip" href="#main">К содержимому</a>
+    <header class="lp-header">
+        <div class="lp-container lp-header-inner">
+            <a class="logo lp-logo" href="/" aria-label="${LANDING_TITLE} — на главную"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a>
+            <button class="lp-menu-toggle" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="main-nav"><span></span><span></span></button>
+            <nav class="lp-nav" id="main-nav" aria-label="Основная навигация">
+                <a href="/#features">Возможности</a><a href="/#pricing">Тарифы</a><a href="/blog/">Блог</a><a href="/about/">О сервисе</a>
+                <a class="lp-button lp-button-small" href="https://t.me/${LANDING_BOT_USERNAME}?start=blog_header" target="_blank" rel="noopener noreferrer">Открыть в Telegram <span aria-hidden="true">↗</span></a>
+            </nav>
+        </div>
+    </header>
+<main id="main"><section class="journal-intro lp-container"><nav class="breadcrumbs" aria-label="Хлебные крошки"><ol><li><a href="/">Главная</a></li><li aria-current="page">Блог</li></ol></nav><span class="journal-category">Блог «Тарелки»</span><h1>Разберёмся,<br>что у вас <span>на тарелке.</span></h1><p>Понятные инструкции про калории, порции и дневник питания.<br>С примерами, которые можно проверить на своём обеде.</p></section><section class="journal-list lp-container" aria-labelledby="articles-title"><div class="journal-list-heading"><h2 id="articles-title">Начните с вопроса, который вам знаком</h2><span>3 материала</span></div><div class="journal-grid"><article class="journal-card">
+    <a class="journal-card-image" href="/blog/tochnost-kalorij-po-foto/" tabindex="-1" aria-hidden="true"><img src="/images/blog-photo.png" width="1200" height="630" loading="lazy" alt=""></a>
+    <div class="journal-card-copy"><span class="journal-category">Калории по фото</span><h3><a href="/blog/tochnost-kalorij-po-foto/">Насколько точен подсчёт калорий по фото</a></h3><p>Что видно на снимке, какие добавки легко пропустить и как уточнить результат бота.</p><span class="journal-reading">5 минут чтения <span aria-hidden="true">↗</span></span></div>
+</article><article class="journal-card">
+    <a class="journal-card-image" href="/blog/kalorijnost-gotovogo-blyuda/" tabindex="-1" aria-hidden="true"><img src="/images/blog-recipe.png" width="1200" height="630" loading="lazy" alt=""></a>
+    <div class="journal-card-copy"><span class="journal-category">Расчёты и порции</span><h3><a href="/blog/kalorijnost-gotovogo-blyuda/">Как рассчитать калорийность готового блюда</a></h3><p>Сухой и готовый вес, понятная формула и калькулятор калорийности своей порции.</p><span class="journal-reading">6 минут чтения <span aria-hidden="true">↗</span></span></div>
+</article><article class="journal-card">
+    <a class="journal-card-image" href="/blog/dnevnik-pitaniya/" tabindex="-1" aria-hidden="true"><img src="/images/blog-diary.png" width="1200" height="630" loading="lazy" alt=""></a>
+    <div class="journal-card-copy"><span class="journal-category">Дневник питания</span><h3><a href="/blog/dnevnik-pitaniya/">Как вести дневник питания: пример и шаблон на неделю</a></h3><p>Какие поля заполнять, как исправлять записи и с чего начать. Пустой шаблон на неделю.</p><span class="journal-reading">5 минут чтения <span aria-hidden="true">↗</span></span></div>
+</article></div></section><section class="journal-tools lp-container" aria-labelledby="tools-title"><div><span class="journal-category">Сохраните под рукой</span><h2 id="tools-title">Для ваших записей и расчётов</h2></div><a href="/blog/kalorijnost-gotovogo-blyuda/#calculator"><strong>Калькулятор порции</strong><span>Ккал на 100 г и на свою тарелку</span><b aria-hidden="true">↗</b></a><a href="/blog/dnevnik-pitaniya/#template"><strong>Шаблон дневника</strong><span>Пустая таблица на неделю в CSV</span><b aria-hidden="true">↗</b></a></section>
+<section class="journal-editorial lp-container"><h2>Проверяем цифры, объясняем ограничения</h2><p>Указываем источники и отделяем пример от измерения. Оценку по фото можно уточнить, а расчёт по рецепту повторить самостоятельно.</p><a href="/about/#editorial">Как готовятся материалы <span aria-hidden="true">↗</span></a></section></main>    <footer class="lp-footer"><div class="lp-container">
+        <div class="lp-footer-top">
+            <div><a class="logo lp-logo" href="/"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a><p>Дневник питания в Telegram.<br>Фото, текст и голос.</p></div>
+            <div class="lp-footer-column"><strong>Материалы</strong><a href="/blog/">Все статьи</a><a href="/blog/dnevnik-pitaniya/">Шаблон дневника питания</a><a href="/blog/kalorijnost-gotovogo-blyuda/#calculator">Калькулятор порции</a></div>
+            <div class="lp-footer-column"><strong>О сервисе</strong><a href="/about/">О «Тарелке» и редакции</a><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>${FEEDBACK_LINK_HTML}</div>
+        </div>
+        <div class="lp-footer-bottom"><span>© ${LANDING_TITLE}</span><a href="/privacy.html">Конфиденциальность</a><a href="/terms.html">Условия использования</a></div>
+        <p class="lp-disclaimer">Расчёты калорий и нутриентов приблизительные. Материалы не заменяют индивидуальную консультацию специалиста.</p>
+    </div></footer>
+</body>
+</html>

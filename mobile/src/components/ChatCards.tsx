@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
 import type { DayView, Entry } from "../types";
+import { mealHeading, ml } from "../format";
 import { BrandMark, Icon } from "./Brand";
 
 export function AssistantLabel() {
@@ -16,9 +17,33 @@ export function EntryCard({ entry, onCorrect, disabled, fromPhoto, previousCalor
   time?: string;
 }) {
   const activity = entry.entry_type === "activity";
+  const water = entry.entry_type === "water";
   const revised = previousCalories !== undefined;
   const details = entry.items?.map((item) => item.name).filter(Boolean).join(", ");
   const caloriesChanged = revised && Math.round(previousCalories) !== Math.round(entry.calories);
+  const title = activity || water ? entry.title : mealHeading(entry.title, entry.meal_slot);
+  if (water) {
+    return <View style={s.response}>
+      <AssistantLabel />
+      <View style={s.card}>
+        <View style={s.activityHeading}>
+          <View style={s.walk}><Icon name="drop" color={colors.accent} /></View>
+          <View style={s.flex}>
+            <Text style={s.title}>{title}</Text>
+            <Text style={s.description}>{ml(entry.volume_ml ?? 0)}</Text>
+          </View>
+        </View>
+        <View style={s.savedRow}>
+          <Icon name="check" size={16} color={colors.accent} />
+          <Text style={s.saved}>Вода сохранена</Text>
+          {time ? <Text style={s.time}>{time}</Text> : null}
+        </View>
+        <Pressable accessibilityRole="button" disabled={disabled} onPress={onCorrect} style={s.quietEdit}>
+          <Text style={s.link}>Уточнить объём</Text>
+        </Pressable>
+      </View>
+    </View>;
+  }
   return <View style={s.response}>
     <AssistantLabel />
     <View style={s.card}>
@@ -26,7 +51,7 @@ export function EntryCard({ entry, onCorrect, disabled, fromPhoto, previousCalor
         <View style={s.activityHeading}>
           <View style={s.walk}><Icon name="walk" color={colors.accent} /></View>
           <View style={s.flex}>
-            <Text style={s.title}>{entry.title}</Text>
+            <Text style={s.title}>{title}</Text>
             <Text style={s.description}>{entry.duration_minutes ? `${entry.duration_minutes} минут` : `≈ ${Math.round(entry.calories)} ккал`}</Text>
           </View>
         </View>
@@ -40,7 +65,7 @@ export function EntryCard({ entry, onCorrect, disabled, fromPhoto, previousCalor
         </Pressable>
       </> : <>
         {revised ? <Text style={s.kicker}>Запись · обновлено</Text> : fromPhoto ? <View style={s.photoChip}><Icon name="camera" size={14} color={colors.accent} /><Text style={s.kicker}>Фото</Text></View> : null}
-        <Text style={s.title}>{entry.title}</Text>
+        <Text style={s.title}>{title}</Text>
         {details ? <Text style={s.description}>{details}</Text> : null}
         <View style={s.calorieRow}>
           <Text style={s.approx}>≈</Text>
@@ -68,11 +93,17 @@ export function EntryCard({ entry, onCorrect, disabled, fromPhoto, previousCalor
 
 export function DaySummary({ day, onPress }: { day: DayView; onPress: () => void }) {
   const minutes = day.entries.reduce((sum, entry) => sum + (entry.duration_minutes ?? 0), 0);
+  const water = day.balance.water_ml ?? 0;
+  const parts = [
+    minutes ? `${minutes} мин движения` : "",
+    water > 0 ? `${Math.round(water)} мл воды` : "",
+  ].filter(Boolean);
+  const summary = parts.length ? parts.join(" · ") : "Все записи за сегодня";
   return <Pressable accessibilityRole="button" accessibilityLabel="Открыть дневник" onPress={onPress} style={s.summary}>
     <View style={s.between}><Text style={s.summaryTitle}>Твой день</Text><Text style={s.summaryHint}>{new Date(`${day.date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</Text></View>
     <View style={s.calorieRow}><Text style={s.summaryCalories}>{Math.round(day.balance.consumed).toLocaleString("ru-RU")}</Text><Text style={s.summaryHint}>ккал из еды</Text></View>
     <View style={[s.divider, { backgroundColor: "#3a4f43" }]} />
-    <View style={s.between}><View style={s.activityHeading}><Icon name="walk" color={colors.lime} size={22} /><Text style={s.summaryBody}>{minutes ? `${minutes} мин движения` : "Все записи за сегодня"}</Text></View><Icon name="chevron" color={colors.lime} size={20} /></View>
+    <View style={s.between}><View style={s.activityHeading}><Icon name="walk" color={colors.lime} size={22} /><Text style={s.summaryBody}>{summary}</Text></View><Icon name="chevron" color={colors.lime} size={20} /></View>
   </Pressable>;
 }
 

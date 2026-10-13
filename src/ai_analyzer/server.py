@@ -109,6 +109,13 @@ async def _run_analysis(
             profile_context=profile_context,
             on_progress=on_progress,
         )
+    if mode == "water":
+        return await runner.analyze_water(
+            text=text,
+            image_path=image_path,
+            profile_context=profile_context,
+            on_progress=on_progress,
+        )
     return await runner.analyze_food(
         text=text,
         image_path=image_path,

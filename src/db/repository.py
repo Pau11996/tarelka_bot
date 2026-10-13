@@ -380,6 +380,8 @@ class UserRepository:
         micronutrients: dict[str, Any] | None = None,
         items: list[dict[str, Any]] | None = None,
         duration_minutes: int | None = None,
+        meal_slot: str | None = None,
+        volume_ml: float | None = None,
         ai_analysis_id: int | None = None,
     ) -> DayEntry:
         entry = DayEntry(
@@ -394,6 +396,8 @@ class UserRepository:
             micronutrients=micronutrients,
             items=items,
             duration_minutes=duration_minutes,
+            meal_slot=meal_slot,
+            volume_ml=volume_ml,
             ai_analysis_id=ai_analysis_id,
         )
         self.session.add(entry)
@@ -458,6 +462,8 @@ class UserRepository:
         items: list[dict[str, Any]] | None,
         ai_analysis_id: int | None,
         duration_minutes: int | None = None,
+        meal_slot: str | None = None,
+        volume_ml: float | None = None,
     ) -> DayEntry:
         entry.title = title
         entry.calories = calories
@@ -467,6 +473,8 @@ class UserRepository:
         entry.micronutrients = micronutrients
         entry.items = items
         entry.duration_minutes = duration_minutes
+        entry.meal_slot = meal_slot
+        entry.volume_ml = volume_ml
         entry.ai_analysis_id = ai_analysis_id
         await self.session.commit()
         await self.session.refresh(entry)
@@ -512,6 +520,7 @@ class UserRepository:
             micronutrients=entry.micronutrients,
             items=entry.items,
             duration_minutes=entry.duration_minutes,
+            volume_ml=entry.volume_ml,
         )
         self.session.add(favorite)
         await self.session.commit()

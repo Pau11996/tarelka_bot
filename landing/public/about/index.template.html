@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>О «Тарелке»: сервис, блог и контакты | ${LANDING_TITLE}</title>
+    <meta name="description" content="Как работает Telegram-бот «Тарелка», как готовятся материалы блога и куда написать об ошибке. Источники, ограничения расчётов и контакты поддержки.">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <link rel="canonical" href="${LANDING_ORIGIN}/about/">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ru_RU">
+    <meta property="og:site_name" content="${LANDING_TITLE}">
+    <meta property="og:title" content="О «Тарелке»: сервис, блог и контакты">
+    <meta property="og:description" content="Как работает Telegram-бот «Тарелка», как готовятся материалы блога и куда написать об ошибке. Источники, ограничения расчётов и контакты поддержки.">
+    <meta property="og:url" content="${LANDING_ORIGIN}/about/">
+    <meta property="og:image" content="${LANDING_ORIGIN}/images/social-home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="О «Тарелке»: сервис, блог и контакты">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="О «Тарелке»: сервис, блог и контакты">
+    <meta name="twitter:description" content="Как работает Telegram-бот «Тарелка», как готовятся материалы блога и куда написать об ошибке. Источники, ограничения расчётов и контакты поддержки.">
+    <meta name="twitter:image" content="${LANDING_ORIGIN}/images/social-home.png">
+    <meta name="theme-color" content="#1a4030">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/home.css">
+    <link rel="stylesheet" href="/blog.css">
+    <script src="/home.js" defer></script>
+    
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "${LANDING_ORIGIN}/#organization",
+      "name": "${LANDING_TITLE}",
+      "url": "${LANDING_ORIGIN}/about/",
+      "logo": "${LANDING_ORIGIN}/logo-mark.svg",
+      "sameAs": [
+        "https://t.me/${LANDING_BOT_USERNAME}"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "${LANDING_ORIGIN}/#website",
+      "name": "${LANDING_TITLE}",
+      "url": "${LANDING_ORIGIN}/",
+      "inLanguage": "ru",
+      "publisher": {
+        "@id": "${LANDING_ORIGIN}/#organization"
+      }
+    },
+    {
+      "@type": "AboutPage",
+      "@id": "${LANDING_ORIGIN}/about/#page",
+      "url": "${LANDING_ORIGIN}/about/",
+      "name": "О сервисе ${LANDING_TITLE}",
+      "inLanguage": "ru",
+      "isPartOf": {
+        "@id": "${LANDING_ORIGIN}/#website"
+      },
+      "mainEntity": {
+        "@id": "${LANDING_ORIGIN}/#organization"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Главная",
+          "item": "${LANDING_ORIGIN}/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "О сервисе",
+          "item": "${LANDING_ORIGIN}/about/"
+        }
+      ]
+    }
+  ]
+}
+    </script>
+    ${GA_TAG_HTML}
+</head>
+<body class="landing-page journal-page" id="top">
+    <a class="lp-skip" href="#main">К содержимому</a>
+    <header class="lp-header">
+        <div class="lp-container lp-header-inner">
+            <a class="logo lp-logo" href="/" aria-label="${LANDING_TITLE} — на главную"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a>
+            <button class="lp-menu-toggle" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="main-nav"><span></span><span></span></button>
+            <nav class="lp-nav" id="main-nav" aria-label="Основная навигация">
+                <a href="/#features">Возможности</a><a href="/#pricing">Тарифы</a><a href="/blog/">Блог</a><a href="/about/">О сервисе</a>
+                <a class="lp-button lp-button-small" href="https://t.me/${LANDING_BOT_USERNAME}?start=blog_header" target="_blank" rel="noopener noreferrer">Открыть в Telegram <span aria-hidden="true">↗</span></a>
+            </nav>
+        </div>
+    </header>
+<main id="main"><article class="journal-article"><div class="article-header lp-container"><nav class="breadcrumbs" aria-label="Хлебные крошки"><ol><li><a href="/">Главная</a></li><li aria-current="page">О сервисе</li></ol></nav><span class="journal-category">О сервисе и материалах</span><h1>Познакомьтесь с «Тарелкой»</h1></div><div class="article-body"><p class="article-answer">«Тарелка» — Telegram-бот для дневника питания. Он оценивает калории и БЖУ по фотографии, голосовому сообщению или тексту, сохраняет записи и показывает дневной баланс.</p>
+<h2>Как работает сервис</h2>
+<p>После отправки еды бот предлагает разбор блюда и размера порции. Результат можно исправить через кнопку «Редактировать». В дневнике доступны записи за день, статистика и избранные блюда. Персональная норма рассчитывается по данным профиля; для старта профиль заполнять необязательно.</p>
+<p>AI-оценка может ошибаться в составе и количестве еды. Мы показываем примерные расчёты и не обещаем определённый процент точности или результат снижения веса. Подробнее об ограничениях — в статье <a href="/blog/tochnost-kalorij-po-foto/">«Насколько точен подсчёт калорий по фото»</a>.</p>
+<h2 id="editorial">Как готовятся материалы блога</h2>
+<p>Блог выпускается от имени «Тарелки». Материалы подготовлены с помощью ИИ. В статьях отделены инструкции по сервису, арифметические примеры и сведения из внешних источников.</p>
+<p>Источники приведены рядом с соответствующими утверждениями и в конце статей. Примеры с продуктами и порциями иллюстративные: для своих расчётов используйте данные упаковки и фактический вес. Дата на странице показывает, когда материал был подготовлен или обновлён.</p>
+<p>У статей нет медицинской рецензии. Блог объясняет учёт еды и работу сервиса; рекомендации по лечению, лечебным диетам или индивидуальному дефициту калорий здесь не публикуются.</p>
+<h2>Связь и исправления</h2>
+<p>Если вы заметили ошибку в статье или расчёте, напишите на <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>. Укажите ссылку на страницу, спорный фрагмент и источник исправления, если он есть.</p>
+<p>Вопросы по работе бота можно отправить через <code>/feedback</code>, вопросы по оплате — через <code>/paysupport</code>.</p>
+<h2>Данные и условия использования</h2>
+<p>Порядок хранения и удаления данных описан в <a href="/privacy.html">политике конфиденциальности</a>. Лимиты и подписка указаны в <a href="/terms.html">условиях использования</a> и в <a href="/#pricing">разделе тарифов</a>.</p>
+</div></article></main>    <footer class="lp-footer"><div class="lp-container">
+        <div class="lp-footer-top">
+            <div><a class="logo lp-logo" href="/"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a><p>Дневник питания в Telegram.<br>Фото, текст и голос.</p></div>
+            <div class="lp-footer-column"><strong>Материалы</strong><a href="/blog/">Все статьи</a><a href="/blog/dnevnik-pitaniya/">Шаблон дневника питания</a><a href="/blog/kalorijnost-gotovogo-blyuda/#calculator">Калькулятор порции</a></div>
+            <div class="lp-footer-column"><strong>О сервисе</strong><a href="/about/">О «Тарелке» и редакции</a><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>${FEEDBACK_LINK_HTML}</div>
+        </div>
+        <div class="lp-footer-bottom"><span>© ${LANDING_TITLE}</span><a href="/privacy.html">Конфиденциальность</a><a href="/terms.html">Условия использования</a></div>
+        <p class="lp-disclaimer">Расчёты калорий и нутриентов приблизительные. Материалы не заменяют индивидуальную консультацию специалиста.</p>
+    </div></footer>
+</body>
+</html>

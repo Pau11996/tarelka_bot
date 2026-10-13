@@ -1,4 +1,14 @@
-export type EntryType = "meal" | "activity";
+export type EntryType = "meal" | "activity" | "water";
+
+export type MealSlot =
+  | "breakfast"
+  | "second_breakfast"
+  | "lunch"
+  | "lanch"
+  | "snack"
+  | "afternoon"
+  | "dinner"
+  | "late_dinner";
 
 export type NutrientItem = {
   name: string;
@@ -21,6 +31,8 @@ export type Entry = {
   micronutrients: Record<string, number> | null;
   items: NutrientItem[] | null;
   duration_minutes: number | null;
+  meal_slot: MealSlot | null;
+  volume_ml: number | null;
   created_at: string | null;
 };
 
@@ -33,6 +45,7 @@ export type Balance = {
   fat_g: number;
   carbs_g: number;
   micronutrients: Record<string, number>;
+  water_ml: number;
   streak: number | null;
 };
 
@@ -63,6 +76,7 @@ export type Favorite = {
   fat_g: number;
   carbs_g: number;
   duration_minutes: number | null;
+  volume_ml: number | null;
   source_entry_id: number | null;
 };
 

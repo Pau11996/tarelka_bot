@@ -16,6 +16,7 @@ from src.bot.services.coach import (
     build_week_digest,
     decide_week_action,
     digest_facts,
+    format_activity_report,
     format_week_message,
     process_sunday_coach_pushes,
     should_send_sunday_review,
@@ -84,6 +85,31 @@ def _digest(entries: list[DayEntry], local_now: datetime):
 
 def test_sunday_date_used_by_push_window() -> None:
     assert SUNDAY.weekday() == 6
+
+
+def test_activity_report_lists_workouts_and_empty_week() -> None:
+    start = date(2026, 10, 6)
+    end = date(2026, 10, 12)
+    run = _activity(date(2026, 10, 7), calories=250)
+    run.title = "пробежка"
+    run.duration_minutes = 30
+    gym = _activity(date(2026, 10, 9), calories=400)
+    gym.title = "зал"
+    gym.duration_minutes = 45
+    meal = _meal(date(2026, 10, 7), 12, title="гречка")
+
+    text = format_activity_report([meal, gym, run], start=start, end=end)
+    assert "6–12 октября" in text
+    assert "2 записи" in text
+    assert "за 2 дня" in text
+    assert "650 ккал" in text
+    assert "75 мин" in text
+    assert "пробежка, 30 мин, 250 ккал" in text
+    assert "зал, 45 мин, 400 ккал" in text
+    assert "гречка" not in text
+
+    empty = format_activity_report([meal], start=start, end=end)
+    assert "тренировок пока нет" in empty
 
 
 def test_empty_day_single_meal_and_long_gap() -> None:

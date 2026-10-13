@@ -12,7 +12,7 @@ from src.bot.keyboards.menus import correction_entries_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
 from src.bot.services.analysis_errors import ANALYSIS_DURATION_HINT, ANALYSIS_UNAVAILABLE
 from src.bot.services.entry_service import EntryService
-from src.bot.services.formatting import format_activity_result, format_analysis_result
+from src.bot.services.formatting import format_activity_result, format_analysis_result, format_water_result
 from src.bot.services.messaging import (
     answer_ephemeral,
     edit_ephemeral,
@@ -22,8 +22,9 @@ from src.bot.services.messaging import (
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.request_limit import ensure_request_allowed
 from src.bot.states import CorrectionStates
-from src.db.models import EntryType
+from src.db.models import DIARY_ENTRY_TYPES, EntryType
 from src.db.repository import UserRepository
+from src.shared.schemas import AnalysisResult
 
 router = Router()
 ai_client = AIAnalyzerClient()
@@ -40,6 +41,19 @@ def _format_current_items(items: list[dict] | None) -> str:
         quantity = escape(str(item.get("quantity") or "вес не указан"))
         lines.append(f"{name} {quantity}")
     return "\n".join(lines)
+
+
+def _format_current_water(entry) -> str:
+    volume = entry.volume_ml or 0
+    return f"Текущая вода: {escape(entry.title)}\nОбъём: {volume:.0f} мл"
+
+
+def _correction_mode(entry_type: EntryType) -> str:
+    if entry_type == EntryType.ACTIVITY:
+        return "activity"
+    if entry_type == EntryType.WATER:
+        return "water"
+    return "meal"
 
 
 def _format_current_activity(entry) -> str:
@@ -116,7 +130,7 @@ async def edit_meal_card(
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+    if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -131,6 +145,12 @@ async def edit_meal_card(
             f"{_format_current_activity(entry)}\n\n"
             "Отправьте исправленное описание активности одним сообщением.\n"
             "Например: «пробежка 45 минут» или «ходьба 60 мин, легкий темп»."
+        )
+    elif entry.entry_type == EntryType.WATER:
+        prompt_text = (
+            f"{_format_current_water(entry)}\n\n"
+            "Отправьте исправленный объём одним сообщением.\n"
+            "Например: «500 мл» или «два стакана»."
         )
     else:
         prompt_text = (
@@ -158,7 +178,7 @@ async def delete_meal_card(callback: CallbackQuery, state: FSMContext, session) 
     repo = UserRepository(session)
     user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+    if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
         await callback.answer("Запись не найдена", show_alert=True)
         return
 
@@ -168,6 +188,8 @@ async def delete_meal_card(callback: CallbackQuery, state: FSMContext, session) 
     except Exception:
         if entry.entry_type == EntryType.ACTIVITY:
             deleted_text = "Запись удалена. Сожженные калории убраны из статистики."
+        elif entry.entry_type == EntryType.WATER:
+            deleted_text = "Запись удалена. Вода убрана из дневника."
         else:
             deleted_text = "Запись удалена. Калории и БЖУ убраны из статистики."
         try:
@@ -199,7 +221,7 @@ async def apply_correction(
     repo = UserRepository(session)
     user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
     entry = await repo.get_entry(entry_id, user.id)
-    if entry is None or entry.entry_type not in {EntryType.MEAL, EntryType.ACTIVITY}:
+    if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
         await state.clear()
         await answer_ephemeral(message, cleanup, "Запись не найдена.", track_user=False)
         schedule_user_message(cleanup, message)
@@ -221,7 +243,7 @@ async def apply_correction(
         f"Пересчитываю с учетом исправления...\n\n{ANALYSIS_DURATION_HINT}",
         track_user=False,
     )
-    analysis_mode = "activity" if entry.entry_type == EntryType.ACTIVITY else "meal"
+    analysis_mode = _correction_mode(entry.entry_type)
     try:
         raw, result = await ai_client.analyze_text(
             mode=analysis_mode,
@@ -250,6 +272,21 @@ async def apply_correction(
             image_path=None,
         )
         result_text = format_activity_result(result, balance)
+    elif entry.entry_type == EntryType.WATER:
+        balance = await service.update_water_from_correction(
+            user=user,
+            entry=entry,
+            correction_text=message.text,
+            raw_response=raw,
+            result=result,
+            image_path=None,
+        )
+        shown = result if result.type == "water" else AnalysisResult(
+            type="water",
+            title=entry.title,
+            volume_ml=entry.volume_ml,
+        )
+        result_text = format_water_result(shown, balance)
     else:
         balance = await service.update_meal_from_correction(
             user=user,

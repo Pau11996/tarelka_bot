@@ -4,14 +4,14 @@ import logging
 from datetime import datetime, timezone
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.handlers.subscription import format_subscription_status, show_subscription_screen
-from src.bot.keyboards.menus import coach_refresh_keyboard, subscription_keyboard
+from src.bot.keyboards.menus import coach_refresh_keyboard, subscription_keyboard, week_menu_keyboard
 from src.bot.services.coach import (
     COACH_FAILED_TEXT,
     MIN_LOGGED_DAYS,
@@ -20,19 +20,31 @@ from src.bot.services.coach import (
     calendar_week_start,
     decide_week_action,
     digest_facts,
+    format_activity_report,
     load_week_digest,
+    rolling_week,
     week_review_allowed,
     write_review_text,
 )
 from src.bot.services.diary_nudges import local_now_for_timezone
-from src.bot.services.messaging import answer_persistent
+from src.bot.services.messaging import answer_persistent, answer_photo_persistent
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.pp_picks import (
+    CATALOG_UNAVAILABLE,
+    FALLBACK_NOTE,
+    card_caption,
+    load_pp_catalog,
+    meal_phrases,
+    pick_pp_cards,
+)
 from src.db.models import CoachReview
 from src.db.repository import UserRepository
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+WEEK_MENU_TEXT = "Что показать по этой неделе?"
 
 
 def _keyboard_for(refresh_used: bool):
@@ -116,6 +128,31 @@ async def _open_week(
     return action
 
 
+async def _send_pp_picks(message: Message, session, *, telegram_id: int) -> None:
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(telegram_id, settings.default_timezone)
+    local_now = local_now_for_timezone(user.timezone, datetime.now(timezone.utc))
+    start, end = rolling_week(local_now.date())
+    entries = await repo.get_entries_for_period(user.id, start, end)
+    catalog = load_pp_catalog()
+    if catalog.is_empty():
+        await answer_persistent(message, CATALOG_UNAVAILABLE)
+        return
+    cards, used_staples = pick_pp_cards(catalog, meal_phrases(entries))
+    if not cards:
+        await answer_persistent(message, CATALOG_UNAVAILABLE)
+        return
+    if used_staples:
+        await answer_persistent(message, FALLBACK_NOTE)
+    for card in cards:
+        caption = card_caption(card)
+        try:
+            await answer_photo_persistent(message, photo=card.image_url, caption=caption)
+        except TelegramAPIError:
+            logger.exception("PP card photo failed for product_id=%s", card.product_id)
+            await answer_persistent(message, caption)
+
+
 @router.message(Command("week"))
 async def show_week(
     message: Message,
@@ -126,12 +163,84 @@ async def show_week(
     await state.clear()
     if message.from_user is None:
         return
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
+    if not week_review_allowed(user):
+        await show_subscription_screen(message, user, cleanup)
+        return
+    await answer_persistent(message, WEEK_MENU_TEXT, reply_markup=week_menu_keyboard())
+
+
+@router.callback_query(F.data == "coach:habits")
+async def show_week_habits(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+    cleanup: MessageCleanupService,
+) -> None:
+    await state.clear()
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    await callback.answer()
     await _open_week(
-        message,
+        callback.message,
         session,
         cleanup,
-        telegram_id=message.from_user.id,
+        telegram_id=callback.from_user.id,
         refresh=False,
+    )
+
+
+@router.callback_query(F.data == "coach:pp")
+async def show_week_pp(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+) -> None:
+    await state.clear()
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    if not week_review_allowed(user):
+        await callback.answer()
+        await callback.message.answer(
+            format_subscription_status(user),
+            reply_markup=subscription_keyboard(is_active=False),
+        )
+        return
+    await callback.answer()
+    await _send_pp_picks(callback.message, session, telegram_id=callback.from_user.id)
+
+
+@router.callback_query(F.data == "coach:activity")
+async def show_week_activity(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session,
+) -> None:
+    await state.clear()
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    if not week_review_allowed(user):
+        await callback.answer()
+        await callback.message.answer(
+            format_subscription_status(user),
+            reply_markup=subscription_keyboard(is_active=False),
+        )
+        return
+    await callback.answer()
+    local_now = local_now_for_timezone(user.timezone, datetime.now(timezone.utc))
+    start, end = rolling_week(local_now.date())
+    entries = await repo.get_entries_for_period(user.id, start, end)
+    await answer_persistent(
+        callback.message,
+        format_activity_report(entries, start=start, end=end),
     )
 
 

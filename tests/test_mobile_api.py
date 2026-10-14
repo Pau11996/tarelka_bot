@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from src.bot.config import settings as app_settings
 from src.db.models import Base, EntryType, Payment
 from src.db.repository import UserRepository
 from src.db.session import get_session
@@ -167,7 +168,9 @@ async def test_settings_notifications_and_account_deletion(api) -> None:
     assert settings.status_code == 200
     body = settings.json()
     assert body["notifications_enabled"] is True
-    assert body["referral_bonus_requests"] >= 1
+    assert body["referral_monthly_goal"] == app_settings.referral_monthly_goal
+    assert body["referral_progress"] == 0
+    assert body["referral_rewarded_this_month"] is False
     assert body["support_email"]
 
     updated = await client.put("/v1/settings/notifications", json={"enabled": False}, headers=headers)

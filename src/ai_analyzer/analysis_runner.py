@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from src.ai_analyzer.barcode import decode_product_barcode
 from src.ai_analyzer.parsing import extract_json_payload, parse_analysis_response, parse_coach_review
 from src.ai_analyzer.prompts import (
     ACTIVITY_CALCULATION_PROMPT,
@@ -40,8 +42,11 @@ from src.shared.schemas import (
     CoachWeekReview,
     NutrientItem,
     apply_typed_result,
+    meal_slot_from_text,
     normalize_meal_slot,
 )
+
+logger = logging.getLogger(__name__)
 
 _TRUTHY = {"true", "1", "yes", "on"}
 PHOTO_NO_FOOD_REASON = "На фото нет еды"
@@ -79,6 +84,20 @@ def _unknown_result(
         needs_clarification=False,
         clarification_question=None,
     )
+
+
+def _catalog_estimate_text(title: str, quantity: str, energy_cost: str | None) -> str:
+    raw_label = (energy_cost or "").strip()
+    if raw_label:
+        nutrition = (
+            "Сырой текст КБЖУ из базы, скрипт его не разобрал. "
+            "Если в тексте есть калории или БЖУ, используй эти числа и пересчитай на всю упаковку. "
+            "Если это не КБЖУ, оцени по названию и весу. "
+            f"Текст: {raw_label}"
+        )
+    else:
+        nutrition = "Текст КБЖУ в базе пустой. Оцени калории и БЖУ всей упаковки по названию и весу."
+    return f"Упаковка продукта из базы: {title}. Вес упаковки: {quantity}. {nutrition}"
 
 
 def _meal_from_label(
@@ -121,7 +140,13 @@ def _meal_from_label(
         needs_clarification=False,
         clarification_question=None,
     )
-    return apply_typed_result(result)
+    return _with_product_image(apply_typed_result(result), product)
+
+
+def _with_product_image(result: AnalysisResult, product: CatalogProduct) -> AnalysisResult:
+    if product.image_url:
+        result.product_image_url = product.image_url
+    return result
 
 
 def _water_from_catalog(title: str, product: CatalogProduct, confidence: float) -> AnalysisResult:
@@ -137,7 +162,7 @@ def _water_from_catalog(title: str, product: CatalogProduct, confidence: float) 
         needs_clarification=False,
         clarification_question=None,
     )
-    return apply_typed_result(result)
+    return _with_product_image(apply_typed_result(result), product)
 
 
 _BODY_METRIC_KEYS = ("weight_kg", "height_cm", "age", "sex", "activity_level")
@@ -429,6 +454,18 @@ class BaseAnalysisRunner:
         forced_type: str | None = None,
         on_progress: ProgressCallback = None,
     ) -> AnalysisResult:
+        decoded = decode_product_barcode(image_path)
+        if decoded:
+            return await self._resolve_barcode(
+                {
+                    "type": "barcode",
+                    "barcode": decoded,
+                    "meal_slot": meal_slot_from_text(text),
+                    "confidence": 1.0,
+                },
+                text=text,
+                on_progress=on_progress,
+            )
         classification = await self._classify(
             text=text,
             image_path=image_path,
@@ -479,7 +516,11 @@ class BaseAnalysisRunner:
         if product is None:
             return _unknown_result(unknown_reason=PRODUCT_NOT_FOUND, confidence=confidence)
 
-        label = parse_energy_cost(product.energy_cost)
+        try:
+            label = parse_energy_cost(product.energy_cost)
+        except (AttributeError, ValueError):
+            logger.exception("Catalog nutrition parse failed")
+            label = None
         title = product_title(product.title, product.brand)
         if label is not None and is_plain_water(title, label):
             return _water_from_catalog(title, product, confidence)
@@ -495,11 +536,7 @@ class BaseAnalysisRunner:
             "meal_slot": meal_slot,
             "components": [{"name": title, "estimated_weight_g": grams}],
         }
-        description = (
-            f"Упаковка продукта из базы: {title}. "
-            f"Вес упаковки: {quantity}. "
-            "В базе нет пригодной таблицы КБЖУ. Оцени калории и БЖУ всей упаковки."
-        )
+        description = _catalog_estimate_text(title, quantity, product.energy_cost)
         result = await self._calculate(
             identification=identification,
             text=description,
@@ -515,7 +552,7 @@ class BaseAnalysisRunner:
         result.needs_clarification = False
         result.clarification_question = None
         result.unknown_reason = None
-        return result
+        return _with_product_image(result, product)
 
     async def analyze_food(
         self,

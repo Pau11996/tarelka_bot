@@ -61,7 +61,12 @@
 .lp-phone-result { right: 4px; top: 7px; transform: rotate(5deg); }
 .lp-phone-screen { height: 100%; border: 3px solid #15251b; border-radius: 32px; overflow: hidden; background: #fff; position: relative; }
 .lp-camera-screen { color: #fff; background: #28452e; }
-.lp-camera-photo { width: 100%; height: 100%; object-fit: cover; object-position: 51% 50%; filter: brightness(.84); }
+.lp-meal { position: relative; display: block; overflow: hidden; background: radial-gradient(ellipse 70% 42% at 50% 56%, #f7f3ea 0 48%, #e6ddcf 49% 54%, transparent 55%), linear-gradient(165deg, #d8c6a8 0%, #a88462 48%, #7d6248 100%); }
+.lp-meal > span { position: absolute; border-radius: 50%; }
+.lp-meal > span:nth-child(1) { width: 36%; height: 20%; left: 16%; top: 44%; background: #f4edd8; }
+.lp-meal > span:nth-child(2) { width: 24%; height: 16%; right: 18%; top: 42%; background: #e0ad72; }
+.lp-meal > span:nth-child(3) { width: 12%; height: 9%; left: 40%; top: 60%; background: #d24b38; box-shadow: 18px -4px 0 #c4382e; }
+.lp-camera-photo { width: 100%; height: 100%; filter: brightness(.88); }
 .lp-phone-status { position: absolute; top: 10px; left: 15px; right: 15px; display: flex; align-items: center; justify-content: space-between; font-size: 8px; font-weight: 600; color: #fff; height: 14px; }
 .lp-phone-island { height: 14px; width: 61px; background: #142019; border-radius: 15px; position: absolute; left: 50%; transform: translateX(-50%); top: -3px; }
 .lp-camera-heading { position: absolute; top: 40px; left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: center; color: #fff; font-size: 9px; text-shadow: 0 1px 8px #142019; }
@@ -83,7 +88,7 @@
 .lp-camera-screen .lp-home-indicator { background: #fff; }
 .lp-drawn-arrow { position: absolute; width: 102px; height: 94px; left: 239px; top: 213px; color: var(--lp-forest); transform: rotate(-4deg); }
 .lp-result-photo { height: 180px; position: relative; }
-.lp-result-photo > img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 52%; filter: brightness(.88); }
+.lp-result-photo > .lp-meal { width: 100%; height: 100%; }
 .lp-food-label { position: absolute; padding: 5px 10px; border-radius: 8px; box-shadow: 0 3px 10px #14201912; font-size: 8px; background: #fff; line-height: 1.35; }
 .lp-food-label b { display: block; color: var(--lp-green-dark); font-size: 8px; }
 .lp-food-label-one { top: 82px; left: 9px; }
@@ -138,7 +143,7 @@
 .lp-demo-app-header { display: flex; align-items: center; gap: 6px; padding: 16px; font-size: 12px; color: var(--lp-forest); border-bottom: 1px solid #eef3ed; }
 .lp-demo-app-header img { width: 25px; height: auto; }
 .lp-demo-app-header > span { font-size: 9px; margin-left: auto; color: var(--lp-muted); }
-.lp-demo-food { width: 100%; height: 180px; object-fit: cover; object-position: 50% 50%; }
+.lp-demo-food { width: 100%; height: 180px; }
 .lp-demo-body { padding: 20px; }
 .lp-demo-body h3 { font-size: 18px; font-weight: 650; letter-spacing: -.4px; margin: 4px 0 16px; }
 .lp-demo-total { display: flex; align-items: center; gap: 5px; font-size: 29px; font-weight: 600; line-height: 1.4; }
@@ -219,7 +224,10 @@
 .lp-diary-card-bottom strong { font-size: 11px; font-weight: 500; }
 .lp-diary-card-bottom > div > span { font-size: 10px; color: #a9c5b4; }
 .lp-price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 852px; margin: 0 auto; }
-.lp-price-card { padding: 33px; border: 1px solid #dce8df; border-radius: 23px; }
+.lp-subscription { background: var(--lp-bg); }
+.lp-subscription .lp-benefit-icon { background: #fff; }
+.lp-subscription-note { max-width: 720px; margin: 32px auto 0 !important; text-align: center; color: var(--lp-muted); font-size: 13px; line-height: 1.8; }
+.lp-price-card { display: flex; flex-direction: column; padding: 33px; border: 1px solid #dce8df; border-radius: 23px; }
 .lp-price-premium { background: var(--lp-bg); border-color: #9ec9ad; }
 .lp-price-label { color: var(--lp-muted); font-size: 11px; }
 .lp-price-card h3 { margin: 9px 0 22px; font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 12px; }
@@ -230,7 +238,7 @@
 .lp-price-card ul { list-style: none; padding: 23px 0; margin: 20px 0 0; border-top: 1px solid #dce8df; display: grid; gap: 12px; }
 .lp-price-card li { font-size: 12px; padding-left: 24px; position: relative; }
 .lp-price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--lp-green-dark); }
-.lp-price-card .lp-button { width: 100%; font-size: 13px; margin-top: 7px; }
+.lp-price-card .lp-button { width: 100%; font-size: 13px; margin-top: auto; }
 .lp-price-note { text-align: center; color: var(--lp-muted); font-size: 11px; margin-top: 24px !important; line-height: 1.8; }
 .lp-faq { padding-top: 44px; }
 .lp-faq-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 90px; }

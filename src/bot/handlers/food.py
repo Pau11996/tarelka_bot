@@ -2,8 +2,9 @@ import logging
 
 import httpx
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import MENU_BUTTON_TEXTS, meal_card_keyboard
@@ -25,8 +26,9 @@ from src.bot.services.messaging import (
     schedule_user_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.product_image import card_photo_source, load_product_photo
 from src.bot.services.referrals import reward_referrer_after_first_analysis
-from src.bot.services.request_limit import RequestGrant, ensure_request_allowed, refund_request
+from src.bot.services.request_limit import RequestGrant, RequestKind, ensure_request_allowed, refund_request
 from src.bot.states import CorrectionStates, SurveyStates
 from src.db.models import AnalysisType
 from src.db.repository import UserRepository
@@ -136,6 +138,7 @@ async def _delete_original_and_send_photo_result(
     entry_id: int | None = None,
     with_meal_actions: bool = False,
     is_profile_complete: bool = True,
+    fallback_photo_file_id: str | None = None,
 ) -> None:
     try:
         await message.delete()
@@ -148,9 +151,18 @@ async def _delete_original_and_send_photo_result(
         result_text=result_text,
         entry_id=entry_id,
         photo_file_id=photo_file_id,
+        fallback_photo_file_id=fallback_photo_file_id,
         with_meal_actions=with_meal_actions,
         is_profile_complete=is_profile_complete,
     )
+
+
+async def _resolve_card_photo(photo: str | None) -> str | BufferedInputFile | None:
+    if not photo:
+        return None
+    if photo.startswith(("https://", "http://")):
+        return await load_product_photo(photo)
+    return photo
 
 
 async def send_result_card(
@@ -160,6 +172,7 @@ async def send_result_card(
     result_text: str,
     entry_id: int | None = None,
     photo_file_id: str | None = None,
+    fallback_photo_file_id: str | None = None,
     is_favorited: bool = False,
     with_meal_actions: bool = False,
     is_profile_complete: bool = True,
@@ -174,44 +187,76 @@ async def send_result_card(
         if with_meal_actions and entry_id is not None
         else None
     )
-    if not photo_file_id:
+    photo = await _resolve_card_photo(photo_file_id)
+    used_fallback = False
+    if photo is None and fallback_photo_file_id and fallback_photo_file_id != photo_file_id:
+        photo = await _resolve_card_photo(fallback_photo_file_id)
+        used_fallback = photo is not None
+    if photo is None:
         if persistent:
             await answer_persistent(message, result_text, reply_markup=reply_markup)
         else:
             await answer_ephemeral(message, cleanup, result_text, track_user=False)
         return
 
-    if len(result_text) <= MAX_PHOTO_CAPTION_LENGTH:
-        if persistent:
-            await answer_photo_persistent(
-                message,
-                photo=photo_file_id,
-                caption=result_text,
-                reply_markup=reply_markup,
-            )
-        else:
-            await answer_photo_ephemeral(
-                message,
-                cleanup,
-                track_user=False,
-                photo=photo_file_id,
-                caption=result_text,
-            )
-        return
-
-    title = result_text.splitlines()[0] if result_text else "Результат анализа"
-    if persistent:
-        await answer_photo_persistent(message, photo=photo_file_id, caption=title, reply_markup=reply_markup)
-        await answer_persistent(message, result_text, reply_markup=reply_markup)
-    else:
-        await answer_photo_ephemeral(
+    caption = result_text
+    if len(result_text) > MAX_PHOTO_CAPTION_LENGTH:
+        caption = result_text.splitlines()[0] if result_text else "Результат анализа"
+    try:
+        await _send_card_photo(
             message,
             cleanup,
-            track_user=False,
-            photo=photo_file_id,
-            caption=title,
+            photo=photo,
+            caption=caption,
+            reply_markup=reply_markup,
+            persistent=persistent,
         )
+    except TelegramBadRequest:
+        if used_fallback or not fallback_photo_file_id or fallback_photo_file_id == photo_file_id:
+            raise
+        fallback = await _resolve_card_photo(fallback_photo_file_id)
+        if fallback is None:
+            raise
+        await _send_card_photo(
+            message,
+            cleanup,
+            photo=fallback,
+            caption=caption,
+            reply_markup=reply_markup,
+            persistent=persistent,
+        )
+    if len(result_text) <= MAX_PHOTO_CAPTION_LENGTH:
+        return
+    if persistent:
+        await answer_persistent(message, result_text, reply_markup=reply_markup)
+    else:
         await answer_ephemeral(message, cleanup, result_text, track_user=False)
+
+
+async def _send_card_photo(
+    message: Message,
+    cleanup: MessageCleanupService,
+    *,
+    photo: str | BufferedInputFile,
+    caption: str,
+    reply_markup,
+    persistent: bool,
+) -> None:
+    if persistent:
+        await answer_photo_persistent(
+            message,
+            photo=photo,
+            caption=caption,
+            reply_markup=reply_markup,
+        )
+        return
+    await answer_photo_ephemeral(
+        message,
+        cleanup,
+        track_user=False,
+        photo=photo,
+        caption=caption,
+    )
 
 
 async def _send_unknown_result(
@@ -359,7 +404,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    grant = await ensure_request_allowed(message, repo, user, cleanup)
+    grant = await ensure_request_allowed(message, repo, user, cleanup, kind=RequestKind.PHOTO)
     if not grant:
         return
 
@@ -439,12 +484,13 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         )
         return
 
+    card_photo, fallback_photo = card_photo_source(result.product_image_url, photo_file_id)
     if result.type == "water":
         entry, balance = await service.save_water_from_analysis(
             user=user,
             analysis_type=AnalysisType.FOOD_PHOTO,
             input_text=message.caption,
-            image_path=photo_file_id,
+            image_path=card_photo,
             raw_response=raw,
             result=result,
         )
@@ -456,7 +502,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         await _delete_original_and_send_photo_result(
             message,
             cleanup,
-            photo_file_id=photo_file_id,
+            photo_file_id=card_photo,
+            fallback_photo_file_id=fallback_photo,
             result_text=format_water_result(result, balance),
             entry_id=entry.id,
             with_meal_actions=True,
@@ -468,7 +515,7 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         user=user,
         analysis_type=AnalysisType.FOOD_PHOTO,
         input_text=message.caption,
-        image_path=photo_file_id,
+        image_path=card_photo,
         raw_response=raw,
         result=result,
     )
@@ -480,7 +527,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
     await _delete_original_and_send_photo_result(
         message,
         cleanup,
-        photo_file_id=photo_file_id,
+        photo_file_id=card_photo,
+        fallback_photo_file_id=fallback_photo,
         result_text=format_analysis_result(result, balance),
         entry_id=entry.id,
         with_meal_actions=True,
@@ -508,7 +556,9 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    grant = await ensure_request_allowed(message, repo, user, cleanup, track_user=True)
+    grant = await ensure_request_allowed(
+        message, repo, user, cleanup, kind=RequestKind.VOICE, track_user=True
+    )
     if not grant:
         return
 
@@ -599,7 +649,9 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
     user, profile = await _require_profile(message, session, cleanup)
 
     repo = UserRepository(session)
-    grant = await ensure_request_allowed(message, repo, user, cleanup, track_user=True)
+    grant = await ensure_request_allowed(
+        message, repo, user, cleanup, kind=RequestKind.TEXT, track_user=True
+    )
     if not grant:
         return
 

@@ -57,7 +57,8 @@ class StaticSiteTests(unittest.TestCase):
         cls.site = Path(cls.temp.name) / 'site'
         shutil.copytree(LANDING / 'public', cls.site)
         env = {**os.environ, 'LANDING_RENDER_ONLY':'1', 'LANDING_PUBLIC_DIR':str(cls.site),
-               'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'ТАРЕЛКА', 'FREE_DAILY_LIMIT':'7',
+               'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'ТАРЕЛКА',
+               'FREE_PHOTO_DAILY_LIMIT':'7', 'FREE_TEXT_DAILY_LIMIT':'61', 'FREE_VOICE_DAILY_LIMIT':'11',
                'TELEGRAM_BOT_USERNAME':'example_test_bot', 'LANDING_BOT_USERNAME':'example_public_bot',
                'TELEGRAM_FEEDBACK_CHAT':'example_support', 'GA_MEASUREMENT_ID':'G-TESTMEASURE1'}
         subprocess.run(['sh', str(LANDING / 'docker-entrypoint.sh')], env=env, check=True)
@@ -121,7 +122,7 @@ class StaticSiteTests(unittest.TestCase):
             if page.schemas:
                 self.assertIn('https://t.me/example_public_bot', json.dumps(page.schemas))
         self.assertIn('data-bot-username="example_test_bot"', (self.site / 'admin.html').read_text())
-        self.assertIn('7 разборов в день', home)
+        self.assertIn('7 фото, 61 текстов и 11 голосовых', home)
         self.assertIn('https://t.me/example_support', home)
 
     def test_calculator_progressive_enhancement_and_diary_csv(self):

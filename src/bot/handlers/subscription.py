@@ -8,10 +8,10 @@ from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import LEGACY_SUBSCRIPTION_BUTTON, SUBSCRIPTION_BUTTON, subscription_keyboard
-from src.bot.services.links import feedback_chat_url, support_email_link
+from src.bot.services.links import feedback_chat_url, subscription_benefits_text, support_email_link
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.bot.services.request_limit import has_active_subscription
+from src.bot.services.request_limit import describe_daily_limits, has_active_subscription
 from src.db.repository import UserRepository
 
 router = Router()
@@ -33,12 +33,7 @@ def format_payment_support() -> str:
 
 
 def format_subscription_benefits() -> str:
-    return (
-        f"• {settings.subscription_daily_request_limit} запросов в день "
-        "(фото, голос, текст и исправления);\n"
-        "• ИИ-помощник по питанию: разбор недели — что получилось, "
-        "что улучшить и где пропущен приём пищи. Команда /week."
-    )
+    return subscription_benefits_text()
 
 
 def format_subscription_status(user) -> str:
@@ -48,7 +43,7 @@ def format_subscription_status(user) -> str:
         return f"Подписка активна до {until}.\n\n{benefits}"
     return (
         "Подписка не активна.\n\n"
-        f"Бесплатно: {settings.daily_request_limit} запросов в день.\n\n"
+        f"Бесплатно: {describe_daily_limits(user)}.\n\n"
         f"С подпиской на {settings.subscription_duration_days} дней "
         f"за {settings.subscription_price_stars}⭐:\n"
         f"{benefits}\n\n"
@@ -95,8 +90,9 @@ async def buy_subscription(callback: CallbackQuery) -> None:
     await callback.message.answer_invoice(
         title="Подписка ТАРЕЛКА",
         description=(
-            f"{settings.subscription_daily_request_limit} запросов в день "
+            f"{settings.subscription_daily_request_limit} фото в день "
             f"на {settings.subscription_duration_days} дней. "
+            f"Текст — безлимит, голос — {settings.subscription_voice_daily_limit}. "
             "ИИ-помощник разберёт неделю: что улучшить и где пропущен приём пищи."
         ),
         payload=SUBSCRIPTION_PAYLOAD,
@@ -139,8 +135,9 @@ async def successful_payment(message: Message, session, cleanup: MessageCleanupS
         message,
         cleanup,
         f"Подписка активирована до {until}.\n\n"
-        f"Теперь доступно {settings.subscription_daily_request_limit} запросов в день.\n"
-        "ИИ-помощник по питанию: /week — разбор недели, что улучшить и где пропущен приём.",
+        f"Теперь доступно {settings.subscription_daily_request_limit} фото, "
+        f"безлимит текстовых и {settings.subscription_voice_daily_limit} голосовых запросов в день.\n"
+        "ИИ-помощник по питанию: /ai — разбор недели, что улучшить и где пропущен приём.",
         reply_markup=subscription_keyboard(is_active=True),
         track_user=False,
     )

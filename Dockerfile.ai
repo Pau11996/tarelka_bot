@@ -23,7 +23,7 @@ RUN mkdir -p /opt/vosk \
 COPY pyproject.toml ./
 COPY src ./src
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --timeout 120 --retries 10 .
 
 RUN mkdir -p /tmp/uploads /opt/logs/ai_analyzer
 

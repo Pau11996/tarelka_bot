@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text } from "react-native";
 
 import { api, apiFailureMessage } from "../api";
 import { useAuth } from "../auth";
-import { formatDay } from "../format";
+import { formatDay, requestUsageSubtitle } from "../format";
 import { colors } from "../theme";
 import type { Subscription } from "../types";
 import { ErrorText, Field, PrimaryButton, ScreenTitle } from "../ui";
@@ -58,8 +58,10 @@ export default function PayScreen() {
   }
 
   const status = subscription?.active
-    ? `Подписка активна до ${subscription.until ? formatDay(subscription.until) : "—"}.`
-    : `Сейчас ${subscription?.requests_used_today ?? 0} из ${subscription?.daily_limit ?? "—"} запросов в день.`;
+    ? `Подписка активна до ${subscription.until ? formatDay(subscription.until) : "—"}. ${requestUsageSubtitle(subscription)}.`
+    : subscription
+      ? `Сейчас ${requestUsageSubtitle(subscription)}.`
+      : undefined;
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

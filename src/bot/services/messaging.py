@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+import logging
+
+from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
+from aiogram.types import CallbackQuery, InputRichMessage, Message, ReplyKeyboardRemove
 
 from src.bot.services.message_cleanup import MessageCleanupService
+
+logger = logging.getLogger(__name__)
 
 
 def schedule_message(
@@ -94,6 +99,33 @@ async def answer_persistent_with_menu(
             await removed.delete()
         except Exception:
             pass
+
+
+async def answer_rich(
+    message: Message,
+    html: str,
+    *,
+    fallback_text: str,
+    cleanup: MessageCleanupService | None = None,
+    persistent: bool = False,
+    track_user: bool = True,
+    **kwargs,
+) -> Message:
+    """Send a rich message. Plain text is used when Telegram rejects the card."""
+    if cleanup is not None and track_user and not persistent:
+        schedule_user_message(cleanup, message)
+    try:
+        sent = await message.bot.send_rich_message(
+            chat_id=message.chat.id,
+            rich_message=InputRichMessage(html=html),
+            **kwargs,
+        )
+    except (TelegramBadRequest, TelegramNotFound):
+        logger.warning("Rich message rejected, falling back to plain text", exc_info=True)
+        sent = await message.answer(fallback_text, **kwargs)
+    if cleanup is not None and not persistent:
+        schedule_bot_message(cleanup, sent)
+    return sent
 
 
 async def answer_photo_ephemeral(

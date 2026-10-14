@@ -20,7 +20,7 @@ from src.bot.services.messaging import (
     schedule_user_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.bot.services.request_limit import ensure_request_allowed
+from src.bot.services.request_limit import RequestKind, ensure_request_allowed
 from src.bot.states import CorrectionStates
 from src.db.models import DIARY_ENTRY_TYPES, EntryType
 from src.db.repository import UserRepository
@@ -227,7 +227,9 @@ async def apply_correction(
         schedule_user_message(cleanup, message)
         return
 
-    if not await ensure_request_allowed(message, repo, user, cleanup, track_user=True):
+    if not await ensure_request_allowed(
+        message, repo, user, cleanup, kind=RequestKind.TEXT, track_user=True
+    ):
         return
 
     previous = None

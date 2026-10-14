@@ -7,7 +7,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -228,14 +228,14 @@ async def analyze_image(
     profile_context: str | None = Form(None),
     previous_result: str | None = Form(None),
     image: UploadFile = File(...),
-    images: list[UploadFile] | None = File(None),
+    images: Annotated[list[UploadFile] | None, File()] = None,
     stream: bool = Form(False),
 ):
     content = await image.read()
     suffix = os.path.splitext(image.filename or "upload.jpg")[1] or ".jpg"
     image_path = save_upload(f"{uuid.uuid4().hex}{suffix}", content)
     extra_paths: list[str] = []
-    for extra in images or []:
+    for extra in images if isinstance(images, list) else []:
         extra_content = await extra.read()
         if not extra_content:
             continue

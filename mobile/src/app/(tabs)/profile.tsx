@@ -159,10 +159,13 @@ export default function ProfileScreen() {
     }
   }
 
-  const bonus = settings?.referral_bonus_requests ?? 0;
-  const inviteHint = settings
-    ? `Когда друг заполнит профиль и отправит первый анализ, вы получите ${bonus} ${bonusWord(bonus)}. Сейчас: ${settings.bonus_requests}.`
-    : "Загрузка приглашения…";
+  const goal = settings?.referral_monthly_goal ?? 5;
+  const progress = settings?.referral_progress ?? 0;
+  const inviteHint = !settings
+    ? "Загрузка приглашения…"
+    : settings.referral_rewarded_this_month
+      ? `В этом месяце: ${progress} из ${goal}. Подписка за этот месяц уже начислена. В новом месяце счётчик начнётся с нуля.`
+      : `Когда друг заполнит профиль и отправит первый анализ, он засчитается. ${friendsPhrase(goal)} за календарный месяц — месяц подписки. В этом месяце: ${progress} из ${goal}.`;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -263,12 +266,12 @@ export default function ProfileScreen() {
   );
 }
 
-function bonusWord(count: number) {
+function friendsPhrase(count: number) {
   const mod10 = count % 10;
   const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return "бонусный запрос";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "бонусных запроса";
-  return "бонусных запросов";
+  if (mod10 === 1 && mod100 !== 11) return `${count} друг`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} друга`;
+  return `${count} друзей`;
 }
 
 function SettingRow({

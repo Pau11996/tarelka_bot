@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api, apiFailureMessage } from "../../api";
 import { useAuth } from "../../auth";
-import { grams, kcal, mealHeading, ml } from "../../format";
+import { grams, kcal, mealHeading, ml, requestUsageSubtitle } from "../../format";
 import { colors } from "../../theme";
 import type { DayView, Entry } from "../../types";
 import { ErrorText, PrimaryButton, ScreenTitle } from "../../ui";
@@ -48,7 +48,7 @@ export default function TodayScreen() {
           />
         }
       >
-        <ScreenTitle title="Сегодня" subtitle={day ? `${day.requests_used_today} из ${day.daily_limit} запросов` : undefined} />
+        <ScreenTitle title="Сегодня" subtitle={day ? requestUsageSubtitle(day) : undefined} />
         {day ? <BalanceCard day={day} /> : null}
         <ErrorText message={error} />
         <PrimaryButton label="Добавить еду или активность" onPress={() => router.push("/add")} />

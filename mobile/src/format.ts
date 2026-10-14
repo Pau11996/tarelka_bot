@@ -1,3 +1,12 @@
+import type { RequestUsage } from "./types";
+
+export function requestUsageSubtitle(view: RequestUsage): string {
+  if (view.limit_mode === "split" && view.limits && view.used) {
+    return `Фото ${view.used.photo}/${view.limits.photo} · текст ${view.used.text}/${view.limits.text} · голос ${view.used.voice}/${view.limits.voice}`;
+  }
+  return `${view.requests_used_today} из ${view.daily_limit} запросов`;
+}
+
 export function kcal(value: number): string {
   return `${Math.round(value)} ккал`;
 }

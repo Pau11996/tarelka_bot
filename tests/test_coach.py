@@ -244,13 +244,13 @@ def test_week_review_requires_subscription() -> None:
     active = format_subscription_status(user)
     assert "ИИ-помощник" in active
     assert "пропущен приём" in active
-    assert "/week" in active
+    assert "/ai" in active
     user.subscription_until = datetime.now(timezone.utc) - timedelta(days=1)
     inactive = format_subscription_status(user)
     assert "Подписка не активна" in inactive
     assert "ИИ-помощник" in inactive
     assert "что улучшить" in inactive
-    assert "/week" in inactive
+    assert "/ai" in inactive
 
 
 def test_decide_week_action_paywall_cache_and_refresh() -> None:

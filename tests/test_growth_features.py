@@ -1,37 +1,50 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi import UploadFile
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from src.ai_analyzer import server
+from src.bot.config import settings
 from src.bot.handlers.data_management import delete_confirmation_keyboard, privacy_text
 from src.bot.handlers.referrals import invite_keyboard
 from src.bot.handlers.start import WELCOME_INTRO
 from src.bot.services.links import PRIVACY_NOTE
 from src.bot.services.diary_nudges import EVENING_NUDGE_TEXT, REVIVE_NUDGE_TEXT
-from src.bot.services.referrals import reward_referrer_after_first_analysis
+from src.bot.services.referrals import (
+    format_invite_text,
+    format_referral_reward_notice,
+    reward_referrer_after_first_analysis,
+)
 from src.bot.services.request_limit import limit_welcome_note
-from src.db.models import User
+from src.db.models import Base, Payment, User
+from src.db.repository import ReferralGrant, UserRepository
 from src.shared.schemas import AnalysisResult
 
 
 class FakeReferralRepository:
-    def __init__(self, referrer: User | None) -> None:
-        self.referrer = referrer
-        self.calls: list[tuple[int, int]] = []
+    def __init__(self, grant: ReferralGrant | None) -> None:
+        self.grant = grant
+        self.calls: list[tuple[int, int, int]] = []
 
     async def grant_referral_reward(
         self,
         user_id: int,
         *,
-        bonus_requests: int,
-    ) -> User | None:
-        self.calls.append((user_id, bonus_requests))
-        return self.referrer
+        monthly_goal: int,
+        duration_days: int,
+        now: datetime | None = None,
+    ) -> ReferralGrant | None:
+        del now
+        self.calls.append((user_id, monthly_goal, duration_days))
+        return self.grant
 
 
 class FakeBot:
@@ -68,9 +81,16 @@ def test_landing_has_pricing_and_no_missing_demo_asset() -> None:
     ).read_text()
 
     assert "demo-meal.jpg" not in template
-    assert "${FREE_DAILY_LIMIT}" in template
+    assert "${FREE_PHOTO_DAILY_LIMIT}" in template
+    assert "${FREE_TEXT_DAILY_LIMIT}" in template
+    assert "${FREE_VOICE_DAILY_LIMIT}" in template
     assert "${SUBSCRIPTION_PRICE_STARS}" in template
-    assert "${REFERRAL_BONUS_REQUESTS}" in template
+    assert "${REFERRAL_MONTHLY_GOAL}" in template
+    assert "месяц подписки" in template
+    assert "${REFERRAL_BONUS_REQUESTS}" not in template
+    terms = (Path(__file__).parents[1] / "landing/public/terms.template.html").read_text()
+    assert "реферальной программой" in terms
+    assert "реферальными бонусами" not in terms
     assert "/privacy.html" in template
     assert "/terms.html" in template
     assert "2000 ккал" in template
@@ -114,10 +134,60 @@ def test_invite_keyboard_uses_telegram_share_url() -> None:
     assert "ref_0123456789" in button.url
 
 
+def test_invite_text_shows_monthly_subscription_goal() -> None:
+    text = format_invite_text(
+        url="https://t.me/taarelka_bot?start=ref_0123456789",
+        progress=2,
+        goal=5,
+        rewarded=False,
+    )
+
+    assert "5 друзей за календарный месяц — подписка на месяц." in text
+    assert "В этом месяце: 2 из 5." in text
+    assert "бонусных запрос" not in text
+    assert text.endswith("https://t.me/taarelka_bot?start=ref_0123456789")
+
+
+def test_referral_notices_cover_progress_grant_and_repeat() -> None:
+    referrer = User(
+        id=3,
+        telegram_id=777,
+        timezone="Europe/Moscow",
+        subscription_until=datetime(2026, 5, 1, tzinfo=timezone.utc),
+    )
+    progress = format_referral_reward_notice(
+        ReferralGrant(referrer=referrer, progress=3, goal=5, granted=False, already_rewarded=False)
+    )
+    granted = format_referral_reward_notice(
+        ReferralGrant(referrer=referrer, progress=5, goal=5, granted=True, already_rewarded=False)
+    )
+    repeat = format_referral_reward_notice(
+        ReferralGrant(referrer=referrer, progress=6, goal=5, granted=False, already_rewarded=True)
+    )
+
+    assert "3 из 5" in progress
+    assert "Ещё 2 друга" in progress
+    assert "Подписка активна до 01.05.2026." in granted
+    assert "уже начислена" in repeat
+    assert "с нуля" in repeat
+
+
 @pytest.mark.asyncio
 async def test_referral_reward_notifies_referrer() -> None:
-    referrer = User(id=3, telegram_id=777, bonus_requests=5)
-    repo = FakeReferralRepository(referrer)
+    referrer = User(
+        id=3,
+        telegram_id=777,
+        timezone="Europe/Moscow",
+        subscription_until=datetime(2026, 5, 1, tzinfo=timezone.utc),
+    )
+    grant = ReferralGrant(
+        referrer=referrer,
+        progress=5,
+        goal=5,
+        granted=True,
+        already_rewarded=False,
+    )
+    repo = FakeReferralRepository(grant)
     bot = FakeBot()
 
     rewarded = await reward_referrer_after_first_analysis(
@@ -127,9 +197,160 @@ async def test_referral_reward_notifies_referrer() -> None:
     )
 
     assert rewarded is True
-    assert repo.calls == [(9, 3)]
+    assert repo.calls == [
+        (9, settings.referral_monthly_goal, settings.subscription_duration_days)
+    ]
     assert bot.messages[0][0] == 777
-    assert "5" in bot.messages[0][1]
+    assert "01.05.2026" in bot.messages[0][1]
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+@pytest.fixture
+async def referral_repo():
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        yield UserRepository(session)
+    await engine.dispose()
+
+
+async def _add_referred(repo: UserRepository, referrer_id: int, telegram_id: int) -> User:
+    user = User(
+        telegram_id=telegram_id,
+        timezone="Europe/Moscow",
+        referred_by_user_id=referrer_id,
+    )
+    repo.session.add(user)
+    await repo.session.commit()
+    await repo.session.refresh(user)
+    return user
+
+
+@pytest.mark.asyncio
+async def test_fifth_referral_grants_one_subscription_month(referral_repo: UserRepository) -> None:
+    march = datetime(2026, 3, 15, 12, tzinfo=timezone.utc)
+    existing_until = march + timedelta(days=10)
+    referrer = User(
+        telegram_id=501,
+        timezone="Europe/Moscow",
+        bonus_requests=2,
+        subscription_until=existing_until,
+        subscription_last_notified_until=existing_until,
+    )
+    referral_repo.session.add(referrer)
+    await referral_repo.session.commit()
+    await referral_repo.session.refresh(referrer)
+
+    first = await _add_referred(referral_repo, referrer.id, 601)
+    first_grant = await referral_repo.grant_referral_reward(
+        first.id, monthly_goal=5, duration_days=30, now=march
+    )
+    assert first_grant is not None and first_grant.progress == 1 and not first_grant.granted
+    assert await referral_repo.grant_referral_reward(
+        first.id, monthly_goal=5, duration_days=30, now=march
+    ) is None
+
+    for offset, telegram_id in enumerate((602, 603, 604), start=2):
+        friend = await _add_referred(referral_repo, referrer.id, telegram_id)
+        grant = await referral_repo.grant_referral_reward(
+            friend.id, monthly_goal=5, duration_days=30, now=march
+        )
+        assert grant is not None
+        assert grant.progress == offset
+        assert grant.granted is False
+        assert referrer.referral_subscription_month is None
+        assert _as_utc(referrer.subscription_until) == existing_until
+
+    fifth = await _add_referred(referral_repo, referrer.id, 605)
+    granted = await referral_repo.grant_referral_reward(
+        fifth.id, monthly_goal=5, duration_days=30, now=march
+    )
+    assert granted is not None
+    assert granted.granted is True
+    assert granted.already_rewarded is False
+    assert granted.progress == 5
+    assert referrer.referral_subscription_month == "2026-03"
+    assert referrer.subscription_last_notified_until is None
+    assert _as_utc(referrer.subscription_until) == existing_until + timedelta(days=30)
+    assert referrer.bonus_requests == 2
+    payments = await referral_repo.session.scalar(select(func.count()).select_from(Payment))
+    assert payments == 0
+
+    paid_until = _as_utc(referrer.subscription_until)
+    sixth = await _add_referred(referral_repo, referrer.id, 606)
+    repeat = await referral_repo.grant_referral_reward(
+        sixth.id, monthly_goal=5, duration_days=30, now=march
+    )
+    assert repeat is not None
+    assert repeat.granted is False
+    assert repeat.already_rewarded is True
+    assert repeat.progress == 6
+    assert referrer.referral_subscription_month == "2026-03"
+    assert _as_utc(referrer.subscription_until) == paid_until
+
+    april = datetime(2026, 4, 10, 12, tzinfo=timezone.utc)
+    april_grant = None
+    for telegram_id in range(701, 706):
+        friend = await _add_referred(referral_repo, referrer.id, telegram_id)
+        april_grant = await referral_repo.grant_referral_reward(
+            friend.id, monthly_goal=5, duration_days=30, now=april
+        )
+        assert april_grant is not None
+    assert april_grant is not None
+    assert april_grant.granted is True
+    assert april_grant.progress == 5
+    assert referrer.referral_subscription_month == "2026-04"
+    assert _as_utc(referrer.subscription_until) == paid_until + timedelta(days=30)
+
+
+@pytest.mark.asyncio
+async def test_referral_month_uses_referrer_timezone(referral_repo: UserRepository) -> None:
+    referrer = User(telegram_id=801, timezone="Europe/Moscow")
+    referral_repo.session.add(referrer)
+    await referral_repo.session.commit()
+    await referral_repo.session.refresh(referrer)
+
+    still_march = datetime(2026, 3, 31, 20, 30, tzinfo=timezone.utc)
+    already_april = datetime(2026, 3, 31, 21, 30, tzinfo=timezone.utc)
+
+    for telegram_id in range(810, 814):
+        friend = await _add_referred(referral_repo, referrer.id, telegram_id)
+        grant = await referral_repo.grant_referral_reward(
+            friend.id, monthly_goal=5, duration_days=30, now=still_march
+        )
+        assert grant is not None and not grant.granted
+
+    crossing = await _add_referred(referral_repo, referrer.id, 814)
+    april_progress = await referral_repo.grant_referral_reward(
+        crossing.id, monthly_goal=5, duration_days=30, now=already_april
+    )
+    assert april_progress is not None
+    assert april_progress.progress == 1
+    assert april_progress.granted is False
+    assert referrer.referral_subscription_month is None
+    assert referrer.subscription_until is None
+
+    last = None
+    for telegram_id in range(815, 819):
+        friend = await _add_referred(referral_repo, referrer.id, telegram_id)
+        last = await referral_repo.grant_referral_reward(
+            friend.id, monthly_goal=5, duration_days=30, now=already_april
+        )
+    assert last is not None
+    assert last.progress == 5
+    assert last.granted is True
+    assert referrer.referral_subscription_month == "2026-04"
 
 
 def test_limit_welcome_note_shows_bonus_requests(monkeypatch: pytest.MonkeyPatch) -> None:

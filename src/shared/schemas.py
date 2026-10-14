@@ -46,6 +46,29 @@ def normalize_meal_slot(value: Any) -> str | None:
     return _MEAL_SLOT_ALIASES.get(slot)
 
 
+_CAPTION_SLOT_PHRASES: tuple[tuple[str, str], ...] = tuple(
+    sorted(
+        (
+            (alias.replace("_", " "), slot)
+            for alias, slot in _MEAL_SLOT_ALIASES.items()
+            if alias not in MEAL_SLOTS
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+)
+
+
+def meal_slot_from_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    folded = text.lower().replace("ё", "е")
+    for phrase, slot in _CAPTION_SLOT_PHRASES:
+        if phrase in folded:
+            return slot
+    return None
+
+
 class CoachWeekReview(BaseModel):
     summary: str
     wins: list[str] = Field(default_factory=list)
@@ -81,6 +104,7 @@ class AnalysisResult(BaseModel):
     unknown_reason: str | None = None
     meal_slot: str | None = None
     volume_ml: float | None = None
+    product_image_url: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AnalysisResult:

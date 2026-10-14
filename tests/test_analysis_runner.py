@@ -674,6 +674,37 @@ def _barcode_runner(monkeypatch: pytest.MonkeyPatch, product, barcode: str) -> F
 
 
 @pytest.mark.asyncio
+async def test_decoded_barcode_skips_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.ai_analyzer.products import LABEL_ASSUMPTION, CatalogProduct
+
+    product = CatalogProduct(
+        title="Творог 5%",
+        brand="Савушкин",
+        weight_g=180,
+        volume="200 г",
+        energy_cost="белки-10,0 г; жиры-5,0 г; углеводы-3,0 г; 150 ккал",
+        image_url="https://cdn.example/4600536004105.jpg",
+    )
+    monkeypatch.setattr(
+        "src.ai_analyzer.analysis_runner.decode_product_barcode",
+        lambda path: "4600536004105",
+    )
+    monkeypatch.setattr("src.ai_analyzer.analysis_runner.lookup_product", lambda code: product)
+    runner = FakeRunner()
+
+    result = await runner.analyze_auto(text="на завтрак", image_path="/tmp/code.jpg")
+
+    assert result.type == "meal"
+    assert result.title == "Савушкин Творог 5%"
+    assert result.meal_slot == "breakfast"
+    assert result.total_calories == 300
+    assert result.confidence == 1.0
+    assert result.assumptions == [LABEL_ASSUMPTION]
+    assert result.product_image_url == "https://cdn.example/4600536004105.jpg"
+    assert runner.calls == []
+
+
+@pytest.mark.asyncio
 async def test_barcode_with_label_does_not_calculate_from_photo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -774,7 +805,34 @@ async def test_barcode_without_calories_estimates_from_name(
     assert runner.calls[1][1] is None
     assert "Творог" in runner.calls[1][0]
     assert "200 г" in runner.calls[1][0]
+    assert "Текст КБЖУ в базе пустой" in runner.calls[1][0]
     assert "/tmp/code.jpg" not in runner.calls[1][0]
+
+
+@pytest.mark.asyncio
+async def test_barcode_with_unparsed_label_sends_raw_text_to_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.ai_analyzer.products import CatalogProduct
+
+    raw_label = "белки 7,5г; жиры 31,3г; углеводы 23,2г; энергетическая ценность, ккал 412,6/кДж 1728"
+    product = CatalogProduct(
+        title="Шоколад",
+        brand="",
+        weight_g=90,
+        volume="90 г",
+        energy_cost=raw_label,
+    )
+    runner = _barcode_runner(monkeypatch, product, "4600536004105")
+
+    result = await runner.analyze_food(text=None, image_path="/tmp/code.jpg")
+
+    assert result.type == "meal"
+    prompt = runner.calls[1][0]
+    assert raw_label in prompt
+    assert "скрипт его не разобрал" in prompt
+    assert "90 г" in prompt
+    assert runner.calls[1][1] is None
 
 
 @pytest.mark.asyncio

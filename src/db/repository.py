@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -30,12 +31,64 @@ from src.db.models import (
 )
 
 DEFAULT_DAILY_CALORIE_TARGET = 2000.0
+_REFERRAL_FALLBACK_TIMEZONE = "Europe/Moscow"
+
+
+@dataclass(frozen=True)
+class ReferralGrant:
+    referrer: User
+    progress: int
+    goal: int
+    granted: bool
+    already_rewarded: bool
+
+
+_USAGE_COUNT_ATTR = {
+    "photo": "photo_count",
+    "text": "text_count",
+    "voice": "voice_count",
+}
+
+
+def _usage_count_attr(kind: str) -> str:
+    try:
+        return _USAGE_COUNT_ATTR[kind]
+    except KeyError as exc:
+        raise ValueError(f"Unknown request kind: {kind}") from exc
 
 
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
+
+
+def referral_month_window(timezone_name: str | None, now: datetime) -> tuple[datetime, datetime, str]:
+    """Local calendar month [start, end) and its YYYY-MM key."""
+    zone = _referral_zone(timezone_name)
+    local = _as_utc(now).astimezone(zone)
+    start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end, f"{start.year:04d}-{start.month:02d}"
+
+
+def _referral_zone(timezone_name: str | None) -> ZoneInfo:
+    name = (timezone_name or "").strip() or _REFERRAL_FALLBACK_TIMEZONE
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo(_REFERRAL_FALLBACK_TIMEZONE)
+
+
+def _extend_subscription(user: User, *, duration_days: int, now: datetime) -> None:
+    current = _as_utc(now)
+    existing = _as_utc(user.subscription_until) if user.subscription_until else None
+    base = existing if existing and existing > current else current
+    user.subscription_until = base + timedelta(days=duration_days)
+    user.subscription_last_notified_until = None
 
 
 def _mobile_login_open(challenge: MobileLoginChallenge, now: datetime) -> bool:
@@ -155,13 +208,26 @@ class UserRepository:
         await self.session.refresh(user)
         return True
 
+    async def referral_month_status(
+        self,
+        user: User,
+        *,
+        now: datetime | None = None,
+    ) -> tuple[int, bool]:
+        current = now or datetime.now(timezone.utc)
+        start, end, month_key = referral_month_window(user.timezone, current)
+        progress = await self._count_qualified_referrals(user.id, start, end)
+        return progress, user.referral_subscription_month == month_key
+
     async def grant_referral_reward(
         self,
         user_id: int,
         *,
-        bonus_requests: int,
+        monthly_goal: int,
+        duration_days: int,
         now: datetime | None = None,
-    ) -> User | None:
+    ) -> ReferralGrant | None:
+        current = now or datetime.now(timezone.utc)
         result = await self.session.execute(
             select(User).where(User.id == user_id).with_for_update()
         )
@@ -182,11 +248,46 @@ class UserRepository:
         if referrer is None:
             return None
 
-        referrer.bonus_requests = int(referrer.bonus_requests or 0) + max(0, bonus_requests)
-        referred_user.referral_reward_granted_at = now or datetime.now(timezone.utc)
+        referred_user.referral_reward_granted_at = current
+        await self.session.flush()
+
+        start, end, month_key = referral_month_window(referrer.timezone, current)
+        progress = await self._count_qualified_referrals(referrer.id, start, end)
+        already_rewarded = referrer.referral_subscription_month == month_key
+        granted = progress >= monthly_goal and not already_rewarded
+        if granted:
+            _extend_subscription(referrer, duration_days=duration_days, now=current)
+            referrer.referral_subscription_month = month_key
+
         await self.session.commit()
         await self.session.refresh(referrer)
-        return referrer
+        return ReferralGrant(
+            referrer=referrer,
+            progress=progress,
+            goal=monthly_goal,
+            granted=granted,
+            already_rewarded=already_rewarded,
+        )
+
+    async def _count_qualified_referrals(
+        self,
+        referrer_id: int,
+        start: datetime,
+        end: datetime,
+    ) -> int:
+        start_utc = start.astimezone(timezone.utc)
+        end_utc = end.astimezone(timezone.utc)
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.referred_by_user_id == referrer_id,
+                User.referral_reward_granted_at.is_not(None),
+                User.referral_reward_granted_at >= start_utc,
+                User.referral_reward_granted_at < end_utc,
+            )
+        )
+        return int(result.scalar_one())
 
     async def try_consume_bonus_request(self, user_id: int) -> bool:
         result = await self.session.execute(
@@ -282,14 +383,25 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_daily_request_count(self, user_id: int, usage_date: date) -> int:
+        total, _, _, _ = await self.get_daily_usage_counts(user_id, usage_date)
+        return total
+
+    async def get_daily_usage_counts(self, user_id: int, usage_date: date) -> tuple[int, int, int, int]:
         result = await self.session.execute(
-            select(DailyRequestUsage.request_count).where(
+            select(
+                DailyRequestUsage.request_count,
+                DailyRequestUsage.photo_count,
+                DailyRequestUsage.text_count,
+                DailyRequestUsage.voice_count,
+            ).where(
                 DailyRequestUsage.user_id == user_id,
                 DailyRequestUsage.usage_date == usage_date,
             )
         )
-        value = result.scalar_one_or_none()
-        return int(value or 0)
+        row = result.one_or_none()
+        if row is None:
+            return 0, 0, 0, 0
+        return tuple(int(value or 0) for value in row)
 
     async def get_profile(self, user_id: int) -> Profile | None:
         result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))
@@ -507,6 +619,43 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_favorite_by_title(self, user_id: int, title: str) -> FavoriteMeal | None:
+        result = await self.session.execute(
+            select(FavoriteMeal)
+            .where(FavoriteMeal.user_id == user_id, FavoriteMeal.title == title)
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    async def create_catalog_favorite(
+        self,
+        *,
+        user_id: int,
+        title: str,
+        calories: float,
+        protein_g: float,
+        fat_g: float,
+        carbs_g: float,
+        micronutrients: dict | None,
+        items: list | None,
+    ) -> FavoriteMeal:
+        favorite = FavoriteMeal(
+            user_id=user_id,
+            source_entry_id=None,
+            entry_type=EntryType.MEAL,
+            title=title[:255],
+            calories=calories,
+            protein_g=protein_g,
+            fat_g=fat_g,
+            carbs_g=carbs_g,
+            micronutrients=micronutrients,
+            items=items,
+        )
+        self.session.add(favorite)
+        await self.session.commit()
+        await self.session.refresh(favorite)
+        return favorite
+
     async def create_favorite_from_entry(self, entry: DayEntry) -> FavoriteMeal:
         favorite = FavoriteMeal(
             user_id=entry.user_id,
@@ -531,7 +680,16 @@ class UserRepository:
         await self.session.delete(favorite)
         await self.session.commit()
 
-    async def try_consume_daily_request(self, user_id: int, usage_date: date, limit: int) -> bool:
+    async def try_consume_daily_request(
+        self,
+        user_id: int,
+        usage_date: date,
+        *,
+        kind: str,
+        limit: int,
+        shared: bool,
+    ) -> bool:
+        kind_attr = _usage_count_attr(kind)
         result = await self.session.execute(
             select(DailyRequestUsage)
             .where(
@@ -549,20 +707,26 @@ class UserRepository:
                     user_id=user_id,
                     usage_date=usage_date,
                     request_count=1,
+                    photo_count=1 if kind_attr == "photo_count" else 0,
+                    text_count=1 if kind_attr == "text_count" else 0,
+                    voice_count=1 if kind_attr == "voice_count" else 0,
                 )
             )
             await self.session.commit()
             return True
 
-        if usage.request_count >= limit:
+        current = int(usage.request_count or 0) if shared else int(getattr(usage, kind_attr) or 0)
+        if current >= limit:
             await self.session.commit()
             return False
 
-        usage.request_count += 1
+        usage.request_count = int(usage.request_count or 0) + 1
+        setattr(usage, kind_attr, int(getattr(usage, kind_attr) or 0) + 1)
         await self.session.commit()
         return True
 
-    async def refund_daily_request(self, user_id: int, usage_date: date) -> None:
+    async def refund_daily_request(self, user_id: int, usage_date: date, *, kind: str) -> None:
+        kind_attr = _usage_count_attr(kind)
         result = await self.session.execute(
             select(DailyRequestUsage)
             .where(
@@ -576,6 +740,7 @@ class UserRepository:
             await self.session.commit()
             return
         usage.request_count = max(0, int(usage.request_count or 0) - 1)
+        setattr(usage, kind_attr, max(0, int(getattr(usage, kind_attr) or 0) - 1))
         await self.session.commit()
 
     async def activate_subscription(

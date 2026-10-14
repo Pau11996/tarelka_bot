@@ -19,7 +19,7 @@ from src.bot.services.nutrition import (
     calculate_logging_streak,
     local_today,
 )
-from src.bot.services.request_limit import effective_daily_request_limit, has_active_subscription
+from src.bot.services.request_limit import has_active_subscription, request_usage_payload
 from src.db.models import ActivityLevel, DIARY_ENTRY_TYPES, EntryType, Goal, Sex, User
 from src.db.repository import UserRepository
 from src.db.session import get_session
@@ -86,16 +86,15 @@ async def _day_payload(repo: UserRepository, user: User, day: date) -> dict:
     dates = await repo.get_distinct_entry_dates(user.id)
     balance.streak = calculate_logging_streak(dates, local_today(user.timezone))
     targets = calculate_daily_nutrient_targets(profile)
-    used = await repo.get_daily_request_count(user.id, local_today(user.timezone))
+    usage = await request_usage_payload(repo, user)
     return {
         "date": day.isoformat(),
         "balance": balance_out(balance),
         "nutrient_targets": nutrient_targets_out(targets),
         "entries": [entry_out(entry) for entry in entries],
         "profile_complete": profile.is_complete(),
-        "requests_used_today": used,
-        "daily_limit": effective_daily_request_limit(user),
         "bonus_requests": int(user.bonus_requests or 0),
+        **usage,
     }
 
 
@@ -404,14 +403,13 @@ async def subscription(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    used = await UserRepository(session).get_daily_request_count(user.id, local_today(user.timezone))
-    active = has_active_subscription(user)
+    repo = UserRepository(session)
+    usage = await request_usage_payload(repo, user)
     return {
-        "active": active,
+        "active": has_active_subscription(user),
         "until": user.subscription_until.isoformat() if user.subscription_until else None,
-        "daily_limit": effective_daily_request_limit(user),
-        "requests_used_today": used,
         "bonus_requests": int(user.bonus_requests or 0),
+        **usage,
     }
 
 
@@ -426,12 +424,16 @@ async def account_settings(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    code = await UserRepository(session).ensure_referral_code(user)
+    repo = UserRepository(session)
+    code = await repo.ensure_referral_code(user)
+    progress, rewarded = await repo.referral_month_status(user)
     return {
         "notifications_enabled": bool(user.notifications_enabled),
         "referral_url": referral_url(code),
         "bonus_requests": int(user.bonus_requests or 0),
-        "referral_bonus_requests": settings.referral_bonus_requests,
+        "referral_monthly_goal": settings.referral_monthly_goal,
+        "referral_progress": progress,
+        "referral_rewarded_this_month": rewarded,
         "support_email": settings.support_email,
         "channel_url": channel_url(),
         "feedback_url": feedback_chat_url(),

@@ -135,7 +135,7 @@ def test_daily_balance_can_include_micronutrients():
 
     text = format_daily_balance(balance)
 
-    assert "Полезные вещества за день" in text
+    assert "\n\nВода: 0 мл\n\nПолезные вещества за день:\n" in text
     assert "<b>ОСТАЛОСЬ: 1700 ккал</b>" in text
     assert "Клетчатка, г: 3" in text
     assert "Сахар, г: 8" in text
@@ -171,6 +171,7 @@ def test_daily_balance_with_profile_shows_targets_through_slash():
     assert f"Б: 29.8 / {targets.protein_g:.1f} г" in text
     assert f"Ж: 3.8 / {targets.fat_g:.1f} г" in text
     assert f"У: 96.6 / {targets.carbs_g:.1f} г" in text
+    assert f"У: 96.6 / {targets.carbs_g:.1f} г\n\nВода: 0 мл\n\nПолезные вещества за день:\n" in text
     assert "Клетчатка, г: 3 / 35" in text
     assert f"Сахар, г: 8 / {targets.micronutrients['sugar_g']:g}" in text
     assert "Натрий" not in text
@@ -296,7 +297,8 @@ def test_daily_balance_shows_water_total():
 
     text = format_daily_balance(balance, include_micronutrients=False)
 
-    assert "Вода: 750 мл" in text
+    assert "Активность: +0 ккал\n\n<b>ОСТАЛОСЬ: 1700 ккал</b>" in text
+    assert "БЖУ за день:\nБ: 0.0 г | Ж: 0.0 г | У: 0.0 г\n\nВода: 750 мл" in text
 
 
 def test_entry_list_shows_meal_slot_and_water():

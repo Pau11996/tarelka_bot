@@ -2,11 +2,18 @@ from src.bot.config import settings
 from src.bot.handlers.subscription import format_payment_support
 from src.bot.keyboards.menus import CONTACTS_BUTTON, contacts_keyboard
 from src.bot.services.links import (
+    EMPTY_CHAT_DESCRIPTION,
     MENU_COMMANDS,
     SETTINGS_COMMANDS,
     SUPPORT_EMAIL,
     format_contacts,
 )
+
+
+def test_empty_chat_description_fits_telegram_limit() -> None:
+    assert len(EMPTY_CHAT_DESCRIPTION) <= 512
+    assert "калории" in EMPTY_CHAT_DESCRIPTION
+    assert "Старт" in EMPTY_CHAT_DESCRIPTION
 
 
 def test_menu_commands_include_contacts_invite_and_start_last() -> None:
@@ -15,7 +22,7 @@ def test_menu_commands_include_contacts_invite_and_start_last() -> None:
     assert "contacts" in names
     assert "invite" in names
     assert "help" in names
-    assert "week" in names
+    assert "ai" in names
     assert names[-1] == "start"
     assert "correct" not in names
     assert [description for _name, description in MENU_COMMANDS] == [
@@ -72,7 +79,7 @@ def test_format_contacts_with_links(monkeypatch) -> None:
     assert "служебных сообщений удаляется автоматически" in text
     assert "не претендует на идеальную точность" in text
     assert "Чтобы увеличить лимит" in text
-    assert "оформить подписку" in text
+    assert "оформите подписку" in text
     assert 'href="https://t.me/taarelka_bot?start=premium"' in text
     assert SUPPORT_EMAIL in text
     assert f"<code>{SUPPORT_EMAIL}</code>" in text

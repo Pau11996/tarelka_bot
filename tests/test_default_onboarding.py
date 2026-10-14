@@ -80,7 +80,7 @@ def test_nutrient_targets_without_weight_use_calorie_shares() -> None:
 
 
 def test_welcome_mentions_default_calorie_target() -> None:
-    user = User(id=1, telegram_id=1, timezone="Europe/Moscow", daily_request_limit=6)
+    user = User(id=1, telegram_id=1, timezone="Europe/Moscow", legacy_photo_quota=True)
     text = build_welcome_new(user)
     assert "2000" in text
     assert "Стартовая норма" in DEFAULT_TARGET_NOTE
@@ -96,7 +96,7 @@ def test_welcome_mentions_default_calorie_target() -> None:
     assert "/delete_me" not in text
     assert "Чтобы увеличить лимит" not in text
     assert "оформить подписку" not in text
-    assert "Доступно 6 запросов в день" in text
+    assert "Доступно 6 фото, 60 текстовых и 10 голосовых запросов в день" in text
     assert "не претендует на идеальную точность" in text
 
 

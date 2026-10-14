@@ -13,7 +13,13 @@ from src.bot.services.ai_client import AIAnalyzerClient
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import profile_context
 from src.bot.services.referrals import reward_referrer_after_first_analysis
-from src.bot.services.request_limit import consume_request_grant, format_limit_reached_message, refund_request
+from src.bot.services.request_limit import (
+    RequestKind,
+    consume_request_grant,
+    format_limit_reached_message,
+    refund_request,
+    request_kind_for_input,
+)
 from src.db.models import AnalysisType, DIARY_ENTRY_TYPES, EntryType, User
 from src.db.repository import UserRepository
 from src.mobile_api.serializers import balance_out, entry_out
@@ -47,7 +53,8 @@ async def _reward_referrer(repo: UserRepository, user_id: int) -> None:
         if not settings.telegram_bot_token:
             await repo.grant_referral_reward(
                 user_id,
-                bonus_requests=settings.referral_bonus_requests,
+                monthly_goal=settings.referral_monthly_goal,
+                duration_days=settings.subscription_duration_days,
             )
             return
         async with Bot(token=settings.telegram_bot_token) as bot:
@@ -85,10 +92,6 @@ class AnalysisService:
         audio: UploadFile | None,
     ) -> dict:
         profile = await self.repo.ensure_default_profile(user.id)
-        grant = await consume_request_grant(self.repo, user)
-        if grant is None:
-            raise HTTPException(status_code=429, detail=format_limit_reached_message(user))
-
         uploads = image if isinstance(image, list) else [image] if image is not None else []
         image_payloads: list[tuple[bytes, str]] = []
         for item in uploads:
@@ -97,6 +100,17 @@ class AnalysisService:
                 image_payloads.append(payload)
         audio_payload = await _read_upload(audio, "voice.m4a")
         caption = (text or "").strip()
+        if not image_payloads and audio_payload is None and not caption:
+            raise HTTPException(status_code=400, detail="Отправьте фото, текст или голосовое.")
+        kind = request_kind_for_input(
+            has_image=bool(image_payloads),
+            has_audio=audio_payload is not None,
+            has_text=bool(caption),
+        )
+        grant = await consume_request_grant(self.repo, user, kind)
+        if grant is None:
+            raise HTTPException(status_code=429, detail=format_limit_reached_message(user, kind))
+
         transcript = ""
 
         try:
@@ -206,9 +220,12 @@ class AnalysisService:
         if entry is None or entry.entry_type not in DIARY_ENTRY_TYPES:
             raise HTTPException(status_code=404, detail="Запись не найдена")
 
-        grant = await consume_request_grant(self.repo, user)
+        grant = await consume_request_grant(self.repo, user, RequestKind.TEXT)
         if grant is None:
-            raise HTTPException(status_code=429, detail=format_limit_reached_message(user))
+            raise HTTPException(
+                status_code=429,
+                detail=format_limit_reached_message(user, RequestKind.TEXT),
+            )
 
         previous = None
         if entry.ai_analysis_id:

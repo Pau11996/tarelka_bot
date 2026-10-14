@@ -128,40 +128,42 @@ def format_daily_balance(
         f"Норма: {balance.target:.0f} ккал\n"
         f"Съедено: {balance.consumed:.0f} ккал\n"
         f"Активность: +{balance.activity_bonus:.0f} ккал\n"
-        f"Вода: {balance.water_ml:.0f} мл\n"
         f"\n<b>ОСТАЛОСЬ: {balance.remaining:.0f} ккал</b>\n\n"
         f"{format_calorie_bar(balance.consumed, balance.target, activity_bonus=balance.activity_bonus)}"
     )
     if streak_value is not None:
         text += f"\nСерия: {streak_value} {format_day_word(streak_value)}"
     text += "\n\nБЖУ за день:\n"
-    if profile is not None:
-        targets = calculate_daily_nutrient_targets(profile)
+    targets = calculate_daily_nutrient_targets(profile) if profile is not None else None
+    if targets is not None:
         text += (
             f"Б: {_format_macro_ratio(balance.protein_g, targets.protein_g)} | "
             f"Ж: {_format_macro_ratio(balance.fat_g, targets.fat_g)} | "
             f"У: {_format_macro_ratio(balance.carbs_g, targets.carbs_g)}"
         )
-        if include_micronutrients:
-            nutrient_lines = [
-                f"{label}: {_format_nutrient_ratio(balance.micronutrients.get(key, 0), targets.micronutrients[key])}"
-                for key, label in TRACKED_MICRONUTRIENTS.items()
-            ]
-            text += "\n\nПолезные вещества за день:\n" + "\n".join(nutrient_lines)
+    else:
+        text += (
+            f"Б: {balance.protein_g:.1f} г | Ж: {balance.fat_g:.1f} г | У: {balance.carbs_g:.1f} г"
+        )
+    text += f"\n\nВода: {balance.water_ml:.0f} мл"
+
+    if not include_micronutrients:
+        return text
+    if targets is not None:
+        nutrient_lines = [
+            f"{label}: {_format_nutrient_ratio(balance.micronutrients.get(key, 0), targets.micronutrients[key])}"
+            for key, label in TRACKED_MICRONUTRIENTS.items()
+        ]
+        text += "\n\nПолезные вещества за день:\n" + "\n".join(nutrient_lines)
         return text
 
-    text += (
-        f"Б: {balance.protein_g:.1f} г | Ж: {balance.fat_g:.1f} г | У: {balance.carbs_g:.1f} г"
-    )
-
-    if include_micronutrients:
-        nutrient_lines = [
-            f"{label}: {balance.micronutrients[key]:g}"
-            for key, label in TRACKED_MICRONUTRIENTS.items()
-            if balance.micronutrients.get(key, 0) > 0
-        ]
-        if nutrient_lines:
-            text += "\n\nПолезные вещества за день:\n" + "\n".join(nutrient_lines)
+    nutrient_lines = [
+        f"{label}: {balance.micronutrients[key]:g}"
+        for key, label in TRACKED_MICRONUTRIENTS.items()
+        if balance.micronutrients.get(key, 0) > 0
+    ]
+    if nutrient_lines:
+        text += "\n\nПолезные вещества за день:\n" + "\n".join(nutrient_lines)
     return text
 
 

@@ -11,6 +11,7 @@ from src.bot.keyboards.menus import LEGACY_INVITE_BUTTON
 from src.bot.services.links import referral_url
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.messaging import answer_ephemeral
+from src.bot.services.referrals import format_invite_text
 from src.db.repository import UserRepository
 
 router = Router()
@@ -52,13 +53,15 @@ async def show_invite(
         )
         return
 
+    progress, rewarded = await repo.referral_month_status(user)
     await answer_ephemeral(
         message,
         cleanup,
-        "Пригласите друга в ТАРЕЛКУ.\n\n"
-        "Когда он заполнит профиль и отправит первый AI-анализ, "
-        f"вы получите {settings.referral_bonus_requests} бонусных запроса.\n"
-        f"Сейчас бонусных запросов: {int(user.bonus_requests or 0)}.\n\n"
-        f"{url}",
+        format_invite_text(
+            url=url,
+            progress=progress,
+            goal=settings.referral_monthly_goal,
+            rewarded=rewarded,
+        ),
         reply_markup=invite_keyboard(url),
     )

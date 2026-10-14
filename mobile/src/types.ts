@@ -56,6 +56,20 @@ export type NutrientTargets = {
   micronutrients: Record<string, number>;
 };
 
+export type RequestLimits = {
+  photo: number;
+  text: number;
+  voice: number;
+};
+
+export type RequestUsage = {
+  limit_mode?: "split" | "shared";
+  requests_used_today: number;
+  daily_limit: number;
+  limits?: RequestLimits;
+  used?: RequestLimits;
+};
+
 export type DayView = {
   date: string;
   balance: Balance;
@@ -65,6 +79,9 @@ export type DayView = {
   requests_used_today: number;
   daily_limit: number;
   bonus_requests: number;
+  limit_mode?: "split" | "shared";
+  limits?: RequestLimits;
+  used?: RequestLimits;
 };
 
 export type Favorite = {
@@ -95,7 +112,9 @@ export type AccountSettings = {
   notifications_enabled: boolean;
   referral_url: string | null;
   bonus_requests: number;
-  referral_bonus_requests: number;
+  referral_monthly_goal: number;
+  referral_progress: number;
+  referral_rewarded_this_month: boolean;
   support_email: string;
   channel_url: string | null;
   feedback_url: string | null;
@@ -107,6 +126,9 @@ export type Subscription = {
   daily_limit: number;
   requests_used_today: number;
   bonus_requests: number;
+  limit_mode?: "split" | "shared";
+  limits?: RequestLimits;
+  used?: RequestLimits;
 };
 
 export type Stats = {

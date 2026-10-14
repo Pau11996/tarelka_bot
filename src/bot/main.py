@@ -25,7 +25,7 @@ from src.bot.handlers import (
     subscription,
     survey,
 )
-from src.bot.services.links import MENU_COMMANDS
+from src.bot.services.links import EMPTY_CHAT_DESCRIPTION, MENU_COMMANDS
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.coach import run_coach_reviews_loop
 from src.bot.services.diary_nudges import run_diary_nudges_loop
@@ -107,6 +107,7 @@ async def main() -> None:
     await bot.set_my_commands(
         [BotCommand(command=name, description=description) for name, description in MENU_COMMANDS]
     )
+    await bot.set_my_description(description=EMPTY_CHAT_DESCRIPTION)
     await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
     asyncio.create_task(run_subscription_reminder_loop(bot))

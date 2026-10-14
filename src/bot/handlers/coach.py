@@ -11,7 +11,12 @@ from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.handlers.subscription import format_subscription_status, show_subscription_screen
-from src.bot.keyboards.menus import coach_refresh_keyboard, subscription_keyboard, week_menu_keyboard
+from src.bot.keyboards.menus import (
+    coach_refresh_keyboard,
+    pp_product_keyboard,
+    subscription_keyboard,
+    week_menu_keyboard,
+)
 from src.bot.services.coach import (
     COACH_FAILED_TEXT,
     MIN_LOGGED_DAYS,
@@ -33,7 +38,9 @@ from src.bot.services.pp_picks import (
     CATALOG_UNAVAILABLE,
     FALLBACK_NOTE,
     card_caption,
+    format_pp_card,
     load_pp_catalog,
+    load_pp_product_card,
     meal_phrases,
     pick_pp_cards,
 )
@@ -144,16 +151,31 @@ async def _send_pp_picks(message: Message, session, *, telegram_id: int) -> None
         return
     if used_staples:
         await answer_persistent(message, FALLBACK_NOTE)
+    saved_titles = {item.title for item in await repo.get_favorites(user.id)}
     for card in cards:
-        caption = card_caption(card)
+        details = load_pp_product_card(card.product_id, image_url=card.image_url)
+        if details is None:
+            caption = card_caption(card)
+            reply_markup = None
+        else:
+            caption = format_pp_card(details)
+            reply_markup = pp_product_keyboard(
+                card.product_id,
+                saved=details.title[:255] in saved_titles,
+            )
         try:
-            await answer_photo_persistent(message, photo=card.image_url, caption=caption)
+            await answer_photo_persistent(
+                message,
+                photo=card.image_url,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
         except TelegramAPIError:
             logger.exception("PP card photo failed for product_id=%s", card.product_id)
-            await answer_persistent(message, caption)
+            await answer_persistent(message, caption, reply_markup=reply_markup)
 
 
-@router.message(Command("week"))
+@router.message(Command("ai", "week"))
 async def show_week(
     message: Message,
     state: FSMContext,

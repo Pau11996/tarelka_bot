@@ -115,8 +115,11 @@ OPENAI_HTTP_PROXY=http://proxy.example.com:8080
 
 | Переменная | По умолчанию | Смысл |
 |------------|--------------|--------|
-| `DAILY_REQUEST_LIMIT` | `6` | Лимит AI-запросов без подписки |
-| `SUBSCRIPTION_DAILY_REQUEST_LIMIT` | `30` | Лимит с подпиской |
+| `FREE_PHOTO_DAILY_LIMIT` | `3` | Фото в день без подписки для новых пользователей |
+| `LEGACY_FREE_PHOTO_DAILY_LIMIT` | `6` | Фото в день для пользователей, которые уже были в базе |
+| `FREE_TEXT_DAILY_LIMIT` | `60` | Текст и AI-правки в день без подписки |
+| `FREE_VOICE_DAILY_LIMIT` | `10` | Голос в день без подписки |
+| `SUBSCRIPTION_DAILY_REQUEST_LIMIT` | `30` | Общий лимит с подпиской |
 | `SUBSCRIPTION_PRICE_STARS` | `150` | Цена в Stars |
 | `SUBSCRIPTION_DURATION_DAYS` | `30` | Срок |
 | `SUBSCRIPTION_REMINDER_DAYS_BEFORE` | `2` | Напоминание до окончания |

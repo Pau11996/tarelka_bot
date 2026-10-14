@@ -5,7 +5,13 @@ from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
 from src.bot.handlers.food import send_result_card
-from src.bot.keyboards.menus import FAVORITES_BUTTON, favorites_keyboard, meal_card_keyboard
+from src.bot.keyboards.menus import (
+    FAVORITES_BUTTON,
+    favorites_keyboard,
+    meal_card_keyboard,
+    pp_product_keyboard,
+)
+from src.bot.services.pp_picks import catalog_favorite_nutrition, load_pp_product_card
 from src.bot.services.entry_service import EntryService
 from src.bot.services.formatting import (
     format_activity_result,
@@ -97,6 +103,46 @@ async def add_meal_to_favorites(callback: CallbackQuery, session) -> None:
 @router.callback_query(F.data.startswith("meal_favorited:"))
 async def meal_already_favorited(callback: CallbackQuery) -> None:
     await callback.answer("Уже в избранном")
+
+
+@router.callback_query(F.data.startswith("pp_favorited:"))
+async def pp_product_already_favorited(callback: CallbackQuery) -> None:
+    await callback.answer("Уже в избранном")
+
+
+@router.callback_query(F.data.startswith("pp_favorite:"))
+async def add_pp_product_to_favorites(callback: CallbackQuery, session) -> None:
+    product_id = int(callback.data.split(":")[1])
+    card = load_pp_product_card(product_id)
+    if card is None:
+        await callback.answer("Продукт не найден", show_alert=True)
+        return
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    title = card.title[:255]
+    existing = await repo.get_favorite_by_title(user.id, title)
+    if existing is None:
+        nutrition = catalog_favorite_nutrition(card)
+        await repo.create_catalog_favorite(
+            user_id=user.id,
+            title=title,
+            calories=nutrition["calories"],
+            protein_g=nutrition["protein_g"],
+            fat_g=nutrition["fat_g"],
+            carbs_g=nutrition["carbs_g"],
+            micronutrients=nutrition["micronutrients"],
+            items=nutrition["items"],
+        )
+        await callback.answer("Добавлено в избранное")
+    else:
+        await callback.answer("Уже в избранном")
+    if callback.message is not None:
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=pp_product_keyboard(product_id, saved=True)
+            )
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data.startswith("favorite_add:"))

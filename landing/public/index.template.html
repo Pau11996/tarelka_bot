@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калории по фото и БЖУ в Telegram | ${LANDING_TITLE}</title>
-    <meta name="description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. Расчёт примерный.">
+    <title>Калории по фото в Telegram | ${LANDING_TITLE}</title>
+    <meta name="description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день бесплатно. Расчёт примерный.">
     <link rel="canonical" href="${LANDING_ORIGIN}/">
-    <meta property="og:title" content="Калории по фото и БЖУ в Telegram | ${LANDING_TITLE}">
-    <meta property="og:description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. Расчёт примерный.">
+    <meta property="og:title" content="Калории по фото в Telegram | ${LANDING_TITLE}">
+    <meta property="og:description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день бесплатно. Расчёт примерный.">
     <meta property="og:url" content="${LANDING_ORIGIN}/">
     <meta property="og:type" content="website">
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -18,8 +18,8 @@
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Тарелка: калории по фото и дневник питания в Telegram">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Калории по фото и БЖУ в Telegram | ${LANDING_TITLE}">
-    <meta name="twitter:description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_DAILY_LIMIT} AI-запросов в день бесплатно. Расчёт примерный.">
+    <meta name="twitter:title" content="Калории по фото в Telegram | ${LANDING_TITLE}">
+    <meta name="twitter:description" content="Считайте калории и БЖУ по фото в Telegram. Бот ${LANDING_TITLE} ведёт дневник питания, принимает текст и голос. ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день бесплатно. Расчёт примерный.">
     <meta name="twitter:image" content="${LANDING_ORIGIN}/images/social-home.png">
     <meta name="theme-color" content="#1a4030">
     <script type="application/ld+json">
@@ -50,7 +50,7 @@
       "@type": "WebPage",
       "@id": "${LANDING_ORIGIN}/#page",
       "url": "${LANDING_ORIGIN}/",
-      "name": "Калории по фото и БЖУ в Telegram | ${LANDING_TITLE}",
+      "name": "Калории по фото в Telegram | ${LANDING_TITLE}",
       "inLanguage": "ru",
       "isPartOf": {
         "@id": "${LANDING_ORIGIN}/#website"
@@ -105,20 +105,20 @@
             <div class="lp-container lp-hero-grid">
                 <div class="lp-hero-copy">
                     <div class="lp-pill"><span class="lp-status-dot"></span> Ваш дневник питания в Telegram</div>
-                    <h1 id="hero-title">Считайте калории<br>по фото<br><span>в Telegram.</span></h1>
+                    <h1 id="hero-title">Считайте калории по&nbsp;фото<br><span>в Telegram.</span></h1>
                     <p class="lp-hero-lead">«Тарелка» оценит калории и БЖУ по фото еды и добавит запись в дневник питания. Отправляйте снимки, текст или голосовые прямо в&nbsp;Telegram.</p>
                     <div class="lp-hero-actions">
                         <a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_hero" target="_blank" rel="noopener noreferrer"><svg class="lp-icon" aria-hidden="true"><use href="#i-telegram"/></svg> Попробовать бесплатно</a>
                         <a class="lp-text-link" href="#how">Как это работает <span aria-hidden="true">↗</span></a>
                     </div>
-                    <p class="lp-hero-note"><svg class="lp-icon" aria-hidden="true"><use href="#i-check"/></svg> ${FREE_DAILY_LIMIT} разборов в день бесплатно. Без карты.</p>
+                    <p class="lp-hero-note"><svg class="lp-icon" aria-hidden="true"><use href="#i-check"/></svg> ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день бесплатно. Без карты.</p>
                 </div>
 
                 <figure class="lp-hero-visual" aria-label="Пример: фотография риса с курицей превращается в разбор калорий и БЖУ">
                     <div class="lp-phone-pair" aria-hidden="true">
                         <div class="lp-phone lp-phone-camera">
                             <div class="lp-phone-screen lp-camera-screen">
-                                <img class="lp-camera-photo" src="/demo-meal.jpg" width="768" height="1024" alt="" fetchpriority="high">
+                                <div class="lp-meal lp-camera-photo" aria-hidden="true"><span></span><span></span><span></span></div>
                                 <div class="lp-phone-status"><span>9:41</span><span class="lp-phone-island"></span><span>▮▮▮ ▰</span></div>
                                 <div class="lp-camera-heading"><span>‹</span><span>Фото еды</span><span>···</span></div>
                                 <div class="lp-scan-frame"><i></i><i></i><i></i><i></i></div>
@@ -129,7 +129,7 @@
                         <svg class="lp-drawn-arrow" viewBox="0 0 116 100" fill="none"><path d="M5 55C44 99 90 77 62 32 45 6 33 68 99 63" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m88 57 13 6-10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <div class="lp-phone lp-phone-result">
                             <div class="lp-phone-screen lp-result-screen">
-                                <div class="lp-result-photo"><img src="/demo-meal.jpg" width="768" height="1024" alt=""><div class="lp-phone-status"><span>9:41</span><span class="lp-phone-island"></span><span>▮▮▮ ▰</span></div><div class="lp-camera-heading"><span>‹</span><span>Разбор блюда</span><span>···</span></div><span class="lp-food-label lp-food-label-one">Рис <b>286 ккал</b></span><span class="lp-food-label lp-food-label-two">Курица <b>116 ккал</b></span><span class="lp-food-label lp-food-label-three">Томаты <b>10 ккал</b></span></div>
+                                <div class="lp-result-photo"><div class="lp-meal" aria-hidden="true"><span></span><span></span><span></span></div><div class="lp-phone-status"><span>9:41</span><span class="lp-phone-island"></span><span>▮▮▮ ▰</span></div><div class="lp-camera-heading"><span>‹</span><span>Разбор блюда</span><span>···</span></div><span class="lp-food-label lp-food-label-one">Рис <b>286 ккал</b></span><span class="lp-food-label lp-food-label-two">Курица <b>116 ккал</b></span><span class="lp-food-label lp-food-label-three">Томаты <b>10 ккал</b></span></div>
                                 <div class="lp-result-content"><span class="lp-mini-eyebrow">Обед · сегодня</span><h3>Рис с курицей<br>и томатами</h3><div class="lp-calorie-total"><span class="lp-calorie-symbol">✦</span><div><span>Калории</span><strong>412 <small>ккал</small></strong></div><span class="lp-complete-mark">✓</span></div><div class="lp-macros"><div><i></i><strong>28,1 г</strong><span>Белки</span></div><div><i></i><strong>3,3 г</strong><span>Жиры</span></div><div><i></i><strong>64 г</strong><span>Углеводы</span></div></div><div class="lp-phone-balance"><span>Баланс дня <b>544 / 2000</b></span><i><span></span></i></div><div class="lp-phone-done">✓ В дневнике</div></div>
                                 <span class="lp-home-indicator"></span>
                             </div>
@@ -158,7 +158,7 @@
                 <div class="lp-feature-layout">
                     <div class="lp-feature-stage" aria-live="polite" aria-atomic="true">
                         <div class="lp-feature-panel" data-panel="photo">
-                            <div class="lp-demo-app"><div class="lp-demo-app-header"><img src="/logo-mark.svg" width="28" height="25" alt=""><strong>${LANDING_TITLE}</strong><span>сегодня</span></div><img class="lp-demo-food" src="/demo-meal.jpg" width="768" height="1024" loading="lazy" alt="Рис с курицей и томатами"><div class="lp-demo-body"><span class="lp-mini-eyebrow">Блюдо добавлено в дневник</span><h3>Ваш обед — в деталях</h3><div class="lp-demo-total">412 <span>ккал</span><svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></div><div class="lp-macros"><div><i></i><strong>28,1 г</strong><span>Белки</span></div><div><i></i><strong>3,3 г</strong><span>Жиры</span></div><div><i></i><strong>64 г</strong><span>Углеводы</span></div></div><div class="lp-demo-row"><span>Клетчатка</span><b>2,1 г</b></div><div class="lp-demo-row"><span>Сахар</span><b>3,4 г</b></div><p class="lp-demo-caption">Пример приблизительного расчёта</p></div></div>
+                            <div class="lp-demo-app"><div class="lp-demo-app-header"><img src="/logo-mark.svg" width="28" height="25" alt=""><strong>${LANDING_TITLE}</strong><span>сегодня</span></div><div class="lp-meal lp-demo-food" role="img" aria-label="Рис с курицей и томатами"><span></span><span></span><span></span></div><div class="lp-demo-body"><span class="lp-mini-eyebrow">Блюдо добавлено в дневник</span><h3>Ваш обед — в деталях</h3><div class="lp-demo-total">412 <span>ккал</span><svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></div><div class="lp-macros"><div><i></i><strong>28,1 г</strong><span>Белки</span></div><div><i></i><strong>3,3 г</strong><span>Жиры</span></div><div><i></i><strong>64 г</strong><span>Углеводы</span></div></div><div class="lp-demo-row"><span>Клетчатка</span><b>2,1 г</b></div><div class="lp-demo-row"><span>Сахар</span><b>3,4 г</b></div><p class="lp-demo-caption">Пример приблизительного расчёта</p></div></div>
                         </div>
                         <div class="lp-feature-panel" data-panel="voice" hidden>
                             <div class="lp-demo-app lp-chat-demo"><div class="lp-demo-app-header"><img src="/logo-mark.svg" width="28" height="25" alt=""><strong>${LANDING_TITLE}</strong><span>бот</span></div><div class="lp-demo-body"><span class="lp-chat-date">Сегодня</span><div class="lp-chat-message lp-chat-outgoing">На завтрак овсянка на молоке, банан и кофе без сахара.<small>9:41 ✓✓</small></div><div class="lp-chat-message">Завтрак записан ✓<br>Овсянка, банан и кофе<br><strong>≈ 350 ккал</strong><small>9:41</small></div><div class="lp-chat-message lp-chat-outgoing lp-voice-message"><svg class="lp-icon" aria-hidden="true"><use href="#i-mic"/></svg><span class="lp-waveform">▂▅▃▇▅▂▆▃▇▅▃▆▂▅▃</span><span>0:08</span></div><p class="lp-demo-caption">Еда или активность — своими словами.<br>Голосовые сообщения до 60 секунд.</p></div></div>
@@ -175,7 +175,7 @@
                         <button type="button" class="lp-feature-option is-active" data-feature="photo" aria-pressed="true"><span class="lp-feature-option-top"><svg class="lp-icon" aria-hidden="true"><use href="#i-camera"/></svg><strong>Калории по одному фото</strong><span class="lp-feature-arrow" aria-hidden="true">↗</span></span><span>Бот распознает блюдо, примерно оценит порцию и рассчитает калории, белки, жиры, углеводы, клетчатку и сахар.</span></button>
                         <button type="button" class="lp-feature-option" data-feature="voice" aria-pressed="false"><span class="lp-feature-option-top"><svg class="lp-icon" aria-hidden="true"><use href="#i-mic"/></svg><strong>Расскажите, что вы ели</strong><span class="lp-feature-arrow" aria-hidden="true">↗</span></span><span>Нет фотографии? Напишите или запишите голосовое. Можно так же добавить прогулку или тренировку.</span></button>
                         <button type="button" class="lp-feature-option" data-feature="balance" aria-pressed="false"><span class="lp-feature-option-top"><svg class="lp-icon" aria-hidden="true"><use href="#i-chart"/></svg><strong>Весь день перед глазами</strong><span class="lp-feature-arrow" aria-hidden="true">↗</span></span><span>Смотрите дневной баланс, статистику и историю веса. Заполните профиль, чтобы узнать норму под свою цель.</span></button>
-                        <button type="button" class="lp-feature-option" data-feature="favorites" aria-pressed="false"><span class="lp-feature-option-top"><svg class="lp-icon" aria-hidden="true"><use href="#i-heart"/></svg><strong>Любимые блюда — в избранное</strong><span class="lp-feature-arrow" aria-hidden="true">↗</span></span><span>Сохраните привычные завтраки и обеды. Добавляйте их снова, не тратя дневной лимит AI-запросов.</span></button>
+                        <button type="button" class="lp-feature-option" data-feature="favorites" aria-pressed="false"><span class="lp-feature-option-top"><svg class="lp-icon" aria-hidden="true"><use href="#i-heart"/></svg><strong>Любимые блюда — в избранное</strong><span class="lp-feature-arrow" aria-hidden="true">↗</span></span><span>Сохраните привычные завтраки и обеды командой /favorites. Добавляйте их снова, не тратя дневной лимит AI-запросов.</span></button>
                     </div>
                 </div>
             </div>
@@ -193,11 +193,72 @@
             <div class="lp-container lp-diary-grid"><div class="lp-diary-copy"><span class="lp-pill lp-pill-light"><span class="lp-status-dot"></span> Маленькая привычка на каждый день</span><h2>Ваша цель.<br>Ваш ритм.<br><span>Ваша «Тарелка».</span></h2><p>Худеть, набирать вес или лучше понимать своё питание. Начните с одной записи — дневник постепенно сложится сам.</p><a class="lp-button lp-button-light" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_diary" target="_blank" rel="noopener noreferrer">Начать свой дневник <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="lp-diary-card"><div class="lp-diary-card-top"><span>Моя неделя</span><span>Пн — Вс</span></div><div class="lp-diary-value">Шаг за шагом <span>к своей цели</span></div><div class="lp-week-chart" role="img" aria-label="Иллюстрация дневника питания за неделю"><div><i></i><span>Пн</span></div><div><i></i><span>Вт</span></div><div><i></i><span>Ср</span></div><div><i></i><span>Чт</span></div><div><i></i><span>Пт</span></div><div><i></i><span>Сб</span></div><div><i></i><span>Вс</span></div></div><div class="lp-diary-card-bottom"><span class="lp-diary-check"><svg class="lp-icon" aria-hidden="true"><use href="#i-check"/></svg></span><div><strong>Сегодня вы позаботились о себе</strong><span>И это уже хороший результат.</span></div></div></div></div>
         </section>
 
+        <section class="lp-subscription lp-section" aria-labelledby="subscription-title">
+            <div class="lp-container">
+                <div class="lp-section-heading">
+                    <span class="lp-eyebrow">Возможности подписки</span>
+                    <h2 id="subscription-title">Поймите, что улучшить<br>в своём питании</h2>
+                    <p>«Тарелка» разбирает ваши записи и предлагает шаги на следующую неделю.</p>
+                </div>
+                <div class="lp-benefit-grid">
+                    <article>
+                        <span class="lp-benefit-icon"><svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></span>
+                        <h3>Разбор вашей недели</h3>
+                        <p>ИИ-помощник покажет, что получилось и что стоит улучшить с учётом вашей цели. В конце разбора предложит 2–3 действия на следующую неделю.</p>
+                    </article>
+                    <article>
+                        <span class="lp-benefit-icon"><svg class="lp-icon" aria-hidden="true"><use href="#i-heart"/></svg></span>
+                        <h3>Идеи продуктов для рациона</h3>
+                        <p>Подборка ПП-продуктов из категорий, которые встречаются в вашем дневнике. В карточках можно посмотреть состав, КБЖУ и торговые сети, сохранить понравившееся в избранное.</p>
+                    </article>
+                    <article>
+                        <span class="lp-benefit-icon"><svg class="lp-icon" aria-hidden="true"><use href="#i-chart"/></svg></span>
+                        <h3>Подробная статистика</h3>
+                        <p>Сравнивайте БЖУ с целями, смотрите сводку приёмов пищи и воды. Отдельный отчёт соберёт записанные за неделю тренировки, их длительность и расход калорий.</p>
+                    </article>
+                </div>
+                <p class="lp-subscription-note">Для разбора недели нужны хотя бы 2 дня с записями еды. Открывайте его командой /ai или получайте по воскресеньям, если включены напоминания.</p>
+            </div>
+        </section>
+
         <section class="lp-pricing lp-section" id="pricing" aria-labelledby="pricing-title">
-            <div class="lp-container"><div class="lp-section-heading"><span class="lp-eyebrow">Сначала попробуйте</span><h2 id="pricing-title">Начать можно бесплатно.</h2><p>Выберите комфортный ритм — остальное мы посчитаем.</p></div><div class="lp-price-grid">
-                <article class="lp-price-card"><span class="lp-price-label">На каждый день</span><h3>Бесплатно</h3><div class="lp-price">0 <span>Stars</span></div><p>${FREE_DAILY_LIMIT} AI-запросов в день</p><ul><li>Фото, текст и голос</li><li>Дневник, баланс и статистика</li><li>Персональная норма калорий</li><li>Избранные блюда без расхода лимита</li></ul><a class="lp-button lp-button-outline" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_free" target="_blank" rel="noopener noreferrer">Попробовать бесплатно <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></article>
-                <article class="lp-price-card lp-price-premium"><span class="lp-price-label">Больше возможностей для записей</span><h3>С подпиской <svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></h3><div class="lp-price">${SUBSCRIPTION_PRICE_STARS} <span>Stars / ${SUBSCRIPTION_DURATION_DAYS} дней</span></div><p>${SUBSCRIPTION_DAILY_LIMIT} AI-запросов в день</p><ul><li>Всё, что есть в бесплатной версии</li><li>Больше разборов еды и активности</li><li>Оплата прямо в Telegram</li><li>Без автоматического продления</li></ul><a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=premium" target="_blank" rel="noopener noreferrer">Открыть подписку <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></article>
-            </div><p class="lp-price-note">Фото, голос, текст и AI-правки входят в дневной лимит.<br>Пригласите друга и получите ${REFERRAL_BONUS_REQUESTS} бонусных запроса после его первого разбора.</p></div>
+            <div class="lp-container">
+                <div class="lp-section-heading">
+                    <span class="lp-eyebrow">Выберите свой формат</span>
+                    <h2 id="pricing-title">Дневник доступен бесплатно</h2>
+                    <p>Подключите подписку, когда захотите получать разборы питания и рекомендации по своим записям.</p>
+                </div>
+                <div class="lp-price-grid">
+                    <article class="lp-price-card">
+                        <span class="lp-price-label">Для ежедневного учёта питания</span>
+                        <h3>Бесплатно</h3>
+                        <div class="lp-price">0 <span>Stars</span></div>
+                        <p>${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день</p>
+                        <ul>
+                            <li>Дневник питания и дневной баланс</li>
+                            <li>Базовая статистика и история веса</li>
+                            <li>Персональная норма калорий</li>
+                            <li>Избранные блюда без расхода лимита</li>
+                        </ul>
+                        <a class="lp-button lp-button-outline" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_free" target="_blank" rel="noopener noreferrer">Попробовать бесплатно <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                    </article>
+                    <article class="lp-price-card lp-price-premium">
+                        <span class="lp-price-label">Для разбора питания и привычек</span>
+                        <h3>С подпиской <svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></h3>
+                        <div class="lp-price">${SUBSCRIPTION_PRICE_STARS} <span>Stars / ${SUBSCRIPTION_DURATION_DAYS} дней</span></div>
+                        <p>${SUBSCRIPTION_DAILY_LIMIT} фото, безлимит текста, ${SUBSCRIPTION_VOICE_DAILY_LIMIT} голосовых в день</p>
+                        <ul>
+                            <li>Всё, что есть в бесплатной версии</li>
+                            <li>Разбор недели и советы по вашим записям</li>
+                            <li>Подбор ПП-продуктов по вашему рациону</li>
+                            <li>БЖУ к целям, статистика приёмов пищи и воды</li>
+                            <li>Отчёт об активности за неделю</li>
+                        </ul>
+                        <a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=premium" target="_blank" rel="noopener noreferrer">Открыть подписку <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                    </article>
+                </div>
+                <p class="lp-price-note">Оплата подписки через Telegram Stars. Без автоматического продления.<br>Фото, текст и голос считаются отдельно. AI-правки расходуют текстовые запросы.<br>Пригласите ${REFERRAL_MONTHLY_GOAL} друзей за календарный месяц командой /invite — после их первого разбора получите месяц подписки.</p>
+            </div>
         </section>
 
 <section class="lp-section lp-home-journal" aria-labelledby="home-journal-title"><div class="lp-container"><div class="lp-section-heading"><span class="lp-eyebrow">Блог «Тарелки»</span><h2 id="home-journal-title">Разберитесь в калориях и порциях</h2><p>Практические инструкции, примеры и инструменты для дневника.</p></div><div class="journal-grid"><article class="journal-card">
@@ -214,11 +275,14 @@
         <section class="lp-faq lp-section" id="faq" aria-labelledby="faq-title">
             <div class="lp-container lp-faq-layout"><div class="lp-faq-heading"><span class="lp-eyebrow">Разберёмся вместе</span><h2 id="faq-title">Остались<br>вопросы?</h2><p>Самое важное о «Тарелке»<br>перед первым фото.</p>${FEEDBACK_LINK_HTML}</div><div class="lp-faq-list">
                 <details><summary>Нужно ли скачивать приложение?<span aria-hidden="true">+</span></summary><p>Нет. «Тарелка» работает прямо в Telegram — на телефоне, планшете и компьютере. Откройте бота, нажмите «Начать» и отправьте первую запись.</p></details>
-                <details><summary>Насколько точны расчёты по фото?<span aria-hidden="true">+</span></summary><p>Расчёт приблизительный: по фотографии нельзя точно определить вес порции и все ингредиенты. Это помощник для повседневного учёта питания. Если бот ошибся, поправьте запись через «Редактировать» или команду /correct.</p></details>
+                <details><summary>Насколько точны расчёты по фото?<span aria-hidden="true">+</span></summary><p>Расчёт приблизительный: по фотографии нельзя точно определить вес порции и все ингредиенты. Это помощник для повседневного учёта питания. Если бот ошибся, поправьте запись через «Редактировать» или команду /correct. Подробнее — <a href="/blog/tochnost-kalorij-po-foto/">что влияет на точность калорий по фото и как уточнить результат</a>.</p></details>
+                <details><summary>Как посчитать калории домашнего блюда?<span aria-hidden="true">+</span></summary><p>Если известен рецепт, сложите калории ингредиентов и взвесьте всё готовое блюдо. Калории порции можно рассчитать по её доле в общем весе, если ингредиенты распределены равномерно. В статье есть <a href="/blog/kalorijnost-gotovogo-blyuda/#calculator">калькулятор калорийности на 100 г и на порцию</a>, формула и пример расчёта.</p></details>
                 <details><summary>Нужно ли сначала заполнять профиль?<span aria-hidden="true">+</span></summary><p>Можно начать сразу со стартовой нормой 2000 ккал. Чтобы получить персональную норму, укажите вес, рост, возраст, пол, цель и уровень активности.</p></details>
-                <details><summary>Можно отправлять текст и голосовые?<span aria-hidden="true">+</span></summary><p>Да. Опишите блюдо, порцию или тренировку своими словами. Голосовое сообщение должно быть не длиннее 60 секунд. По фото бот распознаёт только еду.</p></details>
-                <details><summary>Что входит в бесплатную версию?<span aria-hidden="true">+</span></summary><p>${FREE_DAILY_LIMIT} AI-запросов в день, дневник питания, баланс, статистика и избранное. Фото, текст, голос и AI-правки расходуют запросы. Добавление сохранённых блюд из избранного не тратит лимит.</p></details>
-                <details><summary>Как оплачивается подписка?<span aria-hidden="true">+</span></summary><p>Через Telegram Stars внутри бота: ${SUBSCRIPTION_PRICE_STARS} Stars за ${SUBSCRIPTION_DURATION_DAYS} дней. Подписка увеличивает лимит до ${SUBSCRIPTION_DAILY_LIMIT} AI-запросов в день и не продлевается автоматически. По вопросам оплаты используйте /paysupport.</p></details>
+                <details><summary>Можно отправлять текст и голосовые?<span aria-hidden="true">+</span></summary><p>Да. Опишите блюдо, порцию или тренировку своими словами. Голосовое сообщение должно быть не длиннее 60 секунд. По фото распознаётся только еда.</p></details>
+                <details><summary>Что входит в бесплатную версию?<span aria-hidden="true">+</span></summary><p>Бесплатным дневником можно пользоваться каждый день: доступны баланс, базовая статистика, история веса, персональная норма калорий и избранное. Лимиты на день: ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстовых и ${FREE_VOICE_DAILY_LIMIT} голосовых запросов. AI-правки расходуют текстовые запросы. Добавление сохранённых блюд из избранного не тратит лимит.</p></details>
+                <details><summary>Что добавляет подписка?<span aria-hidden="true">+</span></summary><p>Разбор недели с рекомендациями по вашим записям, подбор ПП-продуктов и отчёт об активности. В статистике появляются сравнение БЖУ с целями и подробные сводки приёмов пищи и воды. Для ежедневных записей доступны ${SUBSCRIPTION_DAILY_LIMIT} фото, безлимит текста и ${SUBSCRIPTION_VOICE_DAILY_LIMIT} голосовых в день.</p></details>
+                <details><summary>Как работает разбор недели?<span aria-hidden="true">+</span></summary><p>С подпиской откройте /ai и выберите разбор пищевых привычек. Бот использует записи за последние 7 дней и вашу цель, отмечает, что получилось, и предлагает 2–3 действия на следующую неделю. Нужны хотя бы 2 дня с записями еды. Готовый разбор можно перечитать и один раз обновить в течение недели. По воскресеньям он приходит автоматически, если включены напоминания.</p></details>
+                <details><summary>Как оплачивается подписка?<span aria-hidden="true">+</span></summary><p>Через Telegram Stars внутри бота: ${SUBSCRIPTION_PRICE_STARS} Stars за ${SUBSCRIPTION_DURATION_DAYS} дней. Подписка не продлевается автоматически. После её окончания можно продолжить пользоваться бесплатным дневником. По вопросам оплаты используйте /paysupport.</p></details>
                 <details><summary>Как отключить напоминания?<span aria-hidden="true">+</span></summary><p>Отправьте боту /notifications_off. Чтобы включить напоминания снова — /notifications_on. Сервисные сообщения об оплате могут приходить отдельно.</p></details>
                 <details><summary>Какие данные хранит «Тарелка»?<span aria-hidden="true">+</span></summary><p>Telegram ID, профиль, записи дневника, результаты анализа, историю веса, использование лимитов и сведения об оплате. Подробнее о данных и их удалении — в <a href="/privacy.html">политике конфиденциальности</a>.</p></details>
             </div></div>
@@ -227,6 +291,6 @@
         <section class="lp-final"><div class="lp-container"><img src="/logo-mark.svg" width="70" height="61" loading="lazy" alt=""><span class="lp-eyebrow">Всё начинается с одной тарелки</span><h2>Ваш следующий приём пищи —<br><span>первый шаг.</span></h2><p>Откройте Telegram. Отправьте фото. Готово.</p><a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_footer" target="_blank" rel="noopener noreferrer"><svg class="lp-icon" aria-hidden="true"><use href="#i-telegram"/></svg> Попробовать «Тарелку»</a><span class="lp-final-note">Бесплатно · Без карты · В привычном чате</span></div></section>
     </main>
 
-    <footer class="lp-footer"><div class="lp-container"><div class="lp-footer-top"><div><a class="logo lp-logo" href="#top"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a><p>Чуть больше заботы о себе.<br>Одна тарелка за другой.</p></div><div class="lp-footer-column"><strong>Знакомство</strong><a href="#features">Возможности</a><a href="#pricing">Тарифы</a><a href="#faq">Вопросы и ответы</a><a href="/blog/">Блог о питании</a><a href="/about/">О сервисе и контакты</a></div><div class="lp-footer-column"><strong>На связи</strong><a href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_footer_link" target="_blank" rel="noopener noreferrer">@${LANDING_BOT_USERNAME}</a>${FEEDBACK_LINK_HTML}</div></div><div class="lp-footer-bottom"><span>© ${LANDING_TITLE}</span><a href="/privacy.html">Конфиденциальность</a><a href="/terms.html">Условия использования</a></div><p class="lp-disclaimer">Расчёт калорий и нутриентов примерный. Сервис не заменяет врача или специалиста по питанию.</p></div></footer>
+    <footer class="lp-footer"><div class="lp-container"><div class="lp-footer-top"><div><a class="logo lp-logo" href="#top"><img class="logo-mark" src="/logo-mark.svg" width="40" height="35" alt=""><span>${LANDING_TITLE}</span></a><p>Чуть больше заботы о себе.<br>Одна тарелка за другой.</p></div><div class="lp-footer-column"><strong>Знакомство</strong><a href="#features">Возможности</a><a href="#pricing">Тарифы</a><a href="#faq">Вопросы и ответы</a><a href="/blog/">Блог о питании</a><a href="/blog/kalorijnost-gotovogo-blyuda/#calculator">Калькулятор калорийности порции</a><a href="/blog/dnevnik-pitaniya/#template">Шаблон дневника питания</a><a href="/about/">О сервисе и контакты</a></div><div class="lp-footer-column"><strong>На связи</strong><a href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_footer_link" target="_blank" rel="noopener noreferrer">@${LANDING_BOT_USERNAME}</a>${FEEDBACK_LINK_HTML}</div></div><div class="lp-footer-bottom"><span>© ${LANDING_TITLE}</span><a href="/privacy.html">Конфиденциальность</a><a href="/terms.html">Условия использования</a></div><p class="lp-disclaimer">Расчёт калорий и нутриентов примерный. Сервис не заменяет врача или специалиста по питанию.</p></div></footer>
 </body>
 </html>

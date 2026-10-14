@@ -6,11 +6,17 @@ from datetime import date
 
 from src.bot.keyboards.menus import week_menu_keyboard
 from src.bot.services.links import HELP_TEXT
+from src.bot.config import PROJECT_ROOT
 from src.bot.services.pp_picks import (
     PpProduct,
+    PpProductCard,
     card_caption,
+    catalog_db_path,
+    catalog_favorite_nutrition,
     catalog_from_products,
+    format_pp_card,
     load_pp_catalog,
+    load_pp_product_card,
     meal_phrases,
     pick_pp_cards,
 )
@@ -140,6 +146,97 @@ def test_caption_adds_brand_once() -> None:
     assert card_caption(already) == "Творог Савушкин 5%"
 
 
+def test_format_pp_card_lists_catalog_fields() -> None:
+    card = PpProductCard(
+        product_id=1027,
+        title="Творог Мягкий Савушкин продукт 5%",
+        brand="Савушкин",
+        barcode="4810268019630",
+        volume="125г",
+        weight_g=130,
+        energy_cost="белки - 8,5 г; жиры - 5,0 г; углеводы - 1,6 г; 85,4 ккал",
+        description="творог (молоко), сливки <след яиц>",
+        producer='ОАО"Савушкин продукт"',
+        country="Республика Беларусь",
+        categories="Творог",
+        networks="Гиппо, Green",
+        image_url="https://img.example/1027.jpg",
+    )
+
+    text = format_pp_card(card)
+
+    assert "Название: Творог Мягкий Савушкин продукт 5%" in text
+    assert "Бренд: Савушкин" in text
+    assert "Штрихкод: 4810268019630" in text
+    assert "Фасовка: 125 г, вес 130 г" in text
+    assert "КБЖУ: белки 8,5 г, жиры 5,0 г, углеводы 1,6 г, 85,4 ккал" in text
+    assert "Состав: творог (молоко), сливки &lt;след яиц&gt;" in text
+    assert "Производитель: ОАО&quot;Савушкин продукт&quot;, Республика Беларусь" in text
+    assert "Категория: Творог" in text
+    assert "Сети: Гиппо, Green" in text
+    nutrition = catalog_favorite_nutrition(card)
+    assert nutrition["calories"] == 85.4
+    assert nutrition["items"][0]["quantity"] == "100 г"
+
+
+def test_load_pp_product_card_reads_catalog_row(monkeypatch, tmp_path) -> None:
+    database = tmp_path / "products.sqlite"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        """
+        CREATE TABLE products (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            brand TEXT,
+            gtin TEXT,
+            barcodes TEXT,
+            volume TEXT,
+            weight INTEGER,
+            energy_cost TEXT,
+            description TEXT,
+            producer TEXT,
+            producing_country TEXT,
+            category_ids TEXT,
+            networks TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE TABLE categories (id INTEGER PRIMARY KEY, title TEXT)"
+    )
+    connection.execute("CREATE TABLE chain_offers (product_id INTEGER, image_url TEXT)")
+    connection.execute("INSERT INTO categories VALUES (1, 'Творог')")
+    connection.execute(
+        """
+        INSERT INTO products VALUES (
+            7, 'Творог 5%', 'Савушкин', '4810268019630', '[]', '125г', 130,
+            '85 ккал', 'молоко', 'Савушкин', 'Беларусь', '[1]', 'gippo,green'
+        )
+        """
+    )
+    connection.execute("INSERT INTO chain_offers VALUES (7, 'https://img.example/7.jpg')")
+    connection.commit()
+    connection.close()
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(database))
+
+    card = load_pp_product_card(7)
+
+    assert card is not None
+    assert card.barcode == "4810268019630"
+    assert card.categories == "Творог"
+    assert card.networks == "Гиппо, Green"
+    assert card.image_url == "https://img.example/7.jpg"
+
+
+def test_catalog_db_path_follows_product_db_env(monkeypatch, tmp_path) -> None:
+    absolute = tmp_path / "catalog.sqlite"
+    monkeypatch.setenv("PRODUCT_DB_PATH", str(absolute))
+    assert catalog_db_path() == absolute
+
+    monkeypatch.setenv("PRODUCT_DB_PATH", "data/green_by_products.sqlite")
+    assert catalog_db_path() == PROJECT_ROOT / "data" / "green_by_products.sqlite"
+
+
 def test_load_catalog_keeps_only_pp_products_with_photos(tmp_path) -> None:
     database = tmp_path / "products.sqlite"
     connection = sqlite3.connect(database)
@@ -174,3 +271,76 @@ def test_load_catalog_keeps_only_pp_products_with_photos(tmp_path) -> None:
     assert titles == ["Гречка ядрица"]
     assert catalog.by_bucket["grains"][0].image_url == "https://img.example/buckwheat.jpg"
     assert catalog.by_bucket["grains"][0].brand == "Мельница"
+
+
+def test_load_catalog_skips_ready_made_counter(tmp_path) -> None:
+    database = tmp_path / "products.sqlite"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        """
+        CREATE TABLE products (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            brand TEXT,
+            is_pp INTEGER,
+            category_ids TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE TABLE categories (id INTEGER PRIMARY KEY, parent_id INTEGER, title TEXT)"
+    )
+    connection.execute("CREATE TABLE chain_offers (product_id INTEGER, image_url TEXT)")
+    connection.executemany(
+        "INSERT INTO categories (id, parent_id, title) VALUES (?, ?, ?)",
+        [(397, None, "Готовая еда"), (402, 397, "Салаты")],
+    )
+    connection.executemany(
+        "INSERT INTO products VALUES (?, ?, ?, ?, ?)",
+        [
+            (1, "Гречка ядрица", "", 1, "[1247]"),
+            (2, "Салат Греческий", "", 1, "[402]"),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO chain_offers VALUES (?, ?)",
+        [
+            (1, "https://img.example/buckwheat.jpg"),
+            (2, "https://img.example/salad.jpg"),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    catalog = load_pp_catalog(database)
+    titles = [product.title for products in catalog.by_bucket.values() for product in products]
+    assert titles == ["Гречка ядрица"]
+
+
+def test_load_catalog_skips_ready_made_brand(tmp_path) -> None:
+    database = tmp_path / "products.sqlite"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT, brand TEXT, is_pp INTEGER)"
+    )
+    connection.execute("CREATE TABLE chain_offers (product_id INTEGER, image_url TEXT)")
+    connection.executemany(
+        "INSERT INTO products VALUES (?, ?, ?, ?)",
+        [
+            (1, "Гречка ядрица", "", 1),
+            (2, "Котлета куриная", "Готовим с любовью!", 1),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO chain_offers VALUES (?, ?)",
+        [
+            (1, "https://img.example/buckwheat.jpg"),
+            (2, "https://img.example/cutlet.jpg"),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    catalog = load_pp_catalog(database)
+    titles = [product.title for products in catalog.by_bucket.values() for product in products]
+    assert titles == ["Гречка ядрица"]

@@ -11,7 +11,7 @@ COPY src ./src
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --timeout 120 --retries 10 .
 
 RUN mkdir -p /opt/logs/bot
 

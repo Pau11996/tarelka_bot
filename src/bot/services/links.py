@@ -52,7 +52,7 @@ def subscription_offer_link(*, renew: bool = False) -> str | None:
     url = subscription_url()
     if not url:
         return None
-    label = "продлить подписку" if renew else "оформить подписку"
+    label = "продлить подписку" if renew else "оформите подписку"
     return f'<a href="{url}">{label}</a>'
 
 
@@ -87,9 +87,21 @@ def support_email_link() -> str:
     return f"<code>{SUPPORT_EMAIL}</code>"
 
 
+def subscription_benefits_text() -> str:
+    return (
+        f"• {settings.subscription_daily_request_limit} фото, безлимит текстовых "
+        f"и {settings.subscription_voice_daily_limit} голосовых запросов в день;\n"
+        "• ИИ-помощник: разбор недели /ai — что получилось, "
+        "что улучшить и где пропущен приём пищи;\n"
+        "• подбор ПП-продуктов под ваш рацион;\n"
+        "• аналитика активности;\n"
+        "• продвинутая статистика: БЖУ к целям, приёмы пищи, вода и активность."
+    )
+
+
 def increase_limit_hint() -> str:
     price_part = (
-        f"{settings.subscription_daily_request_limit} запросов в день "
+        f"{settings.subscription_daily_request_limit} фото в день "
         f"за {settings.subscription_price_stars}⭐"
     )
     offer = subscription_offer_link()
@@ -98,15 +110,21 @@ def increase_limit_hint() -> str:
     else:
         subscription_part = f"оформите подписку — {price_part}"
     return (
-        f"Чтобы увеличить лимит, {subscription_part}. "
-        "В подписке ещё ИИ-помощник: разбор недели /week — "
-        "что улучшить и где пропущен приём пищи."
+        f"Чтобы увеличить лимит, {subscription_part}.\n\n"
+        "В подписке ещё:\n"
+        f"{subscription_benefits_text()}"
     )
 
 
+# Shown by Telegram in an empty bot chat, before the user presses Start.
+EMPTY_CHAT_DESCRIPTION = (
+    "Считаю калории, БЖУ и нутриенты по фото, голосу или тексту.\n\n"
+    "Нажмите «Старт», чтобы открыть дневник питания."
+)
+
 MENU_COMMANDS = (
     ("today", "📊 дневник за сегодня"),
-    ("week", "🍽 разбор недели"),
+    ("ai", "🍽 разбор недели"),
     ("stats", "📈 статистика"),
     ("favorites", "⭐ избранные блюда и активности"),
     ("premium", "💎 подписка"),
@@ -136,7 +154,7 @@ HELP_TEXT = (
     "• «Статистика» — график за месяц и выбранный день;\n"
     "• «Избранное» — быстрый повтор блюд и активностей;\n"
     "• «Профиль» — норма калорий; заполните данные, чтобы она была точнее;\n"
-    "• «Разбор недели» /week — для подписчиков: AI-разбор пищевых привычек, "
+    "• «Разбор недели» /ai — для подписчиков: AI-разбор пищевых привычек, "
     "подбор ПП-продуктов под ваш рацион или аналитика активности.\n\n"
     "Можно начинать сразу: стартовая норма — 2000 ккал.\n"
     "Часть служебных сообщений удаляется автоматически, "

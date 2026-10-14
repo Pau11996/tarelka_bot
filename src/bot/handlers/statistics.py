@@ -12,9 +12,11 @@ from src.bot.config import settings
 from src.bot.keyboards.menus import STATS_BUTTON, statistics_keyboard
 from src.bot.services.charts import DailyCaloriesPoint, WeightPoint, render_calories_chart_png, render_weight_chart_png
 from src.bot.services.formatting import format_daily_balance, format_entry_list
-from src.bot.services.messaging import answer_ephemeral, schedule_bot_message, schedule_user_message
+from src.bot.services.messaging import answer_ephemeral, answer_rich, schedule_bot_message, schedule_user_message
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.nutrition import calculate_daily_balance, local_today
+from src.bot.services.request_limit import has_active_subscription
+from src.bot.services.rich_cards import build_month_advanced, format_day_rich, format_month_rich, format_weight_rich
 from src.bot.states import StatisticsStates
 from src.db.models import EntryType
 from src.db.repository import UserRepository
@@ -22,6 +24,8 @@ from src.db.repository import UserRepository
 router = Router()
 
 DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y")
+MONTH_PHOTO_CAPTION = "Калории за последние 30 дней"
+WEIGHT_PHOTO_CAPTION = "Динамика веса"
 
 
 def _normalize_date_input(value: str) -> str:
@@ -135,9 +139,24 @@ async def show_month_statistics(
     chart = render_calories_chart_png(points, target=profile.daily_calorie_target)
     sent = await callback.message.answer_photo(
         BufferedInputFile(chart, filename="calories_last_30_days.png"),
-        caption=_format_month_caption(points, profile.daily_calorie_target),
+        caption=MONTH_PHOTO_CAPTION,
     )
     schedule_bot_message(cleanup, sent)
+    advanced = None
+    if has_active_subscription(user):
+        advanced = build_month_advanced(
+            entries,
+            profile=profile,
+            target=profile.daily_calorie_target,
+            days_in_period=len(points),
+        )
+    await answer_rich(
+        callback.message,
+        format_month_rich(points, profile.daily_calorie_target, advanced=advanced),
+        fallback_text=_format_month_caption(points, profile.daily_calorie_target),
+        cleanup=cleanup,
+        track_user=False,
+    )
     await callback.answer()
 
 
@@ -162,9 +181,16 @@ async def show_weight_statistics(
     chart = render_weight_chart_png(points)
     sent = await callback.message.answer_photo(
         BufferedInputFile(chart, filename="weight_history.png"),
-        caption=_format_weight_caption(points, profile.weight_kg),
+        caption=WEIGHT_PHOTO_CAPTION,
     )
     schedule_bot_message(cleanup, sent)
+    await answer_rich(
+        callback.message,
+        format_weight_rich(points, profile.weight_kg),
+        fallback_text=_format_weight_caption(points, profile.weight_kg),
+        cleanup=cleanup,
+        track_user=False,
+    )
     await callback.answer()
 
 
@@ -198,10 +224,21 @@ async def show_day_statistics(message: Message, state: FSMContext, session, clea
 
     entries = await repo.get_entries_for_date(user.id, selected_date)
     balance = calculate_daily_balance(profile.daily_calorie_target, entries)
+    subscriber = has_active_subscription(user)
     text = f"📅 Статистика за {selected_date.strftime('%d.%m.%Y')}\n\n"
     text += format_daily_balance(balance)
     text += "\n\n" + format_entry_list(entries)
 
     await state.clear()
-    schedule_user_message(cleanup, message)
-    await answer_ephemeral(message, cleanup, text, track_user=False)
+    await answer_rich(
+        message,
+        format_day_rich(
+            selected_date,
+            balance,
+            entries,
+            subscriber=subscriber,
+            profile=profile,
+        ),
+        fallback_text=text,
+        cleanup=cleanup,
+    )

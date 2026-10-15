@@ -103,20 +103,6 @@ def meal_card_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def pp_product_keyboard(product_id: int, *, saved: bool = False) -> InlineKeyboardMarkup:
-    if saved:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="✅ В избранном", callback_data=f"pp_favorited:{product_id}")]
-            ]
-        )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="⭐ В избранное", callback_data=f"pp_favorite:{product_id}")]
-        ]
-    )
-
-
 def favorites_keyboard(favorites: list) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -156,12 +142,6 @@ def week_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="AI анализ пищевых привычек за неделю",
                     callback_data="coach:habits",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Подбор ПП продуктов под ваш рацион",
-                    callback_data="coach:pp",
                 )
             ],
             [

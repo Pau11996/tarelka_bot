@@ -100,6 +100,14 @@ class StaticSiteTests(unittest.TestCase):
                     if url.fragment:
                         self.assertIn(url.fragment, Page(target.read_text()).ids)
 
+    def test_cached_styles_and_scripts_have_release_versions(self):
+        for path, page in self.pages.items():
+            for asset in page.assets:
+                url = urlsplit(asset)
+                if url.path.endswith(('.css', '.js')) and not url.netloc:
+                    with self.subTest(page=path, asset=asset):
+                        self.assertRegex(url.query, r'^v=[0-9a-f]{12}$')
+
     def test_structured_data_matches_visible_page(self):
         for path, page in self.pages.items():
             if path.name in ('privacy.html', 'terms.html'): continue
@@ -142,7 +150,7 @@ class StaticSiteTests(unittest.TestCase):
             text = path.read_text()
             with self.subTest(path=path.relative_to(self.site)):
                 self.assertIn(tag, text)
-                self.assertIn('src="/analytics.js?v=20261013"', text)
+                self.assertRegex(text, r'src="/analytics\.js\?v=[0-9a-f]{12}"')
                 self.assertNotIn('src="https://www.googletagmanager.com', text)
         self.assertIn(tag, (self.site / '404.html').read_text())
         self.assertNotIn('analytics.js', (self.site / 'admin.html').read_text())

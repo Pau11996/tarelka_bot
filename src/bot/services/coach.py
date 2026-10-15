@@ -443,7 +443,14 @@ def format_week_message(review: CoachWeekReview, facts: dict) -> str:
     text += _bullet_section("Пропуски", _skip_lines(review, facts))
     text += _bullet_section("На следующую неделю", review.next_steps)
     if len(text) > 4000:
-        text = text[:3990].rstrip() + "…"
+        text = text[:3990].rstrip()
+        # Never cut a Telegram HTML entity or a bold section heading in half.
+        if text.rfind("<") > text.rfind(">"):
+            text = text[:text.rfind("<")]
+        if text.rfind("&") > text.rfind(";"):
+            text = text[:text.rfind("&")]
+        open_bold = text.count("<b>") - text.count("</b>")
+        text += "…" + "</b>" * open_bold
     return text
 
 
@@ -547,8 +554,13 @@ async def process_sunday_coach_pushes(
             await bot.send_message(user.telegram_id, text)
             sent += 1
         except TelegramForbiddenError:
+            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
             await repo.set_notifications_enabled(user, False)
+        except asyncio.CancelledError:
+            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
+            raise
         except Exception:
+            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
             logger.exception("Failed to send week review to user_id=%s", user.id)
         await asyncio.sleep(0.05)
     return sent

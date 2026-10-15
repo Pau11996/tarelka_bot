@@ -10,6 +10,8 @@ from aiogram.methods import SendMessage
 
 from src.ai_analyzer.parsing import parse_coach_review
 from src.ai_analyzer.prompts import build_coach_week_prompt
+from src.bot.keyboards.menus import week_menu_keyboard
+from src.bot.services.links import HELP_TEXT
 from src.bot.handlers.subscription import format_subscription_status
 from src.bot.services.coach import (
     MIN_LOGGED_DAYS,
@@ -243,13 +245,15 @@ def test_week_review_requires_subscription() -> None:
     assert week_review_allowed(user) is True
     active = format_subscription_status(user)
     assert "ИИ-помощник" in active
-    assert "пропущен приём" in active
+    assert "бета" in active
+    assert "рекомендации по вашим записям" in active
     assert "/ai" in active
     user.subscription_until = datetime.now(timezone.utc) - timedelta(days=1)
     inactive = format_subscription_status(user)
     assert "Подписка не активна" in inactive
     assert "ИИ-помощник" in inactive
-    assert "что улучшить" in inactive
+    assert "бета" in inactive
+    assert "рекомендации по вашим записям" in inactive
     assert "/ai" in inactive
 
 
@@ -316,6 +320,16 @@ def test_coach_prompt_includes_facts() -> None:
     prompt = build_coach_week_prompt({"goal": "lose", "skips": []})
     assert "lose" in prompt
     assert "Do not recalculate" in prompt
+
+
+@pytest.mark.parametrize("summary", ["&" * 1000, "<" * 1000, *["я" * n for n in range(3820, 3900)]])
+def test_long_review_keeps_valid_telegram_html(summary) -> None:
+    from xml.etree.ElementTree import fromstring
+
+    facts = digest_facts(_digest(_two_days(), _local(SUNDAY, 19)))
+    result = format_week_message(CoachWeekReview(summary=summary, wins=["пример & еда " * 100]), facts)
+    fromstring("<root>" + result + "</root>")
+    assert len(result) <= 4000
 
 
 def test_should_send_sunday_review_only_after_19_for_subscribers() -> None:
@@ -532,6 +546,20 @@ async def test_forbidden_sunday_push_disables_notifications() -> None:
 
     assert sent == 0
     repo.set_notifications_enabled.assert_awaited()
+    repo.release_coach_push.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_send_failure_releases_claim_for_retry() -> None:
+    repo = _repo(_two_days())
+    bot = AsyncMock()
+    bot.send_message.side_effect = RuntimeError("temporary transport failure")
+    now = datetime(2026, 10, 11, 16, 5, tzinfo=timezone.utc)
+    sent = await process_sunday_coach_pushes(
+        bot, repo, [_subscriber()], now=now, compose=AsyncMock(return_value="разбор"))
+    assert sent == 0
+    repo.release_coach_push.assert_awaited_once_with(
+        user_id=1, week_start=date(2026, 10, 5), claimed_at=now)
 
 
 def test_coach_week_endpoint_returns_review(monkeypatch) -> None:
@@ -555,3 +583,22 @@ def test_coach_week_endpoint_returns_review(monkeypatch) -> None:
     body = response.json()
     assert body["review"]["summary"] == "Белок близко к норме."
     assert "приём пищи пропущен" in body["review"]["skipped"][0]
+
+
+def test_week_menu_offers_habits_and_activity() -> None:
+    labels = [
+        button.text
+        for row in week_menu_keyboard().inline_keyboard
+        for button in row
+    ]
+    callbacks = [
+        button.callback_data
+        for row in week_menu_keyboard().inline_keyboard
+        for button in row
+    ]
+    assert labels == [
+        "AI анализ пищевых привычек за неделю",
+        "Аналитика активности",
+    ]
+    assert callbacks == ["coach:habits", "coach:activity"]
+    assert "аналитика активности" in HELP_TEXT

@@ -70,3 +70,7 @@ async def test_answer_ephemeral_schedules_bot_message() -> None:
 
     assert result is sent
     assert len(cleanup._tasks) == 2
+    tasks = tuple(cleanup._tasks)
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)

@@ -68,6 +68,16 @@ envsubst '${GA_TAG_HTML}' \
     < "$PUBLIC_DIR/404.html" > "$PUBLIC_DIR/404.rendered.html"
 mv "$PUBLIC_DIR/404.rendered.html" "$PUBLIC_DIR/404.html"
 
+# Static assets are cached for a week. Change their URLs with every content change
+# so returning visitors do not combine new markup with old CSS or JavaScript.
+ASSET_VERSION=$(find "$PUBLIC_DIR" -type f \( -name '*.css' -o -name '*.js' \) \
+    -exec sha256sum {} \; | sort | sha256sum | cut -c1-12)
+find "$PUBLIC_DIR" -type f -name '*.html' ! -name '*.template.html' | while IFS= read -r page; do
+    sed -E 's@((src|href)="/[^"?]+\.(css|js))(\?[^\"]*)?"@\1?v='"$ASSET_VERSION"'"@g' \
+        "$page" > "$page.versioned"
+    mv "$page.versioned" "$page"
+done
+
 cat > "$PUBLIC_DIR/robots.txt" <<EOF
 User-agent: *
 Allow: /

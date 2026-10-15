@@ -94,7 +94,6 @@ def test_format_limit_reached_message_with_support_link(monkeypatch) -> None:
     assert "Чтобы увеличить лимит" in message
     assert "\n\nВ подписке ещё:\n" in message
     assert "ИИ-помощник: разбор недели /ai" in message
-    assert "подбор ПП-продуктов" in message
     assert "аналитика активности" in message
     assert "продвинутая статистика: БЖУ к целям" in message
     assert "30 фото, безлимит текстовых и 30 голосовых" in message
@@ -134,7 +133,9 @@ def test_subscriber_text_limit_message_hides_the_cap() -> None:
         subscription_until=datetime.now(timezone.utc) + timedelta(days=3),
     )
     message = format_limit_reached_message(user, RequestKind.TEXT)
-    assert "дневного лимита текстовых запросов." in message
+    assert "защита от чрезмерного числа текстовых запросов" in message
+    assert "оформите подписку" not in message
+    assert "продление не сбрасывает" in message
     assert "100" not in message
     assert "(30 в день)" in format_limit_reached_message(user, RequestKind.VOICE)
 
@@ -249,6 +250,10 @@ async def test_activate_subscription_from_now() -> None:
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
     session.add = MagicMock()
+    locked = MagicMock()
+    locked.scalar_one.return_value = user
+    session.execute = AsyncMock(return_value=locked)
+    session.scalar = AsyncMock(return_value=None)
     repo = UserRepository(session)
 
     updated = await repo.activate_subscription(
@@ -283,6 +288,10 @@ async def test_activate_subscription_extends_existing_term() -> None:
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
     session.add = MagicMock()
+    locked = MagicMock()
+    locked.scalar_one.return_value = user
+    session.execute = AsyncMock(return_value=locked)
+    session.scalar = AsyncMock(return_value=None)
     repo = UserRepository(session)
 
     updated = await repo.activate_subscription(

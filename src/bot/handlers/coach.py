@@ -13,7 +13,6 @@ from src.bot.config import settings
 from src.bot.handlers.subscription import format_subscription_status, show_subscription_screen
 from src.bot.keyboards.menus import (
     coach_refresh_keyboard,
-    pp_product_keyboard,
     subscription_keyboard,
     week_menu_keyboard,
 )
@@ -32,18 +31,8 @@ from src.bot.services.coach import (
     write_review_text,
 )
 from src.bot.services.diary_nudges import local_now_for_timezone
-from src.bot.services.messaging import answer_persistent, answer_photo_persistent
+from src.bot.services.messaging import answer_ephemeral, answer_persistent
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.bot.services.pp_picks import (
-    CATALOG_UNAVAILABLE,
-    FALLBACK_NOTE,
-    card_caption,
-    format_pp_card,
-    load_pp_catalog,
-    load_pp_product_card,
-    meal_phrases,
-    pick_pp_cards,
-)
 from src.db.models import CoachReview
 from src.db.repository import UserRepository
 
@@ -51,7 +40,15 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-WEEK_MENU_TEXT = "Что показать по этой неделе?"
+WEEK_MENU_TEXT = (
+    "🥗 ИИ-помощник по питанию\n\n"
+    "Входит в вашу подписку и пока работает в бета-версии.\n"
+    "Поможет разобрать пищевые привычки и записанную активность за неделю.\n\n"
+    "Выберите, что хотите посмотреть:"
+)
+
+# The polling bot has one process, but dispatches updates concurrently.
+_reviews_in_progress: set[int] = set()
 
 
 def _keyboard_for(refresh_used: bool):
@@ -66,6 +63,24 @@ async def _current_review(repo: UserRepository, user) -> CoachReview | None:
 
 
 async def _open_week(
+    message: Message,
+    session,
+    cleanup: MessageCleanupService,
+    *,
+    telegram_id: int,
+    refresh: bool,
+) -> str:
+    if telegram_id in _reviews_in_progress:
+        await answer_persistent(message, "⏳ Разбор уже готовится. Дождитесь результата.")
+        return "busy"
+    _reviews_in_progress.add(telegram_id)
+    try:
+        return await _open_week_once(message, session, cleanup, telegram_id=telegram_id, refresh=refresh)
+    finally:
+        _reviews_in_progress.discard(telegram_id)
+
+
+async def _open_week_once(
     message: Message,
     session,
     cleanup: MessageCleanupService,
@@ -112,67 +127,39 @@ async def _open_week(
     if action not in {"generate", "refresh"}:
         return action
 
-    facts = digest_facts(digest)
-    try:
-        text = await write_review_text(facts)
-    except Exception:
-        logger.exception("Week review failed for user_id=%s", user.id)
-        await answer_persistent(message, COACH_FAILED_TEXT)
-        return "failed"
-
-    saved = await repo.save_coach_review(
-        user_id=user.id,
-        week_start=digest.week_start,
-        facts=facts,
-        review_text=text,
-        refresh_used=action == "refresh",
-    )
-    await answer_persistent(
+    status = await answer_ephemeral(
         message,
-        saved.review_text,
-        reply_markup=_keyboard_for(saved.refresh_used),
+        cleanup,
+        "⏳ Анализирую ваши записи за неделю…\nПришлю разбор, как только он будет готов.",
+        track_user=False,
     )
-    return action
-
-
-async def _send_pp_picks(message: Message, session, *, telegram_id: int) -> None:
-    repo = UserRepository(session)
-    user = await repo.get_or_create_user(telegram_id, settings.default_timezone)
-    local_now = local_now_for_timezone(user.timezone, datetime.now(timezone.utc))
-    start, end = rolling_week(local_now.date())
-    entries = await repo.get_entries_for_period(user.id, start, end)
-    catalog = load_pp_catalog()
-    if catalog.is_empty():
-        await answer_persistent(message, CATALOG_UNAVAILABLE)
-        return
-    cards, used_staples = pick_pp_cards(catalog, meal_phrases(entries))
-    if not cards:
-        await answer_persistent(message, CATALOG_UNAVAILABLE)
-        return
-    if used_staples:
-        await answer_persistent(message, FALLBACK_NOTE)
-    saved_titles = {item.title for item in await repo.get_favorites(user.id)}
-    for card in cards:
-        details = load_pp_product_card(card.product_id, image_url=card.image_url)
-        if details is None:
-            caption = card_caption(card)
-            reply_markup = None
-        else:
-            caption = format_pp_card(details)
-            reply_markup = pp_product_keyboard(
-                card.product_id,
-                saved=details.title[:255] in saved_titles,
-            )
+    try:
+        facts = digest_facts(digest)
         try:
-            await answer_photo_persistent(
-                message,
-                photo=card.image_url,
-                caption=caption,
-                reply_markup=reply_markup,
-            )
+            text = await write_review_text(facts)
+        except Exception:
+            logger.exception("Week review failed for user_id=%s", user.id)
+            await answer_persistent(message, COACH_FAILED_TEXT)
+            return "failed"
+
+        saved = await repo.save_coach_review(
+            user_id=user.id,
+            week_start=digest.week_start,
+            facts=facts,
+            review_text=text,
+            refresh_used=action == "refresh",
+        )
+        await answer_persistent(
+            message,
+            saved.review_text,
+            reply_markup=_keyboard_for(saved.refresh_used),
+        )
+        return action
+    finally:
+        try:
+            await status.delete()
         except TelegramAPIError:
-            logger.exception("PP card photo failed for product_id=%s", card.product_id)
-            await answer_persistent(message, caption, reply_markup=reply_markup)
+            logger.debug("Could not remove week review loading message", exc_info=True)
 
 
 @router.message(Command("ai", "week"))
@@ -212,29 +199,6 @@ async def show_week_habits(
         telegram_id=callback.from_user.id,
         refresh=False,
     )
-
-
-@router.callback_query(F.data == "coach:pp")
-async def show_week_pp(
-    callback: CallbackQuery,
-    state: FSMContext,
-    session,
-) -> None:
-    await state.clear()
-    if callback.message is None or callback.from_user is None:
-        await callback.answer()
-        return
-    repo = UserRepository(session)
-    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
-    if not week_review_allowed(user):
-        await callback.answer()
-        await callback.message.answer(
-            format_subscription_status(user),
-            reply_markup=subscription_keyboard(is_active=False),
-        )
-        return
-    await callback.answer()
-    await _send_pp_picks(callback.message, session, telegram_id=callback.from_user.id)
 
 
 @router.callback_query(F.data == "coach:activity")
@@ -288,6 +252,7 @@ async def refresh_week(
         )
         return
 
+    await callback.answer()
     action = await _open_week(
         callback.message,
         session,
@@ -296,14 +261,29 @@ async def refresh_week(
         refresh=True,
     )
     if action == "refresh_spent":
-        await callback.answer(REFRESH_SPENT_TEXT, show_alert=True)
+        await answer_persistent(callback.message, REFRESH_SPENT_TEXT)
         return
     if action == "failed":
-        await callback.answer()
         return
     if action == "refresh":
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
         except TelegramBadRequest:
             pass
-    await callback.answer()
+
+
+# Retired buttons can remain in previously sent Telegram messages.
+@router.callback_query(
+    (F.data == "coach:pp")
+    | F.data.startswith("pp_favorite:")
+    | F.data.startswith("pp_favorited:")
+)
+async def retired_catalog_button(callback: CallbackQuery) -> None:
+    await callback.answer("Этот раздел больше недоступен. Откройте /ai для актуального меню.", show_alert=True)
+    if callback.message is not None:
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=week_menu_keyboard() if callback.data == "coach:pp" else None,
+            )
+        except TelegramAPIError:
+            pass

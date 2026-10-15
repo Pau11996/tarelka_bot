@@ -75,12 +75,11 @@ def test_onboarding_privacy_and_cleanup_copy_are_accurate() -> None:
     assert "5 минут" not in WELCOME_INTRO
 
 
-def test_landing_has_pricing_and_no_missing_demo_asset() -> None:
+def test_landing_has_pricing() -> None:
     template = (
         Path(__file__).parents[1] / "landing/public/index.template.html"
     ).read_text()
 
-    assert "demo-meal.jpg" not in template
     assert "${FREE_PHOTO_DAILY_LIMIT}" in template
     assert "${FREE_TEXT_DAILY_LIMIT}" in template
     assert "${FREE_VOICE_DAILY_LIMIT}" in template

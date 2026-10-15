@@ -248,14 +248,24 @@ python -m src.bot.main
 
 ## Деплой
 
-Ручной деплой на VPS (как в CI):
+Ручной деплой на VPS после сохранения резервной копии базы. Сначала проверьте текущую
+миграцию: в этой версии последняя — `016_referral_subscription_month`.
+Экспериментальная `017_weekly_review_v2` удалена; если она применялась на сервере,
+откатите её старой сборкой до обновления кода (таблицы экспериментального разбора будут удалены).
 
 ```bash
-./scripts/deploy.sh
+docker compose exec bot alembic current
+git pull --ff-only origin master
+docker compose build
+docker compose up -d
+docker compose ps
 ```
 
-Скрипт делает `git reset --hard origin/master` и `docker compose up -d --build`.  
-В GitHub Actions job автодеплоя сейчас выключен; тесты (`pytest`) гоняются на push/PR в `master`.
+Бот применяет доступные миграции при запуске. Команды выше используют продовый
+`docker-compose.yml`, без локального PostgreSQL из `docker-compose.local.yml`.
+В GitHub Actions автодеплой выключен; на push/PR в `master` запускаются тесты Python,
+рендера лендинга, калькулятора и аналитики. Платёж Telegram Stars и настоящий ответ AI
+нужно проверить отдельно: автоматические тесты не совершают покупок и не вызывают модель.
 
 ## Структура репозитория
 
@@ -267,5 +277,4 @@ src/shared/        # схемы и логирование
 migrations/        # Alembic
 landing/           # nginx + статика + admin UI
 tests/             # pytest
-scripts/deploy.sh  # ручной деплой
 ```

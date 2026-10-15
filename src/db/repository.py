@@ -619,43 +619,6 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_favorite_by_title(self, user_id: int, title: str) -> FavoriteMeal | None:
-        result = await self.session.execute(
-            select(FavoriteMeal)
-            .where(FavoriteMeal.user_id == user_id, FavoriteMeal.title == title)
-            .limit(1)
-        )
-        return result.scalars().first()
-
-    async def create_catalog_favorite(
-        self,
-        *,
-        user_id: int,
-        title: str,
-        calories: float,
-        protein_g: float,
-        fat_g: float,
-        carbs_g: float,
-        micronutrients: dict | None,
-        items: list | None,
-    ) -> FavoriteMeal:
-        favorite = FavoriteMeal(
-            user_id=user_id,
-            source_entry_id=None,
-            entry_type=EntryType.MEAL,
-            title=title[:255],
-            calories=calories,
-            protein_g=protein_g,
-            fat_g=fat_g,
-            carbs_g=carbs_g,
-            micronutrients=micronutrients,
-            items=items,
-        )
-        self.session.add(favorite)
-        await self.session.commit()
-        await self.session.refresh(favorite)
-        return favorite
-
     async def create_favorite_from_entry(self, entry: DayEntry) -> FavoriteMeal:
         favorite = FavoriteMeal(
             user_id=entry.user_id,
@@ -752,17 +715,27 @@ class UserRepository:
         stars_amount: int,
         now: datetime | None = None,
     ) -> User:
-        current = now or datetime.now(timezone.utc)
-        base = user.subscription_until if user.subscription_until and user.subscription_until > current else current
-        new_until = base + timedelta(days=duration_days)
-        user.subscription_until = new_until
-        user.subscription_last_notified_until = None
+        # Serialize renewals and refresh the term after waiting for another payment.
+        result = await self.session.execute(
+            select(User).where(User.id == user.id).with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        user = result.scalar_one()
+        payment = await self.session.scalar(
+            select(Payment).where(Payment.telegram_payment_charge_id == charge_id)
+        )
+        if payment is not None:
+            if payment.user_id != user.id:
+                raise ValueError("Payment belongs to another user")
+            await self.session.commit()
+            return user
+        _extend_subscription(user, duration_days=duration_days, now=_as_utc(now or datetime.now(timezone.utc)))
         self.session.add(
             Payment(
                 user_id=user.id,
                 telegram_payment_charge_id=charge_id,
                 stars_amount=stars_amount,
-                subscription_until=new_until,
+                subscription_until=user.subscription_until,
             )
         )
         await self.session.commit()
@@ -911,6 +884,17 @@ class UserRepository:
         claimed = result.scalar_one_or_none() is not None
         await self.session.commit()
         return claimed
+
+    async def release_coach_push(self, *, user_id: int, week_start: date, claimed_at: datetime) -> None:
+        """Allow retry after a failed send without releasing another attempt's claim."""
+        await self.session.execute(
+            update(CoachReview).where(
+                CoachReview.user_id == user_id,
+                CoachReview.week_start == week_start,
+                CoachReview.push_sent_at == claimed_at,
+            ).values(push_sent_at=None)
+        )
+        await self.session.commit()
 
     async def list_coach_push_candidates(self, *, now: datetime) -> list[User]:
         result = await self.session.execute(

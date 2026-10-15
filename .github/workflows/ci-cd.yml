@@ -25,10 +25,23 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          pip install -e ".[dev]"
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
 
       - name: Run pytest
-        run: pytest
+        run: pytest tests landing/tests/test_site.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check landing scripts
+        run: |
+          sh -n landing/docker-entrypoint.sh
+          node landing/tests/recipe-calculator.test.cjs
+          node landing/tests/analytics.test.cjs
 
   # Auto-deploy temporarily disabled
   # deploy:

@@ -93,7 +93,7 @@ async def buy_subscription(callback: CallbackQuery) -> None:
             f"{settings.subscription_daily_request_limit} фото в день "
             f"на {settings.subscription_duration_days} дней. "
             f"Текст — безлимит, голос — {settings.subscription_voice_daily_limit}. "
-            "ИИ-помощник разберёт неделю: что улучшить и где пропущен приём пищи."
+            "ИИ-помощник по питанию (бета): разбор недели и аналитика активности."
         ),
         payload=SUBSCRIPTION_PAYLOAD,
         currency="XTR",
@@ -137,7 +137,7 @@ async def successful_payment(message: Message, session, cleanup: MessageCleanupS
         f"Подписка активирована до {until}.\n\n"
         f"Теперь доступно {settings.subscription_daily_request_limit} фото, "
         f"безлимит текстовых и {settings.subscription_voice_daily_limit} голосовых запросов в день.\n"
-        "ИИ-помощник по питанию: /ai — разбор недели, что улучшить и где пропущен приём.",
+        "ИИ-помощник по питанию (бета): /ai — разбор пищевых привычек и активности за неделю.",
         reply_markup=subscription_keyboard(is_active=True),
         track_user=False,
     )

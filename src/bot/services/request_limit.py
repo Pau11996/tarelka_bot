@@ -69,7 +69,12 @@ def has_active_subscription(user: User, *, now: datetime | None = None) -> bool:
     if user.subscription_until is None:
         return False
     current = now or datetime.now(timezone.utc)
-    return user.subscription_until > current
+    until = user.subscription_until
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return until > current
 
 
 def request_policy(user: User) -> RequestPolicy:
@@ -143,13 +148,22 @@ def describe_daily_limits(user: User) -> str:
 
 def format_limit_reached_message(user: User, kind: str = RequestKind.PHOTO) -> str:
     policy = request_policy(user)
+    if has_active_subscription(user):
+        if policy.mode == "shared":
+            headline = f"Вы достигли дневного лимита запросов ({policy.shared_limit} в день)."
+        elif kind == RequestKind.TEXT:
+            headline = "Сработала защита от чрезмерного числа текстовых запросов."
+        else:
+            headline = f"Вы достигли дневного лимита {_KIND_LABEL[kind]} ({policy.limit_for(kind)} в день)."
+        return (
+            f"{headline}\n\nДоступ восстановится завтра по вашему часовому поясу. "
+            "Подписка уже активна; её продление не сбрасывает дневные ограничения."
+        )
     if policy.mode == "shared":
         limit = policy.limit_for(kind)
         return f"Вы достигли дневного лимита запросов ({limit} в день).\n\n{increase_limit_hint()}"
     limit = policy.limit_for(kind)
     label = _KIND_LABEL[kind]
-    if kind == RequestKind.TEXT and _subscriber_without_override(user):
-        return f"Вы достигли дневного лимита {label}.\n\n{increase_limit_hint()}"
     return f"Вы достигли дневного лимита {label} ({limit} в день).\n\n{increase_limit_hint()}"
 
 

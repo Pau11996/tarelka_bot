@@ -1,84 +1,158 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text } from "react-native";
-
-import { api, apiFailureMessage } from "../api";
+import { useState } from "react";
+import { Text, View } from "react-native";
+import { Screen, Panel, State, Segments, design } from "../components/Screen";
+import { useResource } from "../hooks/useResource";
 import { useAuth } from "../auth";
-import { formatDay, requestUsageSubtitle } from "../format";
+import { api, apiFailureMessage } from "../api";
+import { PrimaryButton, SecondaryButton } from "../ui";
 import { colors } from "../theme";
 import type { Subscription } from "../types";
-import { ErrorText, Field, PrimaryButton, ScreenTitle } from "../ui";
-
-export default function PayScreen() {
+import { formatDay } from "../format";
+const demo = process.env.EXPO_PUBLIC_DEMO_BILLING === "1";
+export default function Pay() {
   const { token, signOut } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [number, setNumber] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvc, setCvc] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const next = await api<Subscription>("/v1/subscription", { token });
-      setSubscription(next);
-      setError(null);
-    } catch (caught) {
-      const message = await apiFailureMessage(caught, "Не удалось загрузить подписку", signOut);
-      if (message) setError(message);
-    }
-  }, [signOut, token]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
-
+  const { data, error, loading, load } =
+    useResource<Subscription>("/v1/subscription");
+  const [stage, setStage] = useState<
+    "offer" | "card" | "processing" | "success" | "declined"
+  >("offer");
+  const [outcome, setOutcome] = useState<"success" | "declined">("success");
+  const [failure, setFailure] = useState<string | null>(null);
   async function checkout() {
-    setBusy(true);
-    setMessage(null);
+    if (stage === "processing") return;
+    setStage("processing");
+    setFailure(null);
     try {
-      const result = await api<{ status: string; message: string }>("/v1/billing/checkout", {
-        method: "POST",
-        token,
-        json: { plan: "monthly" },
-      });
-      setMessage(result.message);
-      setNumber("");
-      setExpiry("");
-      setCvc("");
-    } catch (caught) {
-      const message = await apiFailureMessage(caught, "Не удалось отправить форму");
-      if (message) setError(message);
-    } finally {
-      setBusy(false);
+      const result = await api<{ status: "success" | "declined" }>(
+        "/v1/billing/demo",
+        { token, method: "POST", json: { outcome } },
+      );
+      setStage(result.status);
+    } catch (e) {
+      setFailure(
+        await apiFailureMessage(
+          e,
+          "Не удалось выполнить демонстрацию",
+          signOut,
+        ),
+      );
+      setStage("card");
     }
   }
-
-  const status = subscription?.active
-    ? `Подписка активна до ${subscription.until ? formatDay(subscription.until) : "—"}. ${requestUsageSubtitle(subscription)}.`
-    : subscription
-      ? `Сейчас ${requestUsageSubtitle(subscription)}.`
-      : undefined;
-
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <ScreenTitle title="Оплата картой" subtitle={status} />
-      <Text style={styles.note}>Данные карты никуда не отправляются. Оплата ещё не подключена.</Text>
-      <Field value={number} onChangeText={setNumber} keyboardType="number-pad" placeholder="Номер карты" maxLength={19} />
-      <Field value={expiry} onChangeText={setExpiry} keyboardType="number-pad" placeholder="ММ/ГГ" maxLength={5} />
-      <Field value={cvc} onChangeText={setCvc} keyboardType="number-pad" placeholder="CVC" maxLength={3} secureTextEntry />
-      <ErrorText message={error} />
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      <PrimaryButton label={busy ? "Проверяю…" : "Оплатить картой"} disabled={busy} onPress={() => void checkout()} />
-    </ScrollView>
+    <Screen
+      back
+      backTo="/account"
+      title="Подписка"
+      subtitle={
+        data?.active
+          ? `Активна до ${data.until ? formatDay(data.until) : "—"}`
+          : "Больше понимания. Меньше рутины."
+      }
+    >
+      <State
+        loading={loading && !data}
+        error={failure ?? error}
+        onRetry={() => void load()}
+      />
+      <Panel
+        title="Ваш помощник в питании"
+        subtitle="Один аккаунт и общая подписка в приложении и Telegram."
+      >
+        {[
+          "ИИ-разбор недели · бета",
+          "Подробная статистика БЖУ, воды и активности",
+          "Периоды статистики до 90 дней",
+          "Больше фото и голосовых, безлимит текста",
+        ].map((t) => (
+          <Text key={t} style={{ color: colors.text, lineHeight: 26 }}>
+            ✓ {t}
+          </Text>
+        ))}
+      </Panel>
+      {demo ? (
+        <>
+          <View
+            style={[
+              design.card,
+              { backgroundColor: "#fff4d9", borderColor: "#f1deb1" },
+            ]}
+          >
+            <Text style={{ fontWeight: "700", color: "#725514" }}>
+              Демонстрационная оплата
+            </Text>
+            <Text style={{ color: "#725514", lineHeight: 21 }}>
+              Деньги не списываются. Реальная подписка аккаунта не изменится.
+            </Text>
+          </View>
+          {stage === "offer" ? (
+            <PrimaryButton
+              label="Попробовать оплату картой"
+              onPress={() => setStage("card")}
+            />
+          ) : null}
+          {stage === "card" || stage === "processing" ? (
+            <Panel
+              title="Тестовая карта"
+              subtitle="Используем готовые тестовые данные. Настоящие реквизиты не нужны."
+            >
+              <View
+                style={[design.card, { backgroundColor: colors.accentDark }]}
+              >
+                <Text
+                  style={{ color: "white", fontSize: 22, letterSpacing: 2 }}
+                >
+                  4242 4242 4242 4242
+                </Text>
+                <Text style={{ color: "#d6e7d1" }}>12 / 30 TEST CARD</Text>
+              </View>
+              <Text style={design.subtitle}>Сценарий для проверки</Text>
+              <Segments
+                value={outcome}
+                onChange={setOutcome}
+                items={[
+                  { value: "success", label: "Успех" },
+                  { value: "declined", label: "Отказ" },
+                ]}
+              />
+              <PrimaryButton
+                disabled={stage === "processing"}
+                label={
+                  stage === "processing" ? "Обработка…" : "Проверить оплату"
+                }
+                onPress={() => void checkout()}
+              />
+            </Panel>
+          ) : null}
+          {stage === "success" ? (
+            <Panel
+              title="Демонстрация прошла успешно"
+              subtitle="Деньги не списаны. Настоящая подписка не активирована."
+            >
+              <SecondaryButton
+                label="Повторить демонстрацию"
+                onPress={() => setStage("card")}
+              />
+            </Panel>
+          ) : null}
+          {stage === "declined" ? (
+            <Panel
+              title="Тестовый отказ банка"
+              subtitle="В этом сценарии оплата отклонена. Попробуйте успешный сценарий."
+            >
+              <SecondaryButton
+                label="Попробовать снова"
+                onPress={() => setStage("card")}
+              />
+            </Panel>
+          ) : null}
+        </>
+      ) : (
+        <Panel
+          title="Оплата в приложении пока недоступна"
+          subtitle="Если подписка уже оформлена в Telegram, она действует и здесь."
+        />
+      )}
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { padding: 20, gap: 12, paddingBottom: 40, backgroundColor: colors.bg },
-  note: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  message: { color: colors.text, fontSize: 16, fontWeight: "600" },
-});

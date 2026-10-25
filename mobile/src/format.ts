@@ -30,7 +30,10 @@ const MEAL_SLOT_LABELS: Record<string, string> = {
   late_dinner: "Поздний ужин",
 };
 
-export function mealHeading(title: string, mealSlot: string | null | undefined): string {
+export function mealHeading(
+  title: string,
+  mealSlot: string | null | undefined,
+): string {
   const label = mealSlot ? MEAL_SLOT_LABELS[mealSlot] : undefined;
   return label ? `${label} · ${title}` : title;
 }

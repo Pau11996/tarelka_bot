@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.bot.config import settings
 from src.shared.logging_config import setup_logging
 from src.bot.handlers import (
+    achievements,
     coach,
     correction,
     daily,
@@ -30,6 +31,8 @@ from src.bot.services.message_cleanup import MessageCleanupService
 from src.bot.services.coach import run_coach_reviews_loop
 from src.bot.services.diary_nudges import run_diary_nudges_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
+from src.shared.weight_reminders import run_weigh_reminders_loop
+from src.shared.achievement_messages import run_goal_messages_loop
 from src.db.repository import UserRepository
 from src.db.session import async_session_factory
 
@@ -79,6 +82,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.update.middleware(DbSessionMiddleware(async_session_factory))
 
     dp.include_router(start.router)
+    dp.include_router(achievements.router)
     dp.include_router(profile.router)
     dp.include_router(subscription.router)
     dp.include_router(data_management.router)
@@ -111,6 +115,8 @@ async def main() -> None:
     await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     logger.info("Starting ТАРЕЛКА bot (message cleanup TTL: %ss)", settings.message_cleanup_ttl_seconds)
     asyncio.create_task(run_subscription_reminder_loop(bot))
+    asyncio.create_task(run_weigh_reminders_loop(bot))
+    asyncio.create_task(run_goal_messages_loop(bot))
     if settings.diary_nudges_enabled:
         asyncio.create_task(run_diary_nudges_loop(bot))
     if settings.coach_reviews_enabled:

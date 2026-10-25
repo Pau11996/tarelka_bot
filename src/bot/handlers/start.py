@@ -131,6 +131,8 @@ async def start_begin(
     profile = await repo.ensure_default_profile(user.id)
 
     if not profile.is_complete():
+        await state.clear()
+        await state.update_data(initial_setup=True)
         await state.set_state(ProfileStates.weight)
         if callback.message:
             new_reply_markup = None
@@ -148,7 +150,7 @@ async def start_begin(
                 pass
         await answer_persistent_with_menu(
             callback.message,
-            "Шаг 1 из 6 · Вес\nВведите ваш вес в кг, например: 75",
+            "Шаг 1 из 7 · Вес\nВведите ваш вес в кг, например: 75",
             cleanup=cleanup,
         )
         await callback.answer()

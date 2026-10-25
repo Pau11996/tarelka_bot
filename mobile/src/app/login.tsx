@@ -1,97 +1,317 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { Redirect, router } from "expo-router";
+import { Link, Redirect } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  type TextInputProps,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, apiFailureMessage, pollLogin } from "../api";
 import { useAuth } from "../auth";
-import { BrandMark, Icon } from "../components/Brand";
-import { SITE_URL } from "../config";
-import { colors } from "../theme";
-import { ErrorText, Loading, SecondaryButton } from "../ui";
+import { Icon } from "../components/Brand";
+import { LoginWelcome } from "../components/LoginWelcome";
+import { API_URL, SITE_URL } from "../config";
+import { authStorageKeys } from "../authStorage";
+import { colors, welcomeColors } from "../theme";
+import { ErrorText, Field, Loading, PrimaryButton, SecondaryButton } from "../ui";
 
-const hero = require("../../assets/login-hero.jpg");
+const PENDING_LOGIN_KEY = authStorageKeys(API_URL).pendingLogin;
 
 export default function LoginScreen() {
   const { ready, token, signIn } = useAuth();
   const [waiting, setWaiting] = useState(false);
   const [botUrl, setBotUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"choose" | "register" | "login">("choose");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const emailSending = useRef(false);
   const attempt = useRef(0);
-  const running = useRef(false);
-  useEffect(() => { return () => { attempt.current += 1; }; }, []);
+  const running = useRef<number | null>(null);
+  const inset = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
 
-  if (!ready) return <Loading />;
-  if (token) return <Redirect href="/(tabs)/chat" />;
+  function chooseMode(next: typeof mode) {
+    attempt.current++;
+    running.current = null;
+    setWaiting(false);
+    setBotUrl(null);
+    setError(null);
+    setPassword("");
+    setConfirmation("");
+    setShowPassword(false);
+    setShowConfirmation(false);
+    setMode(next);
+    void AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+  }
 
-  async function startLogin() {
-    if (running.current) return;
-    running.current = true;
-    const id = ++attempt.current;
-    setError(null); setWaiting(true); setBotUrl(null);
+  async function waitForLogin(
+    pending: { code: string; bot_url: string; expiresAt: number },
+    open: boolean,
+    id: number,
+  ) {
+    setBotUrl(pending.bot_url);
     try {
-      const started = await api<{ code: string; bot_url: string; expires_in: number }>("/v1/auth/telegram/start", { method: "POST" });
-      if (id !== attempt.current) return;
-      setBotUrl(started.bot_url);
-      await Linking.openURL(started.bot_url).catch(() => undefined);
-      const deadline = Date.now() + started.expires_in * 1000;
-      while (id === attempt.current && Date.now() < deadline) {
-        const result = await pollLogin(started.code);
+      if (open) await Linking.openURL(pending.bot_url).catch(() => undefined);
+      while (id === attempt.current && Date.now() < pending.expiresAt) {
+        const result = await pollLogin(pending.code);
         if (id !== attempt.current) return;
         if ("access_token" in result) {
+          await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+          if (id !== attempt.current) return;
           await signIn(result.access_token);
-          router.replace("/(tabs)/chat");
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
-      if (id === attempt.current) setError("Время входа вышло. Попробуйте ещё раз.");
-    } catch (caught) {
-      if (id === attempt.current) setError(await apiFailureMessage(caught, "Не удалось начать вход"));
+      if (id === attempt.current) {
+        await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+        setError("Время входа вышло. Попробуйте ещё раз.");
+      }
+    } catch (e) {
+      if (id === attempt.current) {
+        setError(await apiFailureMessage(e, "Не удалось подтвердить вход"));
+        await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+      }
     } finally {
-      running.current = false;
+      if (running.current === id) running.current = null;
       if (id === attempt.current) setWaiting(false);
     }
   }
+  useEffect(() => {
+    if (!ready || token) return;
+    let active = true;
+    const version = attempt.current;
+    void AsyncStorage.getItem(PENDING_LOGIN_KEY).then((value) => {
+      if (value && active && version === attempt.current) {
+        try {
+          const pending = JSON.parse(value);
+          if (pending.expiresAt > Date.now() && running.current === null) {
+            const id = ++attempt.current;
+            running.current = id;
+            setWaiting(true);
+            void waitForLogin(pending, false, id);
+          }
+          else void AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+        } catch {
+          void AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+        }
+      }
+    });
+    return () => {
+      active = false;
+      attempt.current++;
+    };
+  }, [ready, token]);
+  async function startLogin() {
+    if (running.current !== null || emailSending.current) return;
+    const id = ++attempt.current;
+    running.current = id;
+    setWaiting(true);
+    setError(null);
+    try {
+      const result = await api<{
+        code: string;
+        bot_url: string;
+        expires_in: number;
+      }>("/v1/auth/telegram/start", { method: "POST" });
+      if (id !== attempt.current) return;
+      const pending = {
+        ...result,
+        expiresAt: Date.now() + result.expires_in * 1000,
+      };
+      await AsyncStorage.setItem(
+        PENDING_LOGIN_KEY,
+        JSON.stringify(pending),
+      );
+      if (id !== attempt.current) return;
+      await waitForLogin(pending, true, id);
+    } catch (e) {
+      if (id === attempt.current) {
+        setError(await apiFailureMessage(e, "Не удалось начать вход"));
+        setWaiting(false);
+      }
+    } finally {
+      if (running.current === id) running.current = null;
+    }
+  }
 
-  return <SafeAreaView style={s.safe}>
-    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-      <View style={s.brandRow}><BrandMark size={36} /><Text style={s.brand}>тарелка</Text></View>
-      <Text accessibilityRole="header" style={s.title}>Забота о себе.{"\n"}В одном чате.</Text>
-      <Text style={s.subtitle}>Отправляйте фото, голос или текст.{"\n"}Тарелка поможет вести дневник.</Text>
-      <View style={s.hero} accessibilityLabel="Фото обеда и пример записи о прогулке">
-        <Image source={hero} resizeMode="cover" style={s.heroImage} />
-        <View style={s.chipTop}><Icon name="camera" size={16} color={colors.accent} /><Text style={s.chipText}>Фото обеда</Text></View>
-        <View style={s.chipBottom}><Icon name="walk" size={16} color={colors.accent} /><Text style={s.chipText}>Прогулка 30 мин</Text></View>
-      </View>
-      <Pressable accessibilityRole="button" disabled={waiting} onPress={() => void startLogin()} style={({ pressed }) => [s.loginButton, (pressed || waiting) && { opacity: 0.75 }]}>
-        {waiting ? <ActivityIndicator color="white" /> : <Icon name="telegram" color="white" size={20} />}
-        <Text style={s.loginText}>{waiting ? "Ждём подтверждение…" : "Войти через Telegram"}</Text>
-      </Pressable>
-      <Text style={s.hint}>{waiting ? "Подтвердите вход в боте и вернитесь сюда" : "Без пароля и лишних шагов"}</Text>
-      {waiting && botUrl ? <SecondaryButton label="Открыть Telegram ещё раз" onPress={() => void Linking.openURL(botUrl).catch(() => setError("Не удалось открыть Telegram"))} /> : null}
-      <ErrorText message={error} />
-      <Text style={s.legal}>Продолжая, вы принимаете <Text accessibilityRole="link" style={s.legalLink} onPress={() => void Linking.openURL(`${SITE_URL}/terms.html`).catch(() => setError("Не удалось открыть условия"))}>условия</Text> и <Text accessibilityRole="link" style={s.legalLink} onPress={() => void Linking.openURL(`${SITE_URL}/privacy.html`).catch(() => setError("Не удалось открыть политику конфиденциальности"))}>политику конфиденциальности</Text>.</Text>
-    </ScrollView>
-  </SafeAreaView>;
+  async function submitEmail() {
+    if (emailSending.current || mode === "choose") return;
+    setError(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Укажите корректный email");
+      return;
+    }
+    if (!password || (mode === "register" && password.length < 8)) {
+      setError(mode === "register" ? "Пароль должен содержать не меньше 8 символов" : "Введите пароль");
+      return;
+    }
+    if (mode === "register" && password !== confirmation) {
+      setError("Пароли не совпадают");
+      return;
+    }
+    emailSending.current = true;
+    setEmailBusy(true);
+    attempt.current++;
+    running.current = null;
+    setWaiting(false);
+    try {
+      await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+      const result = await api<{ access_token: string }>(`/v1/auth/email/${mode}`, {
+        json: {
+          email: email.trim(),
+          password,
+          ...(mode === "register" ? { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow" } : {}),
+        },
+      });
+      setPassword("");
+      setConfirmation("");
+      await signIn(result.access_token);
+    } catch (e) {
+      setError(await apiFailureMessage(e, "Не удалось войти. Попробуйте ещё раз."));
+    } finally {
+      emailSending.current = false;
+      setEmailBusy(false);
+    }
+  }
+  function closeEmailForm() {
+    if (!emailSending.current) chooseMode("choose");
+  }
+
+  if (!ready) return <Loading />;
+  if (token) return <Redirect href="/" />;
+
+  return (
+    <>
+      <SafeAreaView style={s.safe} edges={["top", "bottom"]} importantForAccessibility={mode === "choose" ? "auto" : "no-hide-descendants"}>
+        <LoginWelcome>
+          <View style={s.actions}>
+            <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("register")} style={({ pressed }) => [s.createButton, (pressed || emailBusy) && s.pressed]}>
+              <Text style={s.createText}>Создать аккаунт</Text>
+              <Icon name="arrowRight" size={18} color={colors.surface} />
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityState={{ busy: waiting, disabled: waiting || emailBusy }} disabled={waiting || emailBusy} onPress={() => void startLogin()} style={({ pressed }) => [s.telegramButton, (pressed || waiting) && s.pressed]}>
+              {waiting ? <ActivityIndicator color={welcomeColors.telegramIcon} size="small" /> : <Icon name="telegram" color={welcomeColors.telegramIcon} size={18} />}
+              <Text style={s.telegramText}>{waiting ? "Ждём подтверждение…" : "Войти через Telegram"}</Text>
+            </Pressable>
+            <Text style={s.telegramHint}>{waiting ? "Подтвердите вход в боте и вернитесь сюда" : "Откроется ваш дневник из Telegram-бота"}</Text>
+            {waiting && botUrl ? <Link href={botUrl as any} target="_blank" style={s.reopenTelegram}>Открыть Telegram ещё раз</Link> : null}
+            {waiting ? <SecondaryButton label="Отменить вход через Telegram" onPress={() => chooseMode("choose")} /> : null}
+            <View style={s.signinRow}>
+              <Text style={s.signinHint}>Уже есть аккаунт?</Text>
+              <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("login")} style={({ pressed }) => [s.signinButton, pressed && s.pressed]}>
+                <Text style={s.signinText}>Войти по email</Text>
+              </Pressable>
+            </View>
+            {mode === "choose" ? <ErrorText message={error} /> : null}
+            <LegalLinks onError={setError} />
+          </View>
+        </LoginWelcome>
+      </SafeAreaView>
+      <Modal visible={mode !== "choose"} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={closeEmailForm}>
+        <KeyboardAvoidingView style={s.sheetHost} behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}>
+          <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Закрыть форму входа" focusable={false} disabled={emailBusy} onPress={closeEmailForm} />
+          <View accessibilityViewIsModal onAccessibilityEscape={closeEmailForm} style={[s.sheet, { maxHeight: windowHeight - inset.top - 16, paddingBottom: Math.max(inset.bottom, 20) }]}>
+            <View style={s.handle} />
+            <View style={s.sheetHeading}>
+              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Закрыть форму" disabled={emailBusy} onPress={closeEmailForm} style={s.sheetClose}>
+                <Icon name="close" size={18} />
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" bounces={false} contentContainerStyle={s.form}>
+              <Text style={s.formIntro}>{mode === "register" ? "Начните свой дневник с чистого листа." : "Войдите в дневник, который создали по email."}</Text>
+              <View style={s.tabs}>
+                {(["login", "register"] as const).map(item => (
+                  <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: mode === item, disabled: emailBusy }} disabled={emailBusy} onPress={() => chooseMode(item)} style={[s.tab, mode === item && s.tabSelected]}>
+                    <Text style={[s.tabText, mode === item && s.tabTextSelected]}>{item === "login" ? "Вход" : "Регистрация"}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Field accessibilityLabel="Email" placeholder="you@example.com" value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" keyboardType="email-address" editable={!emailBusy} maxLength={254} />
+              <PasswordField accessibilityLabel="Пароль" placeholder={mode === "register" ? "Не меньше 8 символов" : "Ваш пароль"} value={password} onChangeText={setPassword} visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete={mode === "register" ? "new-password" : "current-password"} textContentType={mode === "register" ? "newPassword" : "password"} editable={!emailBusy} maxLength={128} onSubmitEditing={() => { if (mode === "login") void submitEmail(); }} />
+              {mode === "register" ? <PasswordField accessibilityLabel="Повторите пароль" placeholder="Ещё раз тот же пароль" value={confirmation} onChangeText={setConfirmation} visible={showConfirmation} onToggle={() => setShowConfirmation(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete="new-password" textContentType="newPassword" editable={!emailBusy} maxLength={128} onSubmitEditing={() => void submitEmail()} /> : null}
+              <View accessibilityLiveRegion="polite"><ErrorText message={error} /></View>
+              <PrimaryButton label={emailBusy ? (mode === "register" ? "Создаём аккаунт…" : "Входим…") : mode === "register" ? "Зарегистрироваться" : "Войти"} disabled={emailBusy} onPress={() => void submitEmail()} />
+              <Text style={s.accountHint}>Аккаунт по email и аккаунт Telegram имеют отдельные дневники.</Text>
+              <LegalLinks onError={setError} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
+  );
+}
+
+function PasswordField({ visible, onToggle, ...props }: TextInputProps & { visible: boolean; onToggle: () => void }) {
+  const target = props.accessibilityLabel === "Повторите пароль" ? "повтор пароля" : "пароль";
+  const disabled = props.editable === false;
+  return <View>
+    <Field {...props} secureTextEntry={!visible} style={[props.style, s.passwordInput]} />
+    <Pressable accessibilityRole="button" accessibilityLabel={`${visible ? "Скрыть" : "Показать"} ${target}`} accessibilityState={{ selected: visible, disabled }} disabled={disabled} onPress={onToggle} style={({ pressed }) => [s.passwordEye, pressed && s.passwordEyePressed]}>
+      <Icon name={visible ? "eyeOff" : "eye"} size={21} color={colors.muted} />
+    </Pressable>
+  </View>;
+}
+
+function LegalLinks({ onError }: { onError: (message: string) => void }) {
+  return (
+    <Text style={s.legal}>
+      Продолжая, вы принимаете{" "}
+      <Text accessibilityRole="link" style={s.legalLink} onPress={() => void Linking.openURL(`${SITE_URL}/terms.html`).catch(() => onError("Не удалось открыть условия"))}>условия</Text>
+      {"\n"}и{" "}
+      <Text accessibilityRole="link" style={s.legalLink} onPress={() => void Linking.openURL(`${SITE_URL}/privacy.html`).catch(() => onError("Не удалось открыть политику конфиденциальности"))}>политику конфиденциальности</Text>
+    </Text>
+  );
 }
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 20, width: "100%", maxWidth: 480, alignSelf: "center" },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brand: { color: colors.text, fontSize: 22, fontWeight: "600", letterSpacing: -0.4 },
-  title: { marginTop: 28, fontSize: 34, lineHeight: 40, fontWeight: "700", color: colors.text, letterSpacing: -0.8 },
-  subtitle: { marginTop: 14, fontSize: 16, lineHeight: 24, color: colors.muted },
-  hero: { height: 250, borderRadius: 28, marginTop: 22, overflow: "hidden", backgroundColor: colors.soft },
-  heroImage: { width: "100%", height: "100%" },
-  chipTop: { position: "absolute", top: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
-  chipBottom: { position: "absolute", left: 16, bottom: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
-  chipText: { fontSize: 13, fontWeight: "600", color: colors.text },
-  loginButton: { marginTop: 22, minHeight: 56, backgroundColor: colors.accent, borderRadius: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 18, gap: 10 },
-  loginText: { color: "white", fontSize: 16, fontWeight: "700" },
-  hint: { marginTop: 12, fontSize: 13, lineHeight: 18, textAlign: "center", color: colors.muted },
-  legal: { marginTop: "auto", paddingTop: 28, textAlign: "center", color: colors.muted, fontSize: 12, lineHeight: 18 },
+  actions: { paddingTop: 13 },
+  createButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 17, borderRadius: 15, backgroundColor: colors.accent },
+  createText: { fontSize: 13, lineHeight: 19, fontWeight: "600", color: colors.surface },
+  telegramButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, marginTop: 8, paddingHorizontal: 12 },
+  telegramText: { fontSize: 12, lineHeight: 18, fontWeight: "500", color: welcomeColors.telegramText },
+  telegramHint: { fontSize: 9, lineHeight: 14, color: welcomeColors.note, textAlign: "center", marginTop: 5 },
+  reopenTelegram: { textAlign: "center", padding: 14, minHeight: 44, color: colors.accent, fontSize: 12, fontWeight: "600" },
+  signinRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  signinHint: { fontSize: 11, color: colors.muted },
+  signinButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4 },
+  signinText: { fontSize: 11, fontWeight: "600", color: colors.accentDark },
+  legal: { fontSize: 9, lineHeight: 14, color: welcomeColors.legal, textAlign: "center", paddingHorizontal: 10, paddingTop: 2 },
   legalLink: { textDecorationLine: "underline" },
+  pressed: { opacity: 0.65 },
+  sheetHost: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: welcomeColors.sheetOverlay },
+  sheet: { width: "100%", maxWidth: 460, flexShrink: 1, backgroundColor: welcomeColors.sheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
+  handle: { width: 35, height: 4, borderRadius: 4, backgroundColor: welcomeColors.sheetHandle, alignSelf: "center", marginTop: 9, marginBottom: 12 },
+  sheetHeading: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 24, marginBottom: 7 },
+  sheetTitle: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.text },
+  sheetClose: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: welcomeColors.sheetClose },
+  form: { paddingHorizontal: 24, paddingBottom: 4, gap: 13 },
+  formIntro: { fontSize: 12, lineHeight: 19, color: colors.muted, marginBottom: 3 },
+  tabs: { flexDirection: "row", backgroundColor: colors.soft, padding: 3, borderRadius: 12 },
+  tab: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 9 },
+  tabSelected: { backgroundColor: colors.surface },
+  tabText: { fontSize: 12, lineHeight: 18, fontWeight: "500", color: colors.muted },
+  tabTextSelected: { color: colors.accentDark, fontWeight: "600" },
+  passwordInput: { paddingRight: 54 },
+  passwordEye: { position: "absolute", right: 4, bottom: 1, width: 44, height: 44, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  passwordEyePressed: { backgroundColor: colors.soft },
+  accountHint: { fontSize: 10, lineHeight: 16, color: colors.muted, textAlign: "center" },
 });

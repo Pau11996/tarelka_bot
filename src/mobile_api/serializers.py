@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from src.bot.services.nutrition import DailyBalance, DailyNutrientTargets
-from src.db.models import DayEntry, FavoriteMeal, Profile, WeightHistory
+from src.db.models import AIAnalysis, DayEntry, FavoriteMeal, Profile, WeightHistory
 
 
 def _iso(value: datetime | date | None) -> str | None:
@@ -12,9 +12,10 @@ def _iso(value: datetime | date | None) -> str | None:
     return value.isoformat()
 
 
-def entry_out(entry: DayEntry) -> dict:
+def entry_out(entry: DayEntry, *, favorite_id: int | None = None) -> dict:
     return {
         "id": entry.id,
+        "favorite_id": favorite_id,
         "entry_date": _iso(entry.entry_date),
         "entry_type": entry.entry_type.value,
         "title": entry.title,
@@ -28,6 +29,19 @@ def entry_out(entry: DayEntry) -> dict:
         "meal_slot": entry.meal_slot,
         "volume_ml": entry.volume_ml,
         "created_at": _iso(entry.created_at),
+    }
+
+
+def analysis_out(analysis: AIAnalysis) -> dict:
+    result = analysis.parsed_json or {}
+    return {
+        "confidence": analysis.confidence,
+        "assumptions": result.get("assumptions") or [],
+        "portion_assumed": bool(result.get("portion_assumed")),
+        "needs_clarification": bool(result.get("needs_clarification")),
+        "clarification_question": result.get("clarification_question"),
+        "input_text": analysis.input_text,
+        "created_at": _iso(analysis.created_at),
     }
 
 
@@ -62,7 +76,9 @@ def profile_out(profile: Profile) -> dict:
         "age": profile.age,
         "sex": profile.sex.value if profile.sex is not None else None,
         "goal": profile.goal.value if profile.goal is not None else None,
-        "activity_level": profile.activity_level.value if profile.activity_level is not None else None,
+        "activity_level": profile.activity_level.value
+        if profile.activity_level is not None
+        else None,
         "daily_calorie_target": profile.daily_calorie_target,
         "is_complete": profile.is_complete(),
     }

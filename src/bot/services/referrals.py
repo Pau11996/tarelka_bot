@@ -86,7 +86,15 @@ async def reward_referrer_after_first_analysis(
         return False
 
     try:
-        await bot.send_message(grant.referrer.telegram_id, format_referral_reward_notice(grant))
+        if grant.referrer.telegram_id is None:
+            from src.shared.notifications import notify_user
+
+            await notify_user(
+                bot, repo, grant.referrer, format_referral_reward_notice(grant),
+                event_key=f"referral:{referred_user_id}:{grant.progress}",
+            )
+        else:
+            await bot.send_message(grant.referrer.telegram_id, format_referral_reward_notice(grant))
     except Exception:
         logger.exception(
             "Failed to notify referrer user_id=%s about reward",

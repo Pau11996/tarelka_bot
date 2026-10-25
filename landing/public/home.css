@@ -247,6 +247,25 @@
 .lp-faq-list details[open] summary > span { transform: rotate(45deg); }
 .lp-faq-list details > p { color: var(--lp-muted); font-size: 13px; line-height: 1.9; padding-bottom: 24px; }
 .lp-faq-list details > p > a { color: var(--lp-green-dark); text-decoration: underline; text-underline-offset: 3px; }
+.lp-android { padding-top: 20px; }
+.lp-android-card { display: grid; grid-template-columns: 1.35fr 1fr; align-items: center; gap: 56px; padding: 48px; border: 1px solid #d5e6d9; border-radius: 28px; background: var(--lp-bg); }
+.lp-android-copy h2 { font-size: clamp(30px, 3.3vw, 42px); line-height: 1.15; letter-spacing: -1.3px; margin: 16px 0; }
+.lp-android-copy > p { max-width: 470px; color: var(--lp-muted); font-size: 14px; line-height: 1.85; }
+.lp-android-features { display: flex; flex-wrap: wrap; gap: 12px 22px; margin-top: 24px; }
+.lp-android-features > span { display: inline-flex; align-items: center; gap: 7px; color: var(--lp-green-dark); font-size: 11px; }
+.lp-android-features .lp-icon { width: 17px; height: 17px; }
+.lp-android-download { min-width: 0; padding: 28px; border: 1px solid #dce8df; border-radius: 20px; background: #fff; }
+.lp-android-app { display: flex; align-items: center; gap: 13px; margin-bottom: 24px; }
+.lp-android-app-icon { display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; border: 1px solid #e0ece3; border-radius: 17px; background: var(--lp-bg); }
+.lp-android-app > div { display: grid; gap: 6px; }
+.lp-android-app strong { font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+.lp-android-app > div > span { color: var(--lp-muted); font-size: 11px; }
+.lp-android-download .lp-button { width: 100%; font-size: 14px; }
+.lp-android-download .lp-button:disabled { color: var(--lp-muted); background: #eef3ef; border-color: #e0e8e2; cursor: default; transform: none; box-shadow: none; }
+.lp-android-note { margin-top: 13px !important; color: var(--lp-muted); font-size: 11px; line-height: 1.8; }
+.lp-android-install { margin-top: 16px; color: var(--lp-muted); font-size: 11px; line-height: 1.8; }
+.lp-android-install summary { color: var(--lp-green-dark); cursor: pointer; }
+.lp-android-install p { margin-top: 9px; }
 .lp-final { text-align: center; padding: 82px 0 88px; background: linear-gradient(180deg, #f4fbf6, #e3f5e8); }
 .lp-final img { width: 64px; height: auto; margin: 0 auto 24px; }
 .lp-final h2 { font-size: clamp(34px, 4vw, 50px); }
@@ -369,6 +388,12 @@
     .lp-faq-heading > p { font-size: 13px; margin: 15px 0; }
     .lp-faq-list summary { font-size: 14px; padding: 21px 0; }
     .lp-faq-list details > p { font-size: 12px; }
+    .lp-android { padding-top: 10px; }
+    .lp-android-card { grid-template-columns: 1fr; gap: 28px; padding: 26px; border-radius: 23px; }
+    .lp-android-copy h2 { font-size: 31px; }
+    .lp-android-copy > p { font-size: 13px; }
+    .lp-android-features { gap: 13px; margin-top: 18px; }
+    .lp-android-download { padding: 22px; }
     .lp-final { padding: 62px 0; }
     .lp-final h2 { font-size: 34px; }
     .lp-final h2 br { display: none; }

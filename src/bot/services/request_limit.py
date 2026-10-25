@@ -32,6 +32,7 @@ _KIND_LABEL = {
 class RequestGrant:
     source: str  # "daily" | "bonus"
     kind: str
+    usage_date: date | None = None
 
     def __bool__(self) -> bool:
         return True
@@ -223,8 +224,9 @@ async def try_consume_daily_request(
 
 
 async def consume_request_grant(repo: UserRepository, user: User, kind: str) -> RequestGrant | None:
-    if await try_consume_daily_request(repo, user, kind):
-        return RequestGrant(source="daily", kind=kind)
+    day = local_today(user.timezone)
+    if await try_consume_daily_request(repo, user, kind, usage_date=day):
+        return RequestGrant(source="daily", kind=kind, usage_date=day)
     if await repo.try_consume_bonus_request(user.id):
         if (user.bonus_requests or 0) > 0:
             user.bonus_requests -= 1
@@ -260,4 +262,4 @@ async def refund_request(repo: UserRepository, user: User, grant: RequestGrant) 
         await repo.refund_bonus_request(user.id)
         user.bonus_requests = int(user.bonus_requests or 0) + 1
         return
-    await repo.refund_daily_request(user.id, local_today(user.timezone), kind=grant.kind)
+    await repo.refund_daily_request(user.id, grant.usage_date or local_today(user.timezone), kind=grant.kind)

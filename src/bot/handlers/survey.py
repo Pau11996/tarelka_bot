@@ -4,8 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
+from src.bot.filters import form_input
 from src.bot.keyboards.menus import (
-    MENU_BUTTON_TEXTS,
     survey_feedback_keyboard,
     survey_rating_keyboard,
 )
@@ -225,7 +225,7 @@ async def survey_feedback_skip(
     await callback.answer()
 
 
-@router.message(StateFilter(SurveyStates.feedback), F.text & ~F.text.in_(MENU_BUTTON_TEXTS))
+@router.message(StateFilter(SurveyStates.feedback), F.text, form_input)
 async def survey_feedback_text(
     message: Message,
     state: FSMContext,

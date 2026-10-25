@@ -1,32 +1,42 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { requestKey, waitOperation, Operation } from "../../operations";
 import { api, apiFailureMessage } from "../../api";
 import { useAuth } from "../../auth";
-import { grams, kcal, mealHeading, ml } from "../../format";
+import { AnalysisDetails } from "../../components/AnalysisDetails";
+import { FavoriteButton } from "../../components/FavoriteButton";
+import { useRequestLimit } from "../../components/RequestLimitDialog";
 import { colors } from "../../theme";
-import type { AnalyzeResponse, Entry } from "../../types";
+import type { AnalyzeResponse, EntryDetails } from "../../types";
 import { ErrorText, Field, PrimaryButton, SecondaryButton } from "../../ui";
 
 export default function EntryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token, signOut } = useAuth();
-  const [entry, setEntry] = useState<Entry | null>(null);
+  const { handleLimit } = useRequestLimit();
+  const [entry, setEntry] = useState<EntryDetails | null>(null);
   const [correction, setCorrection] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const key = useRef<string | null>(null);
+  const lock = useRef(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-    api<Entry>(`/v1/entries/${id}`, { token })
+    api<EntryDetails>(`/v1/entries/${id}`, { token })
       .then((next) => {
         if (active) {
           setEntry(next);
         }
       })
       .catch(async (caught: unknown) => {
-        const message = await apiFailureMessage(caught, "Запись не найдена", signOut);
+        const message = await apiFailureMessage(
+          caught,
+          "Запись не найдена",
+          signOut,
+        );
         if (message && active) setError(message);
       });
     return () => {
@@ -39,35 +49,40 @@ export default function EntryScreen() {
       setError("Опишите, что нужно исправить");
       return;
     }
+    if (lock.current) return;
+    lock.current = true;
     setBusy(true);
     try {
-      const result = await api<AnalyzeResponse>(`/v1/entries/${id}/correct`, {
-        method: "POST",
+      key.current ??= requestKey();
+      const form = new FormData();
+      form.append("request_key", key.current);
+      form.append("text", correction.trim());
+      form.append("entry_id", String(id));
+      const operation = await api<Operation>("/v1/operations", {
         token,
-        json: { text: correction.trim() },
+        body: form,
       });
+      key.current = null;
+      const done = await waitOperation(operation, token);
+      const result = done.result as AnalyzeResponse;
       if (result.status === "unknown") {
         setError(result.message);
         return;
       }
-      setEntry(result.entry);
+      setEntry(await api<EntryDetails>(`/v1/entries/${id}`, { token }));
       setCorrection("");
       setError(null);
     } catch (caught) {
-      const message = await apiFailureMessage(caught, "Не удалось исправить", signOut);
+      if (await handleLimit(caught, "text")) return;
+      const message = await apiFailureMessage(
+        caught,
+        "Не удалось исправить",
+        signOut,
+      );
       if (message) setError(message);
     } finally {
+      lock.current = false;
       setBusy(false);
-    }
-  }
-
-  async function favorite() {
-    try {
-      await api(`/v1/entries/${id}/favorite`, { method: "POST", token });
-      Alert.alert("Избранное", "Запись сохранена.");
-    } catch (caught) {
-      const message = await apiFailureMessage(caught, "Не удалось сохранить");
-      if (message) setError(message);
     }
   }
 
@@ -83,7 +98,10 @@ export default function EntryScreen() {
               await api(`/v1/entries/${id}`, { method: "DELETE", token });
               router.back();
             } catch (caught) {
-              const message = await apiFailureMessage(caught, "Не удалось удалить");
+              const message = await apiFailureMessage(
+                caught,
+                "Не удалось удалить",
+              );
               if (message) setError(message);
             }
           })();
@@ -102,31 +120,20 @@ export default function EntryScreen() {
 
   const activity = entry.entry_type === "activity";
   const water = entry.entry_type === "water";
-  const title = activity || water ? entry.title : mealHeading(entry.title, entry.meal_slot);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.calories}>
-        {water ? ml(entry.volume_ml ?? 0) : activity ? `Сожжено ${kcal(entry.calories)}` : kcal(entry.calories)}
-      </Text>
-      {activity && entry.duration_minutes ? <Text style={styles.muted}>{entry.duration_minutes} мин</Text> : null}
-      {!activity && !water ? (
-        <Text style={styles.muted}>
-          Б {grams(entry.protein_g)} · Ж {grams(entry.fat_g)} · У {grams(entry.carbs_g)}
-        </Text>
-      ) : null}
-      {!water
-        ? entry.items?.map((item, index) => (
-        <View key={`${item.name}-${index}`} style={styles.item}>
-          <Text style={styles.itemTitle}>{item.name}</Text>
-          <Text style={styles.muted}>
-            {item.quantity ? `${item.quantity} · ` : ""}
-            {kcal(item.calories)}
-          </Text>
-        </View>
-      ))
-        : null}
+    <ScrollView
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
+      <AnalysisDetails entry={entry} action={
+        <FavoriteButton
+          entryId={entry.id}
+          favoriteId={entry.favorite_id}
+          onChange={(favoriteId) => setEntry((current) => current ? { ...current, favorite_id: favoriteId } : current)}
+        />
+      } />
+      <Text style={styles.sectionTitle}>Уточнить запись</Text>
       <Field
         value={correction}
         onChangeText={setCorrection}
@@ -141,8 +148,11 @@ export default function EntryScreen() {
         style={styles.multiline}
       />
       <ErrorText message={error} />
-      <PrimaryButton label={busy ? "Пересчитываю…" : "Исправить"} disabled={busy} onPress={() => void correct()} />
-      <SecondaryButton label="В избранное" onPress={() => void favorite()} />
+      <PrimaryButton
+        label={busy ? "Пересчитываю…" : "Исправить"}
+        disabled={busy}
+        onPress={() => void correct()}
+      />
       <SecondaryButton label="Удалить" onPress={remove} />
     </ScrollView>
   );
@@ -150,18 +160,12 @@ export default function EntryScreen() {
 
 const styles = StyleSheet.create({
   pad: { padding: 20, backgroundColor: colors.bg, flex: 1 },
-  content: { padding: 20, gap: 12, paddingBottom: 40, backgroundColor: colors.bg },
-  title: { fontSize: 26, fontWeight: "700", color: colors.text },
-  calories: { fontSize: 18, fontWeight: "600", color: colors.accentDark },
-  muted: { color: colors.muted, fontSize: 14 },
-  item: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    gap: 2,
+  content: {
+    padding: 20,
+    gap: 12,
+    paddingBottom: 40,
+    backgroundColor: colors.bg,
   },
-  itemTitle: { color: colors.text, fontWeight: "600" },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "600", marginTop: 10 },
   multiline: { minHeight: 80, textAlignVertical: "top" },
 });

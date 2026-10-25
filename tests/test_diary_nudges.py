@@ -219,6 +219,8 @@ def test_revive_text_has_opt_out() -> None:
 
 class FakeNudgeRepo:
     def __init__(self) -> None:
+        self.session = AsyncMock()
+        self.session.get.return_value = None
         self.claims: list[tuple[int, str, date]] = []
         self.disabled: list[int] = []
         self.entry_dates: dict[int, list[date]] = {}

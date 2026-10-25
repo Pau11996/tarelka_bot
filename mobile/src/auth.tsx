@@ -1,8 +1,18 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { API_URL } from "./config";
+import { authStorageKeys } from "./authStorage";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
-const TOKEN_KEY = "tarelka.access_token";
+const TOKEN_KEY = authStorageKeys(API_URL).token;
 
 type AuthValue = {
   ready: boolean;
@@ -21,7 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     (Platform.OS === "web"
       ? Promise.resolve().then(() => sessionStorage.getItem(TOKEN_KEY))
-      : SecureStore.getItemAsync(TOKEN_KEY))
+      : SecureStore.getItemAsync(TOKEN_KEY)
+    )
       .then((stored) => {
         if (active) {
           setToken(stored);
@@ -47,13 +58,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ready,
       token,
       async signIn(next) {
+        const { pauseHealthSync } = await import("./health/service");
+        await pauseHealthSync(true);
         if (Platform.OS === "web") sessionStorage.setItem(TOKEN_KEY, next);
         else await SecureStore.setItemAsync(TOKEN_KEY, next);
         setToken(next);
       },
       async signOut() {
+        const { pauseHealthSync } = await import("./health/service");
+        await pauseHealthSync(true);
+        await AsyncStorage.removeItem(`draft:${token?.slice(-24)}`);
+        const { unregisterPush } = await import("./notifications");
+        await unregisterPush(token).catch(() => undefined);
         if (Platform.OS === "web") sessionStorage.removeItem(TOKEN_KEY);
-        else await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined);
+        else
+          await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined);
         setToken(null);
       },
     }),

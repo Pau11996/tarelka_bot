@@ -11,7 +11,13 @@ import {
 
 import { colors } from "./theme";
 
-export function ScreenTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+export function ScreenTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
   return (
     <View style={styles.titleBlock}>
       <Text style={styles.title}>{title}</Text>
@@ -38,7 +44,10 @@ export function PrimaryButton({
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.primary, (pressed || disabled) && styles.pressed]}
+      style={({ pressed }) => [
+        styles.primary,
+        (pressed || disabled) && styles.pressed,
+      ]}
     >
       <Text style={styles.primaryLabel}>{label}</Text>
     </Pressable>
@@ -59,7 +68,10 @@ export function SecondaryButton({
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.secondary, (pressed || disabled) && styles.pressed]}
+      style={({ pressed }) => [
+        styles.secondary,
+        (pressed || disabled) && styles.pressed,
+      ]}
     >
       <Text style={styles.secondaryLabel}>{label}</Text>
     </Pressable>
@@ -67,7 +79,22 @@ export function SecondaryButton({
 }
 
 export function Field(props: TextInputProps) {
-  return <TextInput placeholderTextColor={colors.muted} {...props} style={[styles.field, props.style]} />;
+  const label = props.accessibilityLabel ?? props.placeholder;
+  return (
+    <View style={{ gap: 6 }}>
+      {label ? (
+        <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>
+          {label}
+        </Text>
+      ) : null}
+      <TextInput
+        placeholderTextColor={colors.muted}
+        {...props}
+        accessibilityLabel={label}
+        style={[styles.field, props.style]}
+      />
+    </View>
+  );
 }
 
 export function ErrorText({ message }: { message: string | null }) {

@@ -69,6 +69,30 @@ class StaticSiteTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls): cls.temp.cleanup()
 
+    def test_android_download_requires_a_nonempty_release_apk(self):
+        home = (self.site / 'index.html').read_text()
+        self.assertLess(home.index('id="faq"'), home.index('id="android"'))
+        self.assertLess(home.index('id="android"'), home.index('class="lp-final"'))
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory) / 'site'
+            shutil.copytree(LANDING / 'public', site)
+            apk = site / 'downloads/tarelka.apk'
+            env = {**os.environ, 'LANDING_RENDER_ONLY': '1', 'LANDING_PUBLIC_DIR': str(site)}
+            for content in (None, b'', b'APK test fixture'):
+                with self.subTest(apk=content):
+                    if content is None:
+                        apk.unlink(missing_ok=True)
+                    else:
+                        apk.write_bytes(content)
+                    subprocess.run(['sh', str(LANDING / 'docker-entrypoint.sh')], env=env, check=True)
+                    html = (site / 'index.html').read_text()
+                    page = Page(html)
+                    self.assertEqual('/downloads/tarelka.apk' in page.links, bool(content))
+                    self.assertEqual('APK скоро появится' in html, not bool(content))
+                    if content:
+                        self.assertIn('download="tarelka.apk"', html)
+                        self.assertIn('Как установить APK', html)
+
     def test_canonicals_sitemap_and_unique_metadata(self):
         titles, descriptions, canonicals = [], [], []
         for path, page in self.pages.items():

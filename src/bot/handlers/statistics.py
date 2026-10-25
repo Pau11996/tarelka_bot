@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from src.bot.config import settings
+from src.bot.filters import form_input
 from src.bot.keyboards.menus import STATS_BUTTON, statistics_keyboard
 from src.bot.services.charts import DailyCaloriesPoint, WeightPoint, render_calories_chart_png, render_weight_chart_png
 from src.bot.services.formatting import format_daily_balance, format_entry_list
@@ -204,7 +205,7 @@ async def ask_statistics_date(callback: CallbackQuery, state: FSMContext, cleanu
     await callback.answer()
 
 
-@router.message(StatisticsStates.waiting_date)
+@router.message(StatisticsStates.waiting_date, form_input)
 async def show_day_statistics(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     selected_date = _parse_date(message.text or "")
     if selected_date is None:

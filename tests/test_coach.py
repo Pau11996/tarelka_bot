@@ -397,6 +397,9 @@ def _subscriber() -> User:
 
 def _repo(entries: list[DayEntry], existing: CoachReview | None = None) -> AsyncMock:
     repo = AsyncMock()
+    repo.session.info = {}
+    repo.session.bind.dialect.name = "sqlite"
+    repo.session.get.return_value = None
     repo.get_coach_review.return_value = existing
     repo.ensure_default_profile.return_value = _profile()
     repo.get_entries_for_period.return_value = entries

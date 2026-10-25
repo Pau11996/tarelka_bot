@@ -70,7 +70,7 @@ Rules:
 - "meal": the photo clearly shows food or a caloric drink (tea, coffee, juice, soda, milk, alcohol).
 - A caption that names food or a caloric drink makes the type "meal" even if a glass is also visible, unless the photo is a barcode scan.
 - A caption that only names a meal occasion (завтрак, обед, ужин, перекус, ланч) does not change a water photo into a meal.
-- "unknown": no food, no drinking water, and no barcode is the main subject (person exercising, landscape, meme, screenshot, empty plate, gym equipment, selfie, etc.).
+- "unknown": no food, no drinking water, and no barcode is the main subject (person exercising, landscape, meme, empty plate, gym equipment, selfie, etc.).
 - If the photo shows a person running/working out without food or water, type must be "unknown" with unknown_reason like "На фото нет еды".
 - Do NOT calculate calories, macros, or milliliters.
 - barcode: digits only when type is "barcode"; otherwise null. Do not invent digits you cannot see.
@@ -264,11 +264,11 @@ COMBINED_ANALYSIS_PROMPT = """You are a visual recognition, nutrition, and fitne
 
 Rules:
 - Never ask clarification questions.
-- If details are unclear, use reasonable estimates and explain assumptions.
+- If food, water or exercise details are unclear, use reasonable estimates and explain assumptions.
 - Classify the input as exactly one type: "meal", "activity", "water", or "unknown".
 - "water" is plain, mineral, or sparkling water. Tea, coffee, juice, soda, milk, and alcohol are "meal".
 - One input is exactly one type. If food and water are both mentioned, type is "meal".
-- For photos: never classify as "activity". A photo of drinking water is "water". If the photo has no food and no drinking water, use type "unknown" with unknown_reason in Russian (for example "На фото нет еды").
+- For photos: never classify as "activity". A photo of drinking water is "water". If the photo has no food or drinking water, use type "unknown" with unknown_reason in Russian (for example "На фото нет еды").
 - For unknown: total_calories and macros must be 0, items must be [], volume_ml null, meal_slot null, portion_assumed false, and unknown_reason a short Russian explanation.
 - For meal: identify dish components, estimate portion weights in grams, and calculate calories, protein_g, fat_g, carbs_g for EACH component.
 - For meal: if the user did not specify weights, estimate standard portions and set portion_assumed to true.

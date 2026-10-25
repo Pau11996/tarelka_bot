@@ -1,144 +1,415 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
-import type { DayView, Entry } from "../types";
-import { mealHeading, ml } from "../format";
+import type { AchievementMessage, DayView, Entry } from "../types";
+import { grams, mealHeading, ml } from "../format";
 import { BrandMark, Icon } from "./Brand";
+import { PhotoPreview } from "./PhotoPreview";
+import { FavoriteButton } from "./FavoriteButton";
+import { DeleteEntryButton } from "./DeleteEntryButton";
 
-export function AssistantLabel() {
-  return <View style={s.label}><BrandMark size={18} /><Text style={s.labelText}>ТАРЕЛКА</Text></View>;
+export type CardPhoto = { uri: string; previewUri?: string };
+
+function AdditionalPhotos({ photos }: { photos: CardPhoto[] }) {
+  if (photos.length < 2) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.additionalPhotos}>
+      {photos.slice(1).map((photo) => (
+        <PhotoPreview key={photo.uri} uri={photo.uri} previewUri={photo.previewUri} style={s.photo} />
+      ))}
+    </ScrollView>
+  );
 }
 
-export function EntryCard({ entry, onCorrect, disabled, fromPhoto, previousCalories, time }: {
+export function AssistantLabel() {
+  return (
+    <View style={s.label}>
+      <View style={s.brandIcon}>
+        <BrandMark size={20} />
+      </View>
+      <Text style={s.labelText}>Тарелка</Text>
+    </View>
+  );
+}
+
+export function WeightChatCard({ weight, time, photos = [] }: {
+  weight: number; time?: string; photos?: CardPhoto[];
+}) {
+  return <View style={s.response}>
+    <AssistantLabel />
+    <View style={[s.card, { padding: 16, gap: 12 }]}>
+      <View style={s.between}><View style={s.category}><Icon name="scale" size={15} color={colors.accent} /><Text style={s.categoryText}>Взвешивание</Text></View>{time ? <Text style={s.time}>{time}</Text> : null}</View>
+      <Text style={{ color: colors.accentDark, fontSize: 30, fontWeight: "600" }}>{weight.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}<Text style={{ fontSize: 14, fontWeight: "400", color: colors.muted }}> кг</Text></Text>
+      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Icon name="check" size={15} color={colors.accent} /><Text style={{ fontSize: 12, color: colors.muted }}>Сохранено в достижениях</Text></View>
+      {photos.length ? <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{photos.map(photo => <PhotoPreview key={photo.uri} {...photo} style={{ width: 64, height: 64, borderRadius: 12 }} />)}</ScrollView> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Открыть достижения" onPress={() => router.push("/(tabs)/achievements")} style={{ minHeight: 42, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }}><Icon name="trophy" size={16} color={colors.accentDark} /><Text style={{ fontSize: 12, fontWeight: "500", color: colors.accentDark }}>Посмотреть прогресс</Text><Icon name="chevron" size={13} color={colors.accentDark} /></Pressable>
+    </View>
+  </View>;
+}
+
+export function GoalReachedChatCard({ notice, time }: { notice: AchievementMessage; time?: string }) {
+  return <View style={s.response}>
+    <AssistantLabel />
+    <View style={[s.card, { padding: 16, gap: 12 }]}>
+      <View style={s.between}>
+        <View style={s.category}><Icon name="trophy" size={16} color={colors.accent} /><Text style={s.categoryText}>Ваша цель</Text></View>
+        {time ? <Text style={s.time}>{time}</Text> : null}
+      </View>
+      <Text style={{ fontSize: 20, fontWeight: "600", color: colors.accentDark }}>{notice.title}</Text>
+      <Text style={{ fontSize: 14, lineHeight: 21, color: colors.text }}>{notice.message}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Открыть достигнутую цель" onPress={() => router.push("/(tabs)/achievements")} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.accentDark }}>Открыть достижения</Text><Icon name="chevron" size={14} color={colors.accentDark} />
+      </Pressable>
+    </View>
+  </View>;
+}
+
+export function EntryCard({
+  entry,
+  onCorrect,
+  disabled,
+  previousCalories,
+  time,
+  fromPhoto,
+  photos = [],
+  onFavoriteChange,
+  onDeleted,
+}: {
   entry: Entry;
   onCorrect: () => void;
   disabled?: boolean;
   fromPhoto?: boolean;
   previousCalories?: number;
   time?: string;
+  photos?: CardPhoto[];
+  onFavoriteChange: (favoriteId: number | null) => void;
+  onDeleted: () => void;
 }) {
-  const activity = entry.entry_type === "activity";
-  const water = entry.entry_type === "water";
-  const revised = previousCalories !== undefined;
-  const details = entry.items?.map((item) => item.name).filter(Boolean).join(", ");
-  const caloriesChanged = revised && Math.round(previousCalories) !== Math.round(entry.calories);
-  const title = activity || water ? entry.title : mealHeading(entry.title, entry.meal_slot);
-  if (water) {
-    return <View style={s.response}>
+  const water = entry.entry_type === "water",
+    activity = entry.entry_type === "activity";
+  const accent = water ? "#4d8199" : activity ? "#a77342" : colors.accent;
+  const soft = water ? "#edf5fa" : activity ? "#fbf2e7" : "#f0f5e8";
+  return (
+    <View style={s.response}>
       <AssistantLabel />
       <View style={s.card}>
-        <View style={s.activityHeading}>
-          <View style={s.walk}><Icon name="drop" color={colors.accent} /></View>
-          <View style={s.flex}>
-            <Text style={s.title}>{title}</Text>
-            <Text style={s.description}>{ml(entry.volume_ml ?? 0)}</Text>
+        <View style={[s.between, s.cardHeader]}>
+          <View style={[s.category, { backgroundColor: soft }]}>
+            <Icon
+              name={water ? "drop" : activity ? "walk" : fromPhoto ? "camera" : "plate"}
+              size={12}
+              color={accent}
+            />
+            <Text style={[s.categoryText, { color: accent }]}>
+              {water
+                ? "Вода"
+                : activity
+                  ? "Активность"
+                  : mealHeading("", entry.meal_slot).replace(
+                      /\s*·\s*$/,
+                      "",
+                    ) || "Приём пищи"}
+            </Text>
+          </View>
+          <DeleteEntryButton entryId={entry.id} disabled={disabled} onDeleted={onDeleted} />
+        </View>
+          <View style={s.cardBody}>
+            <View style={s.overview}>
+              {photos[0] ? (
+                <PhotoPreview uri={photos[0].uri} previewUri={photos[0].previewUri} style={s.photo} />
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Открыть запись: ${entry.title}`}
+                onPress={() => router.push(`/entry/${entry.id}`)}
+                style={s.overviewText}
+              >
+                <Text style={s.title} numberOfLines={2}>{entry.title}</Text>
+                <View style={s.energy}>
+                  <Text style={[s.calories, { color: water ? accent : colors.text }]}>
+                    {water
+                      ? ml(entry.volume_ml ?? 0).replace(" мл", "")
+                      : Math.round(entry.calories).toLocaleString("ru-RU")}
+                  </Text>
+                  <Text style={s.unit}>{water ? "мл" : "ккал"}</Text>
+                  {activity && entry.duration_minutes ? (
+                    <Text style={s.description}>{entry.duration_minutes} мин</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            </View>
+            <AdditionalPhotos photos={photos} />
+            {!water && !activity ? (
+              <View
+                accessible
+                style={s.macroRow}
+                accessibilityLabel={`Белки: ${grams(entry.protein_g)}, жиры: ${grams(entry.fat_g)}, углеводы: ${grams(entry.carbs_g)}`}
+              >
+                {[
+                  { label: "Б", value: entry.protein_g, color: "#3776a2", backgroundColor: "#edf4fa" },
+                  { label: "Ж", value: entry.fat_g, color: "#946821", backgroundColor: "#faf3e7" },
+                  { label: "У", value: entry.carbs_g, color: colors.accent, backgroundColor: "#edf5ec" },
+                ].map(({ label, value, color, backgroundColor }) => (
+                  <View key={label} style={[s.macroItem, { backgroundColor }]}>
+                    <Text style={[s.macroLabel, { color }]}>{label}</Text>
+                    <Text style={[s.macroValue, { color }]}>{grams(value)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {previousCalories !== undefined &&
+            Math.round(previousCalories) !== Math.round(entry.calories) ? (
+              <Text style={s.description}>
+                Уточнено: {Math.round(previousCalories)} →{" "}
+                {Math.round(entry.calories)} ккал
+              </Text>
+            ) : null}
+          </View>
+        <View style={s.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Подробнее: ${entry.title}`}
+            onPress={() => router.push(`/entry/${entry.id}`)}
+            style={({ pressed }) => [s.details, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={s.link}>Подробнее</Text>
+            <Icon name="chevron" size={15} color={colors.accentDark} />
+          </Pressable>
+          <View style={s.rightActions}>
+            <FavoriteButton entryId={entry.id} favoriteId={entry.favorite_id} onChange={onFavoriteChange} />
+            <Pressable
+              accessibilityRole="button"
+              disabled={disabled}
+              onPress={onCorrect}
+              style={({ pressed }) => [
+                s.correct,
+                (pressed || disabled) && { opacity: 0.5 },
+              ]}
+            >
+              <Icon name="edit" size={15} color={colors.accentDark} />
+              <Text style={s.link}>Уточнить</Text>
+            </Pressable>
           </View>
         </View>
-        <View style={s.savedRow}>
-          <Icon name="check" size={16} color={colors.accent} />
-          <Text style={s.saved}>Вода сохранена</Text>
-          {time ? <Text style={s.time}>{time}</Text> : null}
-        </View>
-        <Pressable accessibilityRole="button" disabled={disabled} onPress={onCorrect} style={s.quietEdit}>
-          <Text style={s.link}>Уточнить объём</Text>
-        </Pressable>
       </View>
-    </View>;
-  }
-  return <View style={s.response}>
-    <AssistantLabel />
-    <View style={s.card}>
-      {activity ? <>
-        <View style={s.activityHeading}>
-          <View style={s.walk}><Icon name="walk" color={colors.accent} /></View>
-          <View style={s.flex}>
-            <Text style={s.title}>{title}</Text>
-            <Text style={s.description}>{entry.duration_minutes ? `${entry.duration_minutes} минут` : `≈ ${Math.round(entry.calories)} ккал`}</Text>
-          </View>
-        </View>
-        <View style={s.savedRow}>
-          <Icon name="check" size={16} color={colors.accent} />
-          <Text style={s.saved}>Активность сохранена</Text>
-          {time ? <Text style={s.time}>{time}</Text> : null}
-        </View>
-        <Pressable accessibilityRole="button" disabled={disabled} onPress={onCorrect} style={s.quietEdit}>
-          <Text style={s.link}>Уточнить</Text>
-        </Pressable>
-      </> : <>
-        {revised ? <Text style={s.kicker}>Запись · обновлено</Text> : fromPhoto ? <View style={s.photoChip}><Icon name="camera" size={14} color={colors.accent} /><Text style={s.kicker}>Фото</Text></View> : null}
-        <Text style={s.title}>{title}</Text>
-        {details ? <Text style={s.description}>{details}</Text> : null}
-        <View style={s.calorieRow}>
-          <Text style={s.approx}>≈</Text>
-          <Text style={s.calories}>{Math.round(entry.calories)}</Text>
-          <Text style={s.unit}>ккал</Text>
-          {caloriesChanged ? <Text style={s.previous}>{Math.round(previousCalories)} ккал</Text> : null}
-        </View>
-        <View style={s.macros}>
-          {[["Б", entry.protein_g], ["Ж", entry.fat_g], ["У", entry.carbs_g]].map(([label, value]) => (
-            <Text key={label} style={s.macro}><Text style={s.macroLabel}>{label} </Text>{Math.round(Number(value))} г</Text>
-          ))}
-        </View>
-        <View style={s.divider} />
-        {revised ? <View style={s.savedRow}><Icon name="check" size={16} color={colors.accent} /><Text style={s.saved}>Изменения сохранены</Text></View> : <View style={s.between}>
-          <Text style={s.caption}>Порция определена примерно</Text>
-          <View style={s.savedRow}><Icon name="check" size={16} color={colors.accent} /><Text style={s.saved}>Добавлено в дневник</Text></View>
-        </View>}
-        <Pressable accessibilityRole="button" disabled={disabled} onPress={onCorrect} style={({ pressed }) => [s.edit, (pressed || disabled) && { opacity: 0.6 }]}>
-          <Text style={s.link}>Уточнить порцию</Text>
-        </Pressable>
-      </>}
+      {time ? <Text style={s.time}>{time}</Text> : null}
     </View>
-  </View>;
+  );
 }
 
-export function DaySummary({ day, onPress }: { day: DayView; onPress: () => void }) {
-  const minutes = day.entries.reduce((sum, entry) => sum + (entry.duration_minutes ?? 0), 0);
-  const water = day.balance.water_ml ?? 0;
-  const parts = [
-    minutes ? `${minutes} мин движения` : "",
-    water > 0 ? `${Math.round(water)} мл воды` : "",
-  ].filter(Boolean);
-  const summary = parts.length ? parts.join(" · ") : "Все записи за сегодня";
-  return <Pressable accessibilityRole="button" accessibilityLabel="Открыть дневник" onPress={onPress} style={s.summary}>
-    <View style={s.between}><Text style={s.summaryTitle}>Твой день</Text><Text style={s.summaryHint}>{new Date(`${day.date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</Text></View>
-    <View style={s.calorieRow}><Text style={s.summaryCalories}>{Math.round(day.balance.consumed).toLocaleString("ru-RU")}</Text><Text style={s.summaryHint}>ккал из еды</Text></View>
-    <View style={[s.divider, { backgroundColor: "#3a4f43" }]} />
-    <View style={s.between}><View style={s.activityHeading}><Icon name="walk" color={colors.lime} size={22} /><Text style={s.summaryBody}>{summary}</Text></View><Icon name="chevron" color={colors.lime} size={20} /></View>
-  </Pressable>;
+export function AnalysisFailureCard({
+  message,
+  photos = [],
+  time,
+  onLimit,
+  onRetry,
+  disabled,
+}: {
+  message: string;
+  photos?: CardPhoto[];
+  time?: string;
+  onLimit?: () => void;
+  onRetry?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={s.response}>
+      <AssistantLabel />
+      <View style={[s.card, s.failureCard]}>
+        <View style={[s.cardBody, s.failureBody]}>
+          <View style={s.overview}>
+            {photos[0] ? <PhotoPreview uri={photos[0].uri} previewUri={photos[0].previewUri} style={s.photo} /> : null}
+            <Text accessibilityRole="alert" style={[s.title, s.failureMessage]}>{message}</Text>
+          </View>
+          <AdditionalPhotos photos={photos} />
+        </View>
+        {onLimit || onRetry ? (
+          <View style={[s.actions, s.failureActions]}>
+            {onLimit ? (
+              <Pressable accessibilityRole="button" onPress={onLimit} style={({ pressed }) => [s.details, pressed && { opacity: 0.6 }]}>
+                <Text style={[s.link, s.failureLink]}>Информация о лимите</Text>
+              </Pressable>
+            ) : null}
+            {onRetry ? (
+              <Pressable accessibilityRole="button" onPress={onRetry} disabled={disabled} style={({ pressed }) => [s.details, (pressed || disabled) && { opacity: 0.5 }]}>
+                <Text style={[s.link, s.failureLink]}>Повторить</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+      {time ? <Text style={s.time}>{time}</Text> : null}
+    </View>
+  );
 }
 
+export function DaySummary({
+  day,
+  onPress,
+}: {
+  day: DayView;
+  onPress: () => void;
+}) {
+  const target = day.balance.target + day.balance.activity_bonus;
+  const progress = Math.max(
+    0,
+    Math.min(1, day.balance.consumed / Math.max(1, target)),
+  );
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Открыть дневник"
+      onPress={onPress}
+      style={s.summary}
+    >
+      <View style={s.summaryTop}>
+        <Text style={s.summaryTitle}>Сегодня</Text>
+        <Text style={s.summaryCalories}>
+          {Math.round(day.balance.consumed).toLocaleString("ru-RU")}{" "}
+          <Text style={s.summaryHint}>
+            / {Math.round(target).toLocaleString("ru-RU")} ккал
+          </Text>
+        </Text>
+        <Icon name="chevron" size={16} color={colors.accentDark} />
+      </View>
+      <View style={s.track}>
+        <View style={[s.progress, { width: `${progress * 100}%` }]} />
+      </View>
+      <Text style={s.summaryHint}>
+        {day.balance.remaining >= 0
+          ? `Осталось ${Math.round(day.balance.remaining).toLocaleString("ru-RU")} ккал до цели`
+          : `Сверх цели ${Math.round(-day.balance.remaining).toLocaleString("ru-RU")} ккал`}{" "}
+        · <Text style={{ color: colors.accentDark }}>В дневник →</Text>
+      </Text>
+    </Pressable>
+  );
+}
 const s = StyleSheet.create({
-  flex: { flex: 1 },
-  response: { gap: 10, maxWidth: 360, width: "100%" },
-  label: { flexDirection: "row", gap: 8, alignItems: "center", paddingLeft: 2 },
-  labelText: { fontSize: 10, fontWeight: "600", color: colors.muted, letterSpacing: 0.7 },
-  card: { borderRadius: 22, backgroundColor: colors.surface, padding: 16, gap: 8 },
-  title: { fontSize: 18, fontWeight: "700", color: colors.text },
-  description: { fontSize: 13, lineHeight: 20, color: colors.muted },
-  kicker: { fontSize: 12, color: colors.muted },
-  photoChip: { flexDirection: "row", alignItems: "center", gap: 6 },
-  between: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  calorieRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
-  approx: { fontSize: 22, fontWeight: "600", color: colors.text },
-  calories: { color: colors.text, fontSize: 34, fontWeight: "700", letterSpacing: -0.6 },
-  unit: { color: colors.muted, fontSize: 16 },
-  previous: { marginLeft: 6, color: colors.muted, fontSize: 14, textDecorationLine: "line-through" },
-  caption: { fontSize: 12, color: colors.muted, lineHeight: 16, flexShrink: 1 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
-  macros: { flexDirection: "row", gap: 16, marginTop: 2 },
-  macro: { color: colors.text, fontSize: 15, fontWeight: "600" },
-  macroLabel: { color: colors.muted, fontWeight: "500" },
-  edit: { backgroundColor: colors.soft, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 16, alignItems: "center", minHeight: 48, justifyContent: "center", marginTop: 4 },
-  link: { color: colors.accentDark, fontSize: 14, fontWeight: "600" },
-  quietEdit: { alignSelf: "flex-start", minHeight: 36, justifyContent: "center" },
-  activityHeading: { flexDirection: "row", gap: 12, alignItems: "center" },
-  walk: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.soft },
-  savedRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  saved: { color: colors.accentDark, fontSize: 13, fontWeight: "600", flexShrink: 1 },
-  time: { marginLeft: "auto", fontSize: 11, color: colors.muted },
-  summary: { padding: 18, gap: 13, borderRadius: 22, backgroundColor: colors.text, marginTop: 2 },
-  summaryTitle: { fontSize: 18, color: "white", fontWeight: "700" },
-  summaryHint: { fontSize: 11, color: "#bdd0c2" },
-  summaryCalories: { fontSize: 30, color: "white", fontWeight: "700" },
-  summaryBody: { fontSize: 13, color: "white" },
+  response: { gap: 5, maxWidth: 300, width: "100%", alignSelf: "flex-start" },
+  label: { flexDirection: "row", gap: 6, alignItems: "center" },
+  brandIcon: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  labelText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  card: {
+    borderRadius: 18,
+    borderTopLeftRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "#e0e8dc",
+    overflow: "hidden",
+    boxShadow: "0px 3px 12px #182c2305",
+  },
+  cardHeader: { paddingTop: 8, paddingHorizontal: 12 },
+  cardBody: { padding: 12, paddingTop: 8, gap: 8 },
+  overview: { flexDirection: "row", alignItems: "center", gap: 10 },
+  overviewText: { flex: 1, gap: 3 },
+  photo: { width: 56, height: 56, borderRadius: 10 },
+  additionalPhotos: { gap: 8 },
+  failureCard: { backgroundColor: colors.dangerSoft, borderColor: "#f0c5c0" },
+  failureBody: { paddingTop: 12 },
+  failureMessage: { flex: 1, color: colors.danger, fontSize: 14, lineHeight: 20 },
+  failureActions: { borderTopColor: "#f0c5c0", flexWrap: "wrap" },
+  failureLink: { color: colors.danger },
+  between: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  category: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  categoryText: { fontSize: 10, fontWeight: "600" },
+  title: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: colors.text,
+  },
+  energy: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  calories: {
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    fontVariant: ["tabular-nums"],
+  },
+  unit: { fontSize: 12, color: colors.muted },
+  macroRow: { flexDirection: "row", gap: 6, marginTop: 2 },
+  macroItem: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
+  macroLabel: { fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  macroValue: { fontSize: 12, lineHeight: 17, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  description: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: colors.muted,
+    flexShrink: 1,
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#edf1e9",
+  },
+  correct: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#f0f5e8",
+    borderRadius: 10,
+  },
+  rightActions: { flexDirection: "row", alignItems: "center", gap: 2 },
+  details: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  link: { fontSize: 12, fontWeight: "600", color: colors.accentDark },
+  time: { fontSize: 10, color: colors.muted, paddingLeft: 8 },
+  summary: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    gap: 8,
+    borderRadius: 18,
+    backgroundColor: "#eef4e7",
+    borderWidth: 1,
+    borderColor: "#dfe8d6",
+  },
+  summaryTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  summaryTitle: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.accentDark,
+  },
+  summaryCalories: { fontSize: 14, fontWeight: "700", color: colors.text },
+  summaryHint: { fontSize: 10, fontWeight: "400", color: colors.muted },
+  track: {
+    height: 4,
+    backgroundColor: "#dbe6d1",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progress: { height: 4, backgroundColor: colors.accent, borderRadius: 2 },
 });

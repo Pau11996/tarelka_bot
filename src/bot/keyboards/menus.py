@@ -8,6 +8,9 @@ STATS_BUTTON = "📈 Статистика"
 FAVORITES_BUTTON = "⭐ Избранное"
 SUBSCRIPTION_BUTTON = "💎 Подписка"
 PROFILE_BUTTON = "👤 Профиль"
+WEIGHT_BUTTON = "⚖️ Вес и цель"
+LEGACY_ACHIEVEMENTS_BUTTON = "🏆 Достижения"
+ACHIEVEMENTS_BUTTON = LEGACY_ACHIEVEMENTS_BUTTON
 CONTACTS_BUTTON = "⚙️ Контакты и настройки"
 LEGACY_INVITE_BUTTON = "🎁 Пригласить"
 LEGACY_CONTACTS_BUTTON = "💬 Контакты"
@@ -19,6 +22,9 @@ MENU_BUTTON_TEXTS = frozenset(
         FAVORITES_BUTTON,
         SUBSCRIPTION_BUTTON,
         PROFILE_BUTTON,
+        ACHIEVEMENTS_BUTTON,
+        WEIGHT_BUTTON,
+        "🏆 Цель и достижения",
         CONTACTS_BUTTON,
         LEGACY_INVITE_BUTTON,
         LEGACY_CONTACTS_BUTTON,
@@ -173,7 +179,8 @@ def profile_card_keyboard(*, is_complete: bool = True) -> InlineKeyboardMarkup:
     )
     rows = [
         [InlineKeyboardButton(text=edit_text, callback_data="profile:edit")],
-        [InlineKeyboardButton(text="Изменить вес", callback_data="profile:edit_weight")],
+        [InlineKeyboardButton(text="Записать вес", callback_data="ach:weigh")],
+        [InlineKeyboardButton(text=WEIGHT_BUTTON, callback_data="ach:home")],
         [InlineKeyboardButton(text="Изменить норму калорий", callback_data="profile:edit_calories")],
     ]
     url = feedback_chat_url()

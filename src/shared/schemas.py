@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 TRACKED_MICRONUTRIENTS: dict[str, str] = {
@@ -35,6 +35,7 @@ _MEAL_SLOT_ALIASES: dict[str, str] = {
 
 DEFAULT_WATER_ML = 250.0
 ANALYSIS_TYPES = {"meal", "activity", "water", "unknown"}
+MANUAL_WEIGHT_ENTRY = "Чтобы записать вес, откройте «Записать вес» и введите число в кг."
 
 
 def normalize_meal_slot(value: Any) -> str | None:
@@ -106,10 +107,17 @@ class AnalysisResult(BaseModel):
     volume_ml: float | None = None
     product_image_url: str | None = None
 
+    @model_validator(mode="after")
+    def reject_chat_weight(self) -> AnalysisResult:
+        # Reject responses from an older analyzer without turning them into food.
+        return apply_typed_result(self) if self.type == "weight" else self
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AnalysisResult:
-        items = [NutrientItem(**item) for item in data.get("items", [])]
         analysis_type = str(data.get("type", "meal")).lower()
+        if analysis_type == "weight":
+            return cls(type="weight")
+        items = [NutrientItem(**item) for item in data.get("items", [])]
         if analysis_type not in ANALYSIS_TYPES:
             analysis_type = "meal"
         raw_micronutrients = data.get("micronutrients") or {}
@@ -148,6 +156,19 @@ class AnalysisResult(BaseModel):
 
 def apply_typed_result(result: AnalysisResult) -> AnalysisResult:
     """Keep meal slots on meals and store water as volume only."""
+    if result.type == "weight":
+        result.type = "unknown"
+        result.title = ""
+        result.meal_slot = result.volume_ml = result.duration_minutes = None
+        result.total_calories = result.protein_g = result.fat_g = result.carbs_g = 0.0
+        result.items = []
+        result.micronutrients = {key: 0.0 for key in TRACKED_MICRONUTRIENTS}
+        result.portion_assumed = False
+        result.product_image_url = None
+        result.needs_clarification = False
+        result.clarification_question = None
+        result.unknown_reason = MANUAL_WEIGHT_ENTRY
+        return result
     if result.type == "water":
         result.meal_slot = None
         result.total_calories = 0.0

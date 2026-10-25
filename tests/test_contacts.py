@@ -28,10 +28,11 @@ def test_menu_commands_include_contacts_invite_and_start_last() -> None:
     assert [description for _name, description in MENU_COMMANDS] == [
         "📊 дневник за сегодня",
         "🍽 разбор недели",
-        "📈 статистика",
         "⭐ избранные блюда и активности",
-        "💎 подписка",
         "👤 профиль",
+        "📈 статистика",
+        "⚖️ Вес и цель",
+        "💎 подписка",
         "🎁 пригласить друга",
         "📖 как пользоваться",
         "⚙️ контакты и настройки",
@@ -111,6 +112,9 @@ def test_format_help_is_short_and_current() -> None:
     assert "Статистика" in text
     assert "Избранное" in text
     assert "Профиль" in text
+    assert "«Записать вес»" in text
+    assert "мой вес" not in text
+    assert "напольных весов" not in text
     assert "оформить подписку" not in text
     assert "/privacy" not in text
 

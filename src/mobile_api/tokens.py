@@ -12,7 +12,9 @@ def issue_access_token(user_id: int, *, now: datetime | None = None) -> str:
     payload = {
         "sub": str(user_id),
         "iat": int(current.timestamp()),
-        "exp": int((current + timedelta(days=settings.mobile_token_ttl_days)).timestamp()),
+        "exp": int(
+            (current + timedelta(days=settings.mobile_token_ttl_days)).timestamp()
+        ),
     }
     return jwt.encode(payload, settings.mobile_jwt_secret, algorithm="HS256")
 

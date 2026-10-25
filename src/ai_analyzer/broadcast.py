@@ -96,7 +96,9 @@ async def list_broadcast_telegram_ids(
     if audience is BroadcastAudience.ME:
         return [admin_telegram_id]
 
-    query = select(User.telegram_id).where(User.notifications_enabled.is_(True))
+    query = select(User.telegram_id).where(
+        User.notifications_enabled.is_(True), User.telegram_id.is_not(None)
+    )
     if audience is BroadcastAudience.SUBSCRIBERS:
         current = now or datetime.now(timezone.utc)
         query = query.where(User.subscription_until.is_not(None), User.subscription_until > current)

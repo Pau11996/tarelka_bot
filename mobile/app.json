@@ -19,19 +19,27 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_WEIGHT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
+      "expo-asset",
       [
         "expo-image-picker",
         {
           "photosPermission": "ТАРЕЛКА использует фото, чтобы посчитать калории блюда.",
           "cameraPermission": "ТАРЕЛКА использует камеру, чтобы сфотографировать еду.",
-          "microphonePermission": false
+          "microphonePermission": "ТАРЕЛКА использует микрофон, чтобы записать описание еды."
         }
       ],
       [
@@ -42,7 +50,14 @@
           "enableBackgroundRecording": false
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#23814d"
+        }
+      ],
+      "./plugins/withHealthPrivacy"
     ],
     "experiments": {
       "typedRoutes": false

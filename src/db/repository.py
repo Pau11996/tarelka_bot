@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import delete
+
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -12,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
+    DIARY_ENTRY_TYPES,
     AIAnalysis,
     AnalysisType,
     DailyRequestUsage,
@@ -63,7 +66,9 @@ def _as_utc(value: datetime) -> datetime:
     return value
 
 
-def referral_month_window(timezone_name: str | None, now: datetime) -> tuple[datetime, datetime, str]:
+def referral_month_window(
+    timezone_name: str | None, now: datetime
+) -> tuple[datetime, datetime, str]:
     """Local calendar month [start, end) and its YYYY-MM key."""
     zone = _referral_zone(timezone_name)
     local = _as_utc(now).astimezone(zone)
@@ -102,7 +107,9 @@ class UserRepository:
         self.session = session
 
     async def get_or_create_user(self, telegram_id: int, timezone: str) -> User:
-        result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
+        result = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
         user = result.scalar_one_or_none()
         if user is None:
             user = User(telegram_id=telegram_id, timezone=timezone)
@@ -154,14 +161,24 @@ class UserRepository:
     async def set_notifications_enabled(self, user: User, enabled: bool) -> User:
         user.notifications_enabled = enabled
         if enabled:
+            from src.db.models import NotificationPreference
+
+            preference = await self.session.get(NotificationPreference, user.id)
+            if preference and preference.channel == "off":
+                preference.channel = "telegram" if user.telegram_id is not None else "app"
             user.reengagement_last_sent_at = None
         await self.session.commit()
         await self.session.refresh(user)
         return user
 
     async def delete_user(self, user: User) -> None:
+        from src.mobile_api.experience import MEDIA_ROOT
+        import shutil
+
+        user_id = user.id
         await self.session.delete(user)
         await self.session.commit()
+        shutil.rmtree(MEDIA_ROOT / str(user_id), ignore_errors=True)
 
     async def ensure_referral_code(self, user: User) -> str:
         if user.referral_code:
@@ -186,7 +203,10 @@ class UserRepository:
         *,
         now: datetime | None = None,
     ) -> bool:
-        if user.referred_by_user_id is not None or user.referral_reward_granted_at is not None:
+        if (
+            user.referred_by_user_id is not None
+            or user.referral_reward_granted_at is not None
+        ):
             return False
 
         current = now or datetime.now(timezone.utc)
@@ -313,14 +333,18 @@ class UserRepository:
         await self.session.commit()
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
-        result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
+        result = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_user_by_id(self, user_id: int) -> User | None:
         result = await self.session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
-    async def create_mobile_login(self, *, ttl_seconds: int, now: datetime | None = None) -> MobileLoginChallenge:
+    async def create_mobile_login(
+        self, *, ttl_seconds: int, now: datetime | None = None
+    ) -> MobileLoginChallenge:
         current = now or datetime.now(timezone.utc)
         challenge = MobileLoginChallenge(
             id=str(uuid.uuid4()),
@@ -386,7 +410,9 @@ class UserRepository:
         total, _, _, _ = await self.get_daily_usage_counts(user_id, usage_date)
         return total
 
-    async def get_daily_usage_counts(self, user_id: int, usage_date: date) -> tuple[int, int, int, int]:
+    async def get_daily_usage_counts(
+        self, user_id: int, usage_date: date
+    ) -> tuple[int, int, int, int]:
         result = await self.session.execute(
             select(
                 DailyRequestUsage.request_count,
@@ -404,7 +430,9 @@ class UserRepository:
         return tuple(int(value or 0) for value in row)
 
     async def get_profile(self, user_id: int) -> Profile | None:
-        result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))
+        result = await self.session.execute(
+            select(Profile).where(Profile.user_id == user_id)
+        )
         return result.scalar_one_or_none()
 
     async def ensure_default_profile(self, user_id: int) -> Profile:
@@ -416,7 +444,11 @@ class UserRepository:
             daily_calorie_target=DEFAULT_DAILY_CALORIE_TARGET,
         )
 
-    async def upsert_profile(self, user_id: int, **kwargs: Any) -> Profile:
+    async def upsert_profile(self, user_id: int, *, commit: bool = True, **kwargs: Any) -> Profile:
+        from src.shared.weight_tracking import guard_profile_direction, lock_user, sync_awards, sync_goal_message
+
+        await lock_user(self.session, user_id)
+        await guard_profile_direction(self.session, user_id, kwargs.get("goal"))
         profile = await self.get_profile(user_id)
         old_weight = profile.weight_kg if profile is not None else None
         new_weight = kwargs.get("weight_kg", old_weight)
@@ -427,9 +459,17 @@ class UserRepository:
             for key, value in kwargs.items():
                 setattr(profile, key, value)
         if new_weight is not None and (old_weight is None or old_weight != new_weight):
-            self.session.add(WeightHistory(user_id=user_id, weight_kg=new_weight))
-        await self.session.commit()
-        await self.session.refresh(profile)
+            measurement = WeightHistory(user_id=user_id, weight_kg=new_weight, recorded_at=datetime.now(timezone.utc))
+            self.session.add(measurement)
+            await self.session.flush()
+            user = await self.session.get(User, user_id)
+            await sync_goal_message(self.session, user, measurement_ids={f"manual:{measurement.id}"})
+            await sync_awards(self.session, user)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(profile)
+        else:
+            await self.session.flush()
         return profile
 
     async def get_weight_history(
@@ -444,7 +484,9 @@ class UserRepository:
             query = query.where(WeightHistory.recorded_at >= start_at)
         if end_at is not None:
             query = query.where(WeightHistory.recorded_at <= end_at)
-        result = await self.session.execute(query.order_by(WeightHistory.recorded_at.asc()))
+        result = await self.session.execute(
+            query.order_by(WeightHistory.recorded_at.asc())
+        )
         return list(result.scalars().all())
 
     async def create_analysis(
@@ -475,7 +517,9 @@ class UserRepository:
         return analysis
 
     async def get_analysis(self, analysis_id: int) -> AIAnalysis | None:
-        result = await self.session.execute(select(AIAnalysis).where(AIAnalysis.id == analysis_id))
+        result = await self.session.execute(
+            select(AIAnalysis).where(AIAnalysis.id == analysis_id)
+        )
         return result.scalar_one_or_none()
 
     async def create_entry(
@@ -523,7 +567,9 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_entries_for_date(self, user_id: int, entry_date: date) -> list[DayEntry]:
+    async def get_entries_for_date(
+        self, user_id: int, entry_date: date
+    ) -> list[DayEntry]:
         result = await self.session.execute(
             select(DayEntry)
             .where(DayEntry.user_id == user_id, DayEntry.entry_date == entry_date)
@@ -540,7 +586,24 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
-    async def get_entries_for_period(self, user_id: int, start_date: date, end_date: date) -> list[DayEntry]:
+    async def get_entry_counts_for_period(
+        self, user_id: int, start_date: date, end_date: date
+    ) -> dict[date, int]:
+        result = await self.session.execute(
+            select(DayEntry.entry_date, func.count(DayEntry.id))
+            .where(
+                DayEntry.user_id == user_id,
+                DayEntry.entry_date >= start_date,
+                DayEntry.entry_date <= end_date,
+                DayEntry.entry_type.in_(DIARY_ENTRY_TYPES),
+            )
+            .group_by(DayEntry.entry_date)
+        )
+        return dict(result.all())
+
+    async def get_entries_for_period(
+        self, user_id: int, start_date: date, end_date: date
+    ) -> list[DayEntry]:
         result = await self.session.execute(
             select(DayEntry)
             .where(
@@ -552,7 +615,9 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
-    async def get_recent_meal_entries(self, user_id: int, limit: int = 5) -> list[DayEntry]:
+    async def get_recent_meal_entries(
+        self, user_id: int, limit: int = 5
+    ) -> list[DayEntry]:
         result = await self.session.execute(
             select(DayEntry)
             .where(DayEntry.user_id == user_id, DayEntry.entry_type == EntryType.MEAL)
@@ -593,8 +658,48 @@ class UserRepository:
         return entry
 
     async def delete_entry(self, entry: DayEntry) -> None:
+        from src.db.models import MobileOperation, MobileMedia
+        from src.mobile_api.experience import media_path
+
+        ops = list(
+            (
+                await self.session.scalars(
+                    select(MobileOperation.id).where(
+                        MobileOperation.entry_id == entry.id,
+                        MobileOperation.user_id == entry.user_id,
+                    )
+                )
+            ).all()
+        )
+        files = (
+            list(
+                (
+                    await self.session.scalars(
+                        select(MobileMedia.id).where(
+                            MobileMedia.operation_id.in_(ops),
+                            MobileMedia.user_id == entry.user_id,
+                        )
+                    )
+                ).all()
+            )
+            if ops
+            else []
+        )
+        if ops:
+            await self.session.execute(
+                delete(MobileMedia).where(MobileMedia.operation_id.in_(ops))
+            )
+            # Retain idempotency keys, but discard deleted message contents.
+            await self.session.execute(
+                update(MobileOperation)
+                .where(MobileOperation.id.in_(ops))
+                .values(payload={}, result=None, status="deleted", entry_id=None)
+            )
+        user_id = entry.user_id
         await self.session.delete(entry)
         await self.session.commit()
+        for media_id in files:
+            media_path(user_id, media_id).unlink(missing_ok=True)
 
     async def get_favorites(self, user_id: int) -> list[FavoriteMeal]:
         result = await self.session.execute(
@@ -606,11 +711,15 @@ class UserRepository:
 
     async def get_favorite(self, favorite_id: int, user_id: int) -> FavoriteMeal | None:
         result = await self.session.execute(
-            select(FavoriteMeal).where(FavoriteMeal.id == favorite_id, FavoriteMeal.user_id == user_id)
+            select(FavoriteMeal).where(
+                FavoriteMeal.id == favorite_id, FavoriteMeal.user_id == user_id
+            )
         )
         return result.scalar_one_or_none()
 
-    async def get_favorite_by_source_entry(self, user_id: int, entry_id: int) -> FavoriteMeal | None:
+    async def get_favorite_by_source_entry(
+        self, user_id: int, entry_id: int
+    ) -> FavoriteMeal | None:
         result = await self.session.execute(
             select(FavoriteMeal).where(
                 FavoriteMeal.user_id == user_id,
@@ -619,7 +728,26 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_favorite_ids_for_entries(
+        self, user_id: int, entry_ids: list[int]
+    ) -> dict[int, int]:
+        if not entry_ids:
+            return {}
+        result = await self.session.execute(
+            select(FavoriteMeal.source_entry_id, FavoriteMeal.id).where(
+                FavoriteMeal.user_id == user_id,
+                FavoriteMeal.source_entry_id.in_(entry_ids),
+            )
+        )
+        return dict(result.all())
+
     async def create_favorite_from_entry(self, entry: DayEntry) -> FavoriteMeal:
+        # Serialize duplicate clicks before checking the unique source-entry index.
+        await self.session.execute(select(User.id).where(User.id == entry.user_id).with_for_update())
+        existing = await self.get_favorite_by_source_entry(entry.user_id, entry.id)
+        if existing is not None:
+            await self.session.commit()
+            return existing
         favorite = FavoriteMeal(
             user_id=entry.user_id,
             source_entry_id=entry.id,
@@ -653,6 +781,8 @@ class UserRepository:
         shared: bool,
     ) -> bool:
         kind_attr = _usage_count_attr(kind)
+        # A new usage row cannot itself be locked; use the user's existing row.
+        await self.session.execute(select(User.id).where(User.id == user_id).with_for_update())
         result = await self.session.execute(
             select(DailyRequestUsage)
             .where(
@@ -678,7 +808,11 @@ class UserRepository:
             await self.session.commit()
             return True
 
-        current = int(usage.request_count or 0) if shared else int(getattr(usage, kind_attr) or 0)
+        current = (
+            int(usage.request_count or 0)
+            if shared
+            else int(getattr(usage, kind_attr) or 0)
+        )
         if current >= limit:
             await self.session.commit()
             return False
@@ -688,7 +822,9 @@ class UserRepository:
         await self.session.commit()
         return True
 
-    async def refund_daily_request(self, user_id: int, usage_date: date, *, kind: str) -> None:
+    async def refund_daily_request(
+        self, user_id: int, usage_date: date, *, kind: str
+    ) -> None:
         kind_attr = _usage_count_attr(kind)
         result = await self.session.execute(
             select(DailyRequestUsage)
@@ -717,7 +853,9 @@ class UserRepository:
     ) -> User:
         # Serialize renewals and refresh the term after waiting for another payment.
         result = await self.session.execute(
-            select(User).where(User.id == user.id).with_for_update()
+            select(User)
+            .where(User.id == user.id)
+            .with_for_update()
             .execution_options(populate_existing=True)
         )
         user = result.scalar_one()
@@ -729,7 +867,11 @@ class UserRepository:
                 raise ValueError("Payment belongs to another user")
             await self.session.commit()
             return user
-        _extend_subscription(user, duration_days=duration_days, now=_as_utc(now or datetime.now(timezone.utc)))
+        _extend_subscription(
+            user,
+            duration_days=duration_days,
+            now=_as_utc(now or datetime.now(timezone.utc)),
+        )
         self.session.add(
             Payment(
                 user_id=user.id,
@@ -789,9 +931,9 @@ class UserRepository:
             .subquery()
         )
         result = await self.session.execute(
-            select(User, last_entry.c.last_entry_date).join(
-                last_entry, last_entry.c.user_id == User.id
-            ).where(
+            select(User, last_entry.c.last_entry_date)
+            .join(last_entry, last_entry.c.user_id == User.id)
+            .where(
                 User.notifications_enabled.is_(True),
                 last_entry.c.last_entry_date >= window_start,
                 last_entry.c.last_entry_date <= window_end,
@@ -826,9 +968,13 @@ class UserRepository:
         await self.session.commit()
         return claimed
 
-    async def get_coach_review(self, user_id: int, week_start: date) -> CoachReview | None:
+    async def get_coach_review(
+        self, user_id: int, week_start: date
+    ) -> CoachReview | None:
         result = await self.session.execute(
-            select(CoachReview).where(
+            select(CoachReview)
+            .execution_options(populate_existing=True)
+            .where(
                 CoachReview.user_id == user_id,
                 CoachReview.week_start == week_start,
             )
@@ -885,14 +1031,18 @@ class UserRepository:
         await self.session.commit()
         return claimed
 
-    async def release_coach_push(self, *, user_id: int, week_start: date, claimed_at: datetime) -> None:
+    async def release_coach_push(
+        self, *, user_id: int, week_start: date, claimed_at: datetime
+    ) -> None:
         """Allow retry after a failed send without releasing another attempt's claim."""
         await self.session.execute(
-            update(CoachReview).where(
+            update(CoachReview)
+            .where(
                 CoachReview.user_id == user_id,
                 CoachReview.week_start == week_start,
                 CoachReview.push_sent_at == claimed_at,
-            ).values(push_sent_at=None)
+            )
+            .values(push_sent_at=None)
         )
         await self.session.commit()
 
@@ -962,7 +1112,9 @@ class UserRepository:
         return response
 
     async def get_survey_stats(self) -> dict[str, Any]:
-        total = await self.session.scalar(select(func.count()).select_from(SurveyResponse))
+        total = await self.session.scalar(
+            select(func.count()).select_from(SurveyResponse)
+        )
         total = int(total or 0)
         avg_app = await self.session.scalar(select(func.avg(SurveyResponse.app_rating)))
         avg_photo = await self.session.scalar(
@@ -974,8 +1126,9 @@ class UserRepository:
         photo_distribution: dict[int, int] = {rating: 0 for rating in range(1, 6)}
         if total:
             app_rows = await self.session.execute(
-                select(SurveyResponse.app_rating, func.count())
-                .group_by(SurveyResponse.app_rating)
+                select(SurveyResponse.app_rating, func.count()).group_by(
+                    SurveyResponse.app_rating
+                )
             )
             for rating, count in app_rows.all():
                 app_distribution[int(rating)] = int(count)

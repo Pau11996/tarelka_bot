@@ -40,6 +40,7 @@ from src.ai_analyzer.products import (
 from src.shared.schemas import (
     AnalysisResult,
     CoachWeekReview,
+    MANUAL_WEIGHT_ENTRY,
     NutrientItem,
     apply_typed_result,
     meal_slot_from_text,
@@ -369,6 +370,9 @@ class BaseAnalysisRunner:
                 reason=str(unknown_reason) if unknown_reason else DEFAULT_UNKNOWN_REASON,
             )
 
+        if classified_type == "weight":
+            return await _unknown(reason=MANUAL_WEIGHT_ENTRY)
+
         if classified_type not in {"meal", "activity", "water"}:
             return await _unknown(reason=DEFAULT_UNKNOWN_REASON)
 
@@ -435,6 +439,8 @@ class BaseAnalysisRunner:
             text=text,
             profile_context=profile_context,
         )
+        if result.unknown_reason == MANUAL_WEIGHT_ENTRY:
+            return result
         result.type = result_type
         result = apply_typed_result(result)
         if result.type == "meal" and result.meal_slot is None:
@@ -477,6 +483,8 @@ class BaseAnalysisRunner:
                 text=text,
                 on_progress=on_progress,
             )
+        if str(classification.get("type", "")).lower() == "weight":
+            return _unknown_result(unknown_reason=MANUAL_WEIGHT_ENTRY)
         if single_call_enabled():
             return await self._analyze_single(
                 text=text,
@@ -542,6 +550,8 @@ class BaseAnalysisRunner:
             text=description,
             profile_context=None,
         )
+        if result.unknown_reason == MANUAL_WEIGHT_ENTRY:
+            return result
         result.type = "meal"
         result = apply_typed_result(result)
         result.meal_slot = meal_slot

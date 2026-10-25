@@ -10,7 +10,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.config import settings
-from src.bot.handlers.subscription import format_subscription_status, show_subscription_screen
+from src.bot.handlers.subscription import (
+    format_subscription_status,
+    show_subscription_screen,
+)
 from src.bot.keyboards.menus import (
     coach_refresh_keyboard,
     subscription_keyboard,
@@ -34,6 +37,7 @@ from src.bot.services.diary_nudges import local_now_for_timezone
 from src.bot.services.messaging import answer_ephemeral, answer_persistent
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.db.models import CoachReview
+from src.shared.review_service import get_week_review
 from src.db.repository import UserRepository
 
 logger = logging.getLogger(__name__)
@@ -71,11 +75,15 @@ async def _open_week(
     refresh: bool,
 ) -> str:
     if telegram_id in _reviews_in_progress:
-        await answer_persistent(message, "⏳ Разбор уже готовится. Дождитесь результата.")
+        await answer_persistent(
+            message, "⏳ Разбор уже готовится. Дождитесь результата."
+        )
         return "busy"
     _reviews_in_progress.add(telegram_id)
     try:
-        return await _open_week_once(message, session, cleanup, telegram_id=telegram_id, refresh=refresh)
+        return await _open_week_once(
+            message, session, cleanup, telegram_id=telegram_id, refresh=refresh
+        )
     finally:
         _reviews_in_progress.discard(telegram_id)
 
@@ -134,21 +142,22 @@ async def _open_week_once(
         track_user=False,
     )
     try:
-        facts = digest_facts(digest)
         try:
-            text = await write_review_text(facts)
+            action, saved = await get_week_review(
+                repo, user, refresh=refresh, writer=write_review_text
+            )
         except Exception:
             logger.exception("Week review failed for user_id=%s", user.id)
             await answer_persistent(message, COACH_FAILED_TEXT)
             return "failed"
-
-        saved = await repo.save_coach_review(
-            user_id=user.id,
-            week_start=digest.week_start,
-            facts=facts,
-            review_text=text,
-            refresh_used=action == "refresh",
-        )
+        if action == "refresh_spent":
+            return action
+        if action == "need_data":
+            await answer_persistent(message, NOT_ENOUGH_TEXT)
+            return action
+        if action == "paywall":
+            await show_subscription_screen(message, user, cleanup)
+            return action
         await answer_persistent(
             message,
             saved.review_text,
@@ -173,7 +182,9 @@ async def show_week(
     if message.from_user is None:
         return
     repo = UserRepository(session)
-    user = await repo.get_or_create_user(message.from_user.id, settings.default_timezone)
+    user = await repo.get_or_create_user(
+        message.from_user.id, settings.default_timezone
+    )
     if not week_review_allowed(user):
         await show_subscription_screen(message, user, cleanup)
         return
@@ -212,7 +223,9 @@ async def show_week_activity(
         await callback.answer()
         return
     repo = UserRepository(session)
-    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    user = await repo.get_or_create_user(
+        callback.from_user.id, settings.default_timezone
+    )
     if not week_review_allowed(user):
         await callback.answer()
         await callback.message.answer(
@@ -243,7 +256,9 @@ async def refresh_week(
         return
 
     repo = UserRepository(session)
-    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    user = await repo.get_or_create_user(
+        callback.from_user.id, settings.default_timezone
+    )
     if not week_review_allowed(user):
         await callback.answer()
         await callback.message.answer(
@@ -279,11 +294,16 @@ async def refresh_week(
     | F.data.startswith("pp_favorited:")
 )
 async def retired_catalog_button(callback: CallbackQuery) -> None:
-    await callback.answer("Этот раздел больше недоступен. Откройте /ai для актуального меню.", show_alert=True)
+    await callback.answer(
+        "Этот раздел больше недоступен. Откройте /ai для актуального меню.",
+        show_alert=True,
+    )
     if callback.message is not None:
         try:
             await callback.message.edit_reply_markup(
-                reply_markup=week_menu_keyboard() if callback.data == "coach:pp" else None,
+                reply_markup=week_menu_keyboard()
+                if callback.data == "coach:pp"
+                else None,
             )
         except TelegramAPIError:
             pass

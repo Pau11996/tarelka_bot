@@ -22,6 +22,8 @@ competitor-profiles
 mobile/node_modules/
 mobile/.expo/
 output
+/outputs/
+/.codex/
 .name
 skills-lock.json
 data/green_by_products.full.sqlite

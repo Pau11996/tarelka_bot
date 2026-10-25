@@ -67,11 +67,7 @@ def choose_diary_nudge(
     local_date = local_now.date()
     days_ago = (local_date - last_entry_date).days
     sent = set(already_sent_kinds)
-    if (
-        days_ago == 1
-        and local_now.hour >= evening_hour
-        and KIND_EVENING not in sent
-    ):
+    if days_ago == 1 and local_now.hour >= evening_hour and KIND_EVENING not in sent:
         return DiaryNudgeDecision(
             kind=KIND_EVENING,
             last_entry_date=last_entry_date,
@@ -94,9 +90,7 @@ def choose_diary_nudge(
 def format_evening_nudge(streak: int) -> str:
     text = EVENING_NUDGE_TEXT
     if streak >= 2:
-        text += (
-            f"\n\nСерия {streak} дней сгорит, если сегодня не будет записи."
-        )
+        text += f"\n\nСерия {streak} дней сгорит, если сегодня не будет записи."
     return text
 
 
@@ -144,7 +138,15 @@ async def process_diary_nudge_candidates(
             continue
         try:
             text = await _nudge_text(repo, user, decision)
-            await bot.send_message(user.telegram_id, text)
+            from src.shared.notifications import notify_user
+
+            await notify_user(
+                bot,
+                repo,
+                user,
+                text,
+                event_key=f"diary:{decision.kind}:{decision.local_date}",
+            )
             sent += 1
         except TelegramForbiddenError:
             await repo.set_notifications_enabled(user, False)
@@ -167,9 +169,7 @@ async def run_diary_nudges_iteration(
     async with async_session_factory() as session:
         repo = UserRepository(session)
         candidates = await repo.get_diary_nudge_candidates(now=current)
-        return await process_diary_nudge_candidates(
-            bot, repo, candidates, now=current
-        )
+        return await process_diary_nudge_candidates(bot, repo, candidates, now=current)
 
 
 async def run_diary_nudges_loop(bot: Bot) -> None:

@@ -1,10 +1,13 @@
+import asyncio
 import logging
 
 import httpx
+from aiohttp import ClientError
+from sqlalchemy import select
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.bot.config import settings
 from src.bot.keyboards.menus import MENU_BUTTON_TEXTS, meal_card_keyboard
@@ -26,13 +29,15 @@ from src.bot.services.messaging import (
     schedule_user_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
+from src.bot.services.weight_tracking import weight_saved_text
 from src.bot.services.product_image import card_photo_source, load_product_photo
 from src.bot.services.referrals import reward_referrer_after_first_analysis
 from src.bot.services.request_limit import RequestGrant, RequestKind, ensure_request_allowed, refund_request
-from src.bot.states import CorrectionStates, SurveyStates
-from src.db.models import AnalysisType
+from src.bot.states import CorrectionStates, SurveyStates, WeightTrackingStates
+from src.db.models import AnalysisType, WeightHistory
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult
+from src.shared.weight_tracking import achievements_payload
 
 router = Router()
 ai_client = AIAnalyzerClient()
@@ -291,6 +296,28 @@ async def _send_unknown_result(
     )
 
 
+async def _send_saved_weight(message, cleanup, *, session, user, record, state):
+    if state is not None and await state.get_state() == WeightTrackingStates.weight.state:
+        await state.clear()
+    data = await achievements_payload(session, user)
+    schedule_user_message(cleanup, message, persistent=True)
+    await answer_persistent(message, weight_saved_text(record.weight_kg, data["goal"]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Вес и цель", callback_data="ach:home")
+        ]]))
+
+
+async def _repeat_weight_response(message, cleanup, *, session, user, state):
+    record = await session.scalar(select(WeightHistory).where(
+        WeightHistory.user_id == user.id,
+        WeightHistory.operation_key == f"telegram:{message.chat.id}:{message.message_id}",
+    ))
+    if record is None:
+        return False
+    await _send_saved_weight(message, cleanup, session=session, user=user, record=record, state=state)
+    return True
+
+
 async def _save_and_send_text_result(
     message: Message,
     cleanup: MessageCleanupService,
@@ -394,6 +421,8 @@ async def _save_and_send_text_result(
 @router.message(F.photo)
 async def handle_food_photo(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
+    if current_state == WeightTrackingStates.weight.state:
+        return
     if current_state and "ProfileStates" in str(current_state):
         return
     if current_state and "SurveyStates" in str(current_state):
@@ -402,6 +431,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
         return
 
     user, profile = await _require_profile(message, session, cleanup)
+    if await _repeat_weight_response(message, cleanup, session=session, user=user, state=state):
+        return
 
     repo = UserRepository(session)
     grant = await ensure_request_allowed(message, repo, user, cleanup, kind=RequestKind.PHOTO)
@@ -417,11 +448,11 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
 
     photo = message.photo[-1]
     photo_file_id = photo.file_id
-    file = await message.bot.get_file(photo.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
 
     try:
+        file = await message.bot.get_file(photo.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
         raw, result = await ai_client.analyze_image(
             mode="auto",
             image_bytes=content,
@@ -430,8 +461,9 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
             profile_context=profile_context(profile),
             on_progress=_progress_handler(message, status),
         )
-    except httpx.HTTPError:
+    except (httpx.HTTPError, TelegramAPIError, ClientError, asyncio.TimeoutError):
         logger.exception("Photo analysis request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         await answer_ephemeral(
             message,
@@ -539,6 +571,8 @@ async def handle_food_photo(message: Message, state: FSMContext, session, cleanu
 @router.message(F.voice)
 async def handle_food_voice(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
+    if current_state == WeightTrackingStates.weight.state:
+        return
     if current_state and "ProfileStates" in str(current_state):
         return
     if current_state and "SurveyStates" in str(current_state):
@@ -554,6 +588,8 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         return
 
     user, profile = await _require_profile(message, session, cleanup)
+    if await _repeat_weight_response(message, cleanup, session=session, user=user, state=state):
+        return
 
     repo = UserRepository(session)
     grant = await ensure_request_allowed(
@@ -569,27 +605,29 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         track_user=False,
     )
 
-    file = await message.bot.get_file(voice.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    content = file_bytes.read()
-
     try:
+        file = await message.bot.get_file(voice.file_id)
+        file_bytes = await message.bot.download_file(file.file_path)
+        content = file_bytes.read()
         transcript = await ai_client.transcribe(audio_bytes=content, filename="voice.ogg")
     except httpx.HTTPStatusError as exc:
         logger.exception("Voice transcription request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         if exc.response is not None and exc.response.status_code == 400:
             await answer_ephemeral(message, cleanup, VOICE_NOT_RECOGNIZED, track_user=False)
         else:
             await answer_ephemeral(message, cleanup, VOICE_UNAVAILABLE, track_user=False)
         return
-    except httpx.HTTPError:
+    except (httpx.HTTPError, TelegramAPIError, ClientError, asyncio.TimeoutError):
         logger.exception("Voice transcription request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         await answer_ephemeral(message, cleanup, VOICE_UNAVAILABLE, track_user=False)
         return
 
     if not transcript:
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         await answer_ephemeral(message, cleanup, VOICE_NOT_RECOGNIZED, track_user=False)
         return
@@ -609,6 +647,7 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
         )
     except httpx.HTTPError:
         logger.exception("Voice analysis request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         await answer_ephemeral(
             message,
@@ -635,6 +674,8 @@ async def handle_food_voice(message: Message, state: FSMContext, session, cleanu
 @router.message(F.text & ~F.text.in_(MENU_BUTTON_TEXTS))
 async def handle_food_text(message: Message, state: FSMContext, session, cleanup: MessageCleanupService) -> None:
     current_state = await state.get_state()
+    if current_state == WeightTrackingStates.weight.state:
+        return
     if current_state and "ProfileStates" in str(current_state):
         return
     if current_state == CorrectionStates.waiting_text:
@@ -647,6 +688,8 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         return
 
     user, profile = await _require_profile(message, session, cleanup)
+    if await _repeat_weight_response(message, cleanup, session=session, user=user, state=state):
+        return
 
     repo = UserRepository(session)
     grant = await ensure_request_allowed(
@@ -671,6 +714,7 @@ async def handle_food_text(message: Message, state: FSMContext, session, cleanup
         )
     except httpx.HTTPError:
         logger.exception("Text analysis request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status)
         await answer_ephemeral(
             message,

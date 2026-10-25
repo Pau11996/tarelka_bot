@@ -1,0 +1,376 @@
+[
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "lose",
+      "activity_level": "sedentary"
+    },
+    "target": 1495
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "lose",
+      "activity_level": "light"
+    },
+    "target": 1786
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "lose",
+      "activity_level": "moderate"
+    },
+    "target": 2077
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "lose",
+      "activity_level": "active"
+    },
+    "target": 2368
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "lose",
+      "activity_level": "very_active"
+    },
+    "target": 2659
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "sedentary"
+    },
+    "target": 1995
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "light"
+    },
+    "target": 2286
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "moderate"
+    },
+    "target": 2577
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "active"
+    },
+    "target": 2868
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "very_active"
+    },
+    "target": 3159
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "gain",
+      "activity_level": "sedentary"
+    },
+    "target": 2295
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "gain",
+      "activity_level": "light"
+    },
+    "target": 2586
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "gain",
+      "activity_level": "moderate"
+    },
+    "target": 2877
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "gain",
+      "activity_level": "active"
+    },
+    "target": 3168
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "male",
+      "goal": "gain",
+      "activity_level": "very_active"
+    },
+    "target": 3459
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "sedentary"
+    },
+    "target": 1296
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "light"
+    },
+    "target": 1558
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "moderate"
+    },
+    "target": 1820
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "active"
+    },
+    "target": 2081
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "very_active"
+    },
+    "target": 2343
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "sedentary"
+    },
+    "target": 1796
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "light"
+    },
+    "target": 2058
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "moderate"
+    },
+    "target": 2320
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "active"
+    },
+    "target": 2581
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "very_active"
+    },
+    "target": 2843
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "gain",
+      "activity_level": "sedentary"
+    },
+    "target": 2096
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "gain",
+      "activity_level": "light"
+    },
+    "target": 2358
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "gain",
+      "activity_level": "moderate"
+    },
+    "target": 2620
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "gain",
+      "activity_level": "active"
+    },
+    "target": 2881
+  },
+  {
+    "profile": {
+      "weight_kg": 72.5,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "gain",
+      "activity_level": "very_active"
+    },
+    "target": 3143
+  },
+  {
+    "profile": {
+      "weight_kg": 80,
+      "height_cm": 175,
+      "age": 30,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "sedentary"
+    },
+    "target": 2098
+  },
+  {
+    "profile": {
+      "weight_kg": 80,
+      "height_cm": 185,
+      "age": 30,
+      "sex": "male",
+      "goal": "maintain",
+      "activity_level": "sedentary"
+    },
+    "target": 2174
+  },
+  {
+    "profile": {
+      "weight_kg": 45,
+      "height_cm": 150,
+      "age": 65,
+      "sex": "female",
+      "goal": "lose",
+      "activity_level": "sedentary"
+    },
+    "target": 1200.0
+  },
+  {
+    "profile": {
+      "weight_kg": 72,
+      "height_cm": 174,
+      "age": 31,
+      "sex": "female",
+      "goal": "maintain",
+      "activity_level": "moderate"
+    },
+    "target": 2312
+  }
+]

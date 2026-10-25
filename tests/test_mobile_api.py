@@ -89,6 +89,52 @@ async def test_login_binds_the_same_telegram_user(api) -> None:
     await _login(client, factory, 4242)
 
 
+async def test_diary_calendar_shares_unique_entry_dates_and_current_streak(
+    api, monkeypatch
+) -> None:
+    from src.mobile_api import routes
+
+    client, factory = api
+    token, owner_id = await _login(client, factory, 6010)
+    _, other_id = await _login(client, factory, 6011)
+    monkeypatch.setattr(routes, "local_today", lambda zone: date(2026, 10, 23))
+    async with factory() as session:
+        repo = UserRepository(session)
+        for day, kind in [
+            (21, EntryType.MEAL),
+            (21, EntryType.MEAL),
+            (22, EntryType.WATER),
+            (23, EntryType.ACTIVITY),
+        ]:
+            await repo.create_entry(
+                user_id=owner_id, entry_date=date(2026, 10, day),
+                entry_type=kind, title="Запись", calories=100,
+            )
+        await repo.create_entry(
+            user_id=other_id, entry_date=date(2026, 10, 20),
+            entry_type=EntryType.MEAL, title="Чужая запись", calories=200,
+        )
+    headers = {"Authorization": f"Bearer {token}"}
+    today = (await client.get("/v1/today", headers=headers)).json()
+    assert today["entry_dates"] == ["2026-10-21", "2026-10-22", "2026-10-23"]
+    assert today["balance"]["streak"] == 3
+    assert today["nutrient_targets"]["micronutrients"]["fiber_g"] > 0
+    assert today["nutrient_targets"]["micronutrients"]["sugar_g"] > 0
+    past = (await client.get("/v1/days/2026-10-01", headers=headers)).json()
+    assert past["entries"] == []
+    assert past["entry_dates"] == today["entry_dates"]
+    assert past["balance"]["streak"] == 3
+
+
+async def test_empty_diary_returns_zero_streak_and_no_calendar_markers(api) -> None:
+    client, factory = api
+    token, _ = await _login(client, factory, 6012)
+    response = await client.get("/v1/today", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    assert response.json()["balance"]["streak"] == 0
+    assert response.json()["entry_dates"] == []
+
+
 async def test_other_user_cannot_read_or_delete_entry(api) -> None:
     client, factory = api
     owner_token, owner_id = await _login(client, factory, 1001)

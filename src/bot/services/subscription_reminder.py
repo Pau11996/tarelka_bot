@@ -24,18 +24,28 @@ async def run_subscription_reminder_loop(bot: Bot) -> None:
             now = datetime.now(timezone.utc)
             async with async_session_factory() as session:
                 repo = UserRepository(session)
-                users = await repo.get_users_needing_renewal_reminder(now=now, window=window)
+                users = await repo.get_users_needing_renewal_reminder(
+                    now=now, window=window
+                )
                 for user in users:
                     try:
-                        until = user.subscription_until.astimezone(timezone.utc).strftime("%d.%m.%Y")
+                        until = user.subscription_until.astimezone(
+                            timezone.utc
+                        ).strftime("%d.%m.%Y")
                         offer = subscription_offer_link(renew=True)
                         if offer:
                             text = f"Подписка истекает {until}. {offer.capitalize()}?"
                         else:
                             text = f"Подписка истекает {until}. Продлить?"
-                        await bot.send_message(
-                            user.telegram_id,
+                        from src.shared.notifications import notify_user
+
+                        await notify_user(
+                            bot,
+                            repo,
+                            user,
                             text,
+                            event_key=f"subscription:{user.subscription_until.isoformat()}",
+                            path="/pay",
                             reply_markup=subscription_keyboard(is_active=True),
                         )
                         await repo.mark_renewal_reminded(user)

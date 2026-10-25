@@ -66,10 +66,53 @@ services:
       DIARY_NUDGES_INTERVAL_SECONDS: ${DIARY_NUDGES_INTERVAL_SECONDS:-1200}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-help.4posts@gmail.com}
       PRODUCT_DB_PATH: /opt/data/green_by_products.sqlite
+      MOBILE_MEDIA_DIR: /opt/mobile-media
     volumes:
       - ./logs:/opt/logs
       - ./data:/opt/data:ro
+      - mobile_media:/opt/mobile-media
     restart: unless-stopped
+
+  mobile_api:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - >-
+        python -c 'from src.mobile_api.main import validate_runtime_config; validate_runtime_config()'
+        && alembic upgrade head && exec python -m uvicorn src.mobile_api.main:app
+        --host 0.0.0.0 --port 8000 --root-path "$${MOBILE_API_ROOT_PATH}"
+        --proxy-headers --forwarded-allow-ips "127.0.0.1,172.30.77.0/24"
+    environment:
+      MOBILE_API_ENV: production
+      MOBILE_API_ROOT_PATH: /api
+      MOBILE_MEDIA_DIR: /opt/mobile-media
+      MOBILE_DEMO_BILLING: ${MOBILE_DEMO_BILLING:-1}
+      MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET:-}
+      HEALTH_CONNECT_ENABLED: ${HEALTH_CONNECT_ENABLED:-0}
+      DATABASE_URL: ${DATABASE_URL}
+      AI_ANALYZER_URL: ${AI_ANALYZER_URL:-http://ai_analyzer:8000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Europe/Moscow}
+    expose:
+      - "8000"
+    volumes:
+      - ./logs:/opt/logs
+      - mobile_media:/opt/mobile-media
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      ai_analyzer:
+        condition: service_healthy
 
   landing:
     build:
@@ -104,6 +147,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  mobile_media:
 
 networks:
   default:

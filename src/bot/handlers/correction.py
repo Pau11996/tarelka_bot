@@ -7,6 +7,7 @@ import httpx
 import logging
 
 from src.bot.config import settings
+from src.bot.filters import form_input
 from src.bot.handlers.food import _delete_status_message, send_result_card
 from src.bot.keyboards.menus import correction_entries_keyboard
 from src.bot.services.ai_client import AIAnalyzerClient
@@ -20,7 +21,7 @@ from src.bot.services.messaging import (
     schedule_user_message,
 )
 from src.bot.services.message_cleanup import MessageCleanupService
-from src.bot.services.request_limit import RequestKind, ensure_request_allowed
+from src.bot.services.request_limit import RequestKind, ensure_request_allowed, refund_request
 from src.bot.states import CorrectionStates
 from src.db.models import DIARY_ENTRY_TYPES, EntryType
 from src.db.repository import UserRepository
@@ -203,13 +204,16 @@ async def delete_meal_card(callback: CallbackQuery, state: FSMContext, session) 
     await callback.answer("Удалено")
 
 
-@router.message(CorrectionStates.waiting_text)
+@router.message(CorrectionStates.waiting_text, form_input)
 async def apply_correction(
     message: Message,
     state: FSMContext,
     session,
     cleanup: MessageCleanupService,
 ) -> None:
+    if not message.text:
+        await answer_ephemeral(message, cleanup, "Отправьте исправление текстом, например: «рис 180 г, курица 120 г».")
+        return
     data = await state.get_data()
     entry_id = data.get("correct_entry_id")
     if not entry_id:
@@ -227,9 +231,10 @@ async def apply_correction(
         schedule_user_message(cleanup, message)
         return
 
-    if not await ensure_request_allowed(
+    grant = await ensure_request_allowed(
         message, repo, user, cleanup, kind=RequestKind.TEXT, track_user=True
-    ):
+    )
+    if not grant:
         return
 
     previous = None
@@ -254,6 +259,7 @@ async def apply_correction(
         )
     except httpx.HTTPError:
         logger.exception("Correction analysis request failed")
+        await refund_request(repo, user, grant)
         await _delete_status_message(message, status_message)
         await answer_ephemeral(
             message,
@@ -261,6 +267,14 @@ async def apply_correction(
             ANALYSIS_UNAVAILABLE,
             track_user=False,
         )
+        return
+
+    if result.type != analysis_mode:
+        await refund_request(repo, user, grant)
+        await _delete_status_message(message, status_message)
+        await answer_ephemeral(message, cleanup,
+            "Не удалось понять исправление. Запись не изменена. Опишите состав и количество текстом ещё раз.",
+            track_user=False)
         return
 
     service = EntryService(session)

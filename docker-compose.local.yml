@@ -33,37 +33,14 @@ services:
         condition: service_healthy
 
   mobile_api:
-    build:
-      context: .
-      dockerfile: Dockerfile.bot
-    env_file:
-      - .env
-    command: ["python", "-m", "uvicorn", "src.mobile_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      AI_ANALYZER_URL: ${AI_ANALYZER_URL:-http://ai_analyzer:8000}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-taarelka_bot}
-      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Europe/Moscow}
-      FREE_PHOTO_DAILY_LIMIT: ${FREE_PHOTO_DAILY_LIMIT:-3}
-      LEGACY_FREE_PHOTO_DAILY_LIMIT: ${LEGACY_FREE_PHOTO_DAILY_LIMIT:-6}
-      FREE_TEXT_DAILY_LIMIT: ${FREE_TEXT_DAILY_LIMIT:-60}
-      FREE_VOICE_DAILY_LIMIT: ${FREE_VOICE_DAILY_LIMIT:-10}
-      SUBSCRIPTION_DAILY_REQUEST_LIMIT: ${SUBSCRIPTION_DAILY_REQUEST_LIMIT:-30}
-      SUBSCRIPTION_TEXT_DAILY_LIMIT: ${SUBSCRIPTION_TEXT_DAILY_LIMIT:-100}
-      SUBSCRIPTION_VOICE_DAILY_LIMIT: ${SUBSCRIPTION_VOICE_DAILY_LIMIT:-30}
-      REFERRAL_MONTHLY_GOAL: ${REFERRAL_MONTHLY_GOAL:-5}
+      MOBILE_API_ENV: development
+      MOBILE_API_ROOT_PATH: ""
+      MOBILE_DEMO_BILLING: "1"
+      HEALTH_CONNECT_ENABLED: ${HEALTH_CONNECT_ENABLED:-1}
       MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET:-dev-mobile-jwt-secret-change-me}
     ports:
       - "${MOBILE_API_PUBLISH:-127.0.0.1:8001}:8000"
-    volumes:
-      - ./logs:/opt/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     depends_on:
       postgres:
         condition: service_healthy

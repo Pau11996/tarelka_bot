@@ -5,7 +5,7 @@ from html import escape
 from src.ai_analyzer.products import BARCODE_FAILURES, ESTIMATE_ASSUMPTION
 from src.db.models import DayEntry, EntryType, FavoriteMeal, Profile
 from src.bot.services.nutrition import DailyBalance, calculate_daily_nutrient_targets
-from src.shared.schemas import MEAL_SLOTS, AnalysisResult, TRACKED_MICRONUTRIENTS
+from src.shared.schemas import MEAL_SLOTS, AnalysisResult, TRACKED_MICRONUTRIENTS, MANUAL_WEIGHT_ENTRY
 
 
 SEX_LABELS = {
@@ -219,6 +219,8 @@ def format_analysis_result(
 
 def format_unknown_result(result: AnalysisResult | None = None) -> str:
     reason = result.unknown_reason if result is not None else None
+    if reason == MANUAL_WEIGHT_ENTRY:
+        return f"⚖️ {reason}\nИзмерение не сохранено."
     if reason in BARCODE_FAILURES:
         return (
             f"❓ {reason}\n"

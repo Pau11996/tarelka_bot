@@ -110,7 +110,10 @@ async def buy_subscription(callback: CallbackQuery) -> None:
 @router.pre_checkout_query()
 async def pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
     ok = pre_checkout_query.invoice_payload == SUBSCRIPTION_PAYLOAD
-    await pre_checkout_query.answer(ok=ok)
+    await pre_checkout_query.answer(
+        ok=ok,
+        error_message=None if ok else "Этот счёт недействителен. Откройте /premium и попробуйте снова.",
+    )
 
 
 @router.message(F.successful_payment)

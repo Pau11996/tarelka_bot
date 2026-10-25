@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Annotated
+from calendar import monthrange
 from datetime import date, datetime, timedelta
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bot.config import settings
@@ -19,14 +21,28 @@ from src.bot.services.nutrition import (
     calculate_logging_streak,
     local_today,
 )
-from src.bot.services.request_limit import has_active_subscription, request_usage_payload
-from src.db.models import ActivityLevel, DIARY_ENTRY_TYPES, EntryType, Goal, Sex, User
+from src.bot.services.request_limit import (
+    has_active_subscription,
+    request_usage_payload,
+)
+from src.db.models import (
+    DIARY_ENTRY_TYPES,
+    ActivityLevel,
+    EntryType,
+    Goal,
+    MobileMedia,
+    MobileOperation,
+    NotificationPreference,
+    Sex,
+    User,
+)
 from src.db.repository import UserRepository
 from src.db.session import get_session
 from src.mobile_api.analysis import AnalysisService
 from src.mobile_api.deps import get_current_user
 from src.mobile_api.login_codes import LOGIN_EXPIRED
 from src.mobile_api.serializers import (
+    analysis_out,
     balance_out,
     entry_out,
     favorite_out,
@@ -34,25 +50,37 @@ from src.mobile_api.serializers import (
     profile_out,
     weight_out,
 )
+from src.mobile_api.statistics import chart_facts
+from src.mobile_api.request_limits import request_limit_info
 from src.mobile_api.tokens import issue_access_token
+from src.mobile_api.health import router as health_router, health_payload, health_weight
+from src.mobile_api.weight import router as weight_router, tracking_http_error
+from src.shared.weight_tracking import (
+    WeightTrackingError, active_goal, direction_for, goal_out,
+    current_weight, record_weight, set_weight_goal,
+)
 
 router = APIRouter()
+router.include_router(health_router)
+router.include_router(weight_router)
 
 CHECKOUT_MESSAGE = "Оплата картой появится позже"
 
 
 class ProfileUpdate(BaseModel):
-    weight_kg: float | None = None
+    weight_kg: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
     height_cm: float | None = None
     age: int | None = Field(default=None, ge=1, le=120)
     sex: Sex | None = None
     goal: Goal | None = None
     activity_level: ActivityLevel | None = None
     daily_calorie_target: float | None = Field(default=None, ge=500, le=10000)
+    target_weight_kg: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
 
 
 class WeightUpdate(BaseModel):
-    weight_kg: float = Field(gt=0)
+    weight_kg: float = Field(gt=0, le=1000, allow_inf_nan=False)
+    operation_id: str | None = Field(default=None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 class CorrectionRequest(BaseModel):
@@ -76,12 +104,15 @@ def _parse_day(value: str) -> date:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Дата должна быть в формате ГГГГ-ММ-ДД") from exc
+        raise HTTPException(
+            status_code=400, detail="Дата должна быть в формате ГГГГ-ММ-ДД"
+        ) from exc
 
 
 async def _day_payload(repo: UserRepository, user: User, day: date) -> dict:
     profile = await repo.ensure_default_profile(user.id)
     entries = await repo.get_entries_for_date(user.id, day)
+    favorite_ids = await repo.get_favorite_ids_for_entries(user.id, [e.id for e in entries])
     balance = calculate_daily_balance(profile.daily_calorie_target, entries)
     dates = await repo.get_distinct_entry_dates(user.id)
     balance.streak = calculate_logging_streak(dates, local_today(user.timezone))
@@ -89,9 +120,11 @@ async def _day_payload(repo: UserRepository, user: User, day: date) -> dict:
     usage = await request_usage_payload(repo, user)
     return {
         "date": day.isoformat(),
+        "entry_dates": [value.isoformat() for value in sorted(dates)],
         "balance": balance_out(balance),
         "nutrient_targets": nutrient_targets_out(targets),
-        "entries": [entry_out(entry) for entry in entries],
+        "entries": [entry_out(entry, favorite_id=favorite_ids.get(entry.id)) for entry in entries],
+        "health": await health_payload(repo.session, user, day, day),
         "profile_complete": profile.is_complete(),
         "bonus_requests": int(user.bonus_requests or 0),
         **usage,
@@ -101,7 +134,9 @@ async def _day_payload(repo: UserRepository, user: User, day: date) -> dict:
 @router.post("/auth/telegram/start")
 async def start_telegram_login(session: AsyncSession = Depends(get_session)) -> dict:
     repo = UserRepository(session)
-    challenge = await repo.create_mobile_login(ttl_seconds=settings.mobile_login_ttl_seconds)
+    challenge = await repo.create_mobile_login(
+        ttl_seconds=settings.mobile_login_ttl_seconds
+    )
     return {
         "code": challenge.id,
         "bot_url": _bot_url(challenge.id),
@@ -124,20 +159,29 @@ async def poll_telegram_login(code: str, session: AsyncSession = Depends(get_ses
 
 
 @router.get("/me")
-async def me(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> dict:
+async def me(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> dict:
     profile = await UserRepository(session).ensure_default_profile(user.id)
     return {
         "id": user.id,
         "telegram_id": user.telegram_id,
+        "email": user.email,
+        "auth_method": "telegram" if user.telegram_id is not None else "email",
+        "timezone": user.timezone,
         "timezone": user.timezone,
         "profile_complete": profile.is_complete(),
         "subscription_active": has_active_subscription(user),
-        "subscription_until": user.subscription_until.isoformat() if user.subscription_until else None,
+        "subscription_until": user.subscription_until.isoformat()
+        if user.subscription_until
+        else None,
     }
 
 
 @router.get("/today")
-async def today(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> dict:
+async def today(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> dict:
     return await _day_payload(UserRepository(session), user, local_today(user.timezone))
 
 
@@ -156,10 +200,36 @@ async def get_entry(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    entry = await UserRepository(session).get_entry(entry_id, user.id)
+    repo = UserRepository(session)
+    entry = await repo.get_entry(entry_id, user.id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Запись не найдена")
-    return entry_out(entry)
+    analysis = await repo.get_analysis(entry.ai_analysis_id) if entry.ai_analysis_id else None
+    favorite = await repo.get_favorite_by_source_entry(user.id, entry.id)
+    media = list(
+        (
+            await session.scalars(
+                select(MobileMedia)
+                .join(MobileOperation, MobileMedia.operation_id == MobileOperation.id)
+                .where(
+                    MobileOperation.entry_id == entry.id,
+                    MobileOperation.user_id == user.id,
+                    MobileMedia.user_id == user.id,
+                )
+                .order_by(MobileMedia.created_at, MobileMedia.id)
+            )
+        ).all()
+    )
+    return {
+        **entry_out(entry, favorite_id=favorite.id if favorite else None),
+        "analysis": analysis_out(analysis)
+        if analysis is not None and analysis.user_id == user.id
+        else None,
+        "media": [
+            {"id": item.id, "mime": item.mime, "url": f"/v1/media/{item.id}"}
+            for item in media
+        ],
+    }
 
 
 @router.delete("/entries/{entry_id}", status_code=204, response_model=None)
@@ -172,6 +242,11 @@ async def delete_entry(
     entry = await repo.get_entry(entry_id, user.id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Запись не найдена")
+    await session.execute(
+        update(MobileOperation)
+        .where(MobileOperation.user_id == user.id, MobileOperation.entry_id == entry.id)
+        .values(result=None)
+    )
     await repo.delete_entry(entry)
 
 
@@ -182,8 +257,11 @@ async def analyze_entry(
     text: str | None = Form(None),
     image: Annotated[list[UploadFile], File()] = [],
     audio: UploadFile | None = File(None),
+    operation_id: str | None = Form(None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9_-]+$"),
 ) -> dict:
-    return await AnalysisService(session).analyze(user, text=text, image=image, audio=audio)
+    return await AnalysisService(session).analyze(
+        user, text=text, image=image, audio=audio,
+    )
 
 
 @router.post("/entries/{entry_id}/correct")
@@ -240,11 +318,17 @@ async def log_favorite(
         raise HTTPException(status_code=404, detail="Запись не найдена")
     service = EntryService(session)
     if favorite.entry_type == EntryType.ACTIVITY:
-        entry, balance = await service.save_activity_from_favorite(user=user, favorite=favorite)
+        entry, balance = await service.save_activity_from_favorite(
+            user=user, favorite=favorite
+        )
     elif favorite.entry_type == EntryType.WATER:
-        entry, balance = await service.save_water_from_favorite(user=user, favorite=favorite)
+        entry, balance = await service.save_water_from_favorite(
+            user=user, favorite=favorite
+        )
     else:
-        entry, balance = await service.save_meal_from_favorite(user=user, favorite=favorite)
+        entry, balance = await service.save_meal_from_favorite(
+            user=user, favorite=favorite
+        )
     return {"entry": entry_out(entry), "balance": balance_out(balance)}
 
 
@@ -267,7 +351,8 @@ async def get_profile(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     profile = await UserRepository(session).ensure_default_profile(user.id)
-    return profile_out(profile)
+    goal = await active_goal(session, user.id)
+    return {**profile_out(profile), "weight_goal": goal_out(goal, await current_weight(session, user)) if goal else None}
 
 
 @router.put("/profile")
@@ -299,6 +384,15 @@ async def update_profile(
         "daily_calorie_target": profile.daily_calorie_target,
     }
     data.update(payload)
+    target_weight = data.pop("target_weight_kg", None)
+    if target_weight is not None and was_complete:
+        previous = await active_goal(session, user.id)
+        if previous and previous.target_weight_kg == target_weight:
+            # A retry of the initial form must not replay stale profile fields.
+            return {**profile_out(profile), "weight_goal": goal_out(previous, await current_weight(session, user))}
+        raise HTTPException(409, "Измените цель по весу в «Достижениях».")
+    if target_weight is not None and not was_complete and data["weight_kg"] is not None:
+        data["goal"] = Goal(direction_for(data["weight_kg"], target_weight))
     becoming_complete = all(
         data[key] is not None
         for key in ("weight_kg", "height_cm", "age", "sex", "goal", "activity_level")
@@ -312,8 +406,22 @@ async def update_profile(
             goal=data["goal"],
             activity_level=data["activity_level"],
         )
-    saved = await repo.upsert_profile(user.id, **data)
-    return profile_out(saved)
+    try:
+        if target_weight is not None and not was_complete:
+            if not becoming_complete:
+                raise WeightTrackingError("Заполните основные данные перед сохранением цели.")
+            saved = await repo.upsert_profile(user.id, commit=False, **data)
+            previous = await active_goal(session, user.id)
+            await set_weight_goal(session, user, target_weight, expected_goal_id=previous.id if previous else None,
+                                  start_weight=data["weight_kg"], commit=False)
+            await session.commit()
+        else:
+            saved = await repo.upsert_profile(user.id, **data)
+    except WeightTrackingError as error:
+        await session.rollback()
+        raise tracking_http_error(error)
+    goal = await active_goal(session, user.id)
+    return {**profile_out(saved), "weight_goal": goal_out(goal, await current_weight(session, user)) if goal else None}
 
 
 @router.get("/weight")
@@ -322,7 +430,9 @@ async def weight_history(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     records = await UserRepository(session).get_weight_history(user.id)
-    return {"weight": [weight_out(record) for record in records]}
+    imported = await health_weight(session, user)
+    combined = [{**weight_out(record), "source": "manual"} for record in records] + imported
+    return {"weight": sorted(combined, key=lambda record: record["recorded_at"])}
 
 
 @router.post("/weight")
@@ -333,8 +443,34 @@ async def update_weight(
 ) -> dict:
     repo = UserRepository(session)
     await repo.ensure_default_profile(user.id)
-    saved = await repo.upsert_profile(user.id, weight_kg=body.weight_kg)
+    from uuid import uuid4
+    try:
+        await record_weight(session, user, body.weight_kg, operation_key=f"app:{body.operation_id or uuid4()}")
+    except WeightTrackingError as error:
+        await session.rollback()
+        raise tracking_http_error(error)
+    saved = await repo.get_profile(user.id)
     return profile_out(saved)
+
+
+@router.get("/stats/calendar")
+async def statistics_calendar(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+) -> dict:
+    today = local_today(user.timezone)
+    start = _parse_day(f"{month}-01") if month else today.replace(day=1)
+    end = start.replace(day=monthrange(start.year, start.month)[1])
+    counts = await UserRepository(session).get_entry_counts_for_period(user.id, start, end)
+    return {
+        "month": start.strftime("%Y-%m"),
+        "today": today.isoformat(),
+        "days": [
+            {"date": (start + timedelta(days=offset)).isoformat(), "entry_count": counts.get(start + timedelta(days=offset), 0)}
+            for offset in range((end - start).days + 1)
+        ],
+    }
 
 
 @router.get("/stats")
@@ -343,15 +479,22 @@ async def stats(
     session: AsyncSession = Depends(get_session),
     start: str | None = None,
     end: str | None = None,
+    days: int = Query(30, ge=1, le=366),
 ) -> dict:
     repo = UserRepository(session)
     profile = await repo.ensure_default_profile(user.id)
     today = local_today(user.timezone)
     end_date = _parse_day(end) if end else today
-    start_date = _parse_day(start) if start else end_date - timedelta(days=29)
+    start_date = _parse_day(start) if start else end_date - timedelta(days=days - 1)
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="Начало периода позже конца")
 
+    if (end_date - start_date).days > 365:
+        raise HTTPException(status_code=422, detail="Выберите период не больше года")
+    if not has_active_subscription(user) and (end_date - start_date).days > 29:
+        raise HTTPException(
+            status_code=403, detail="Расширенная статистика входит в подписку"
+        )
     entries = await repo.get_entries_for_period(user.id, start_date, end_date)
     calories_by_date: dict[date, float] = defaultdict(float)
     protein_by_date: dict[date, float] = defaultdict(float)
@@ -387,6 +530,12 @@ async def stats(
     start_at = datetime.combine(start_date, datetime.min.time(), tzinfo=zone)
     end_at = datetime.combine(end_date, datetime.max.time(), tzinfo=zone)
     weight = await repo.get_weight_history(user.id, start_at=start_at, end_at=end_at)
+    health = await health_payload(session, user, start_date, end_date)
+    imported_weight = await health_weight(session, user, start_at, end_at)
+    combined_weight = [
+        {**weight_out(record), "source": "manual", "local_date": record.recorded_at.astimezone(zone).date().isoformat()}
+        for record in weight
+    ] + imported_weight
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -394,8 +543,21 @@ async def stats(
         "total_calories": total,
         "average_calories": (total / len(nonempty)) if nonempty else 0,
         "days": days,
-        "weight": [weight_out(record) for record in weight],
+        "weight": sorted(combined_weight, key=lambda record: record["recorded_at"]),
+        "health": health,
+        **chart_facts(
+            entries, profile, start_date, end_date, has_active_subscription(user)
+        ),
     }
+
+
+@router.get("/request-limits")
+async def request_limits(
+    kind: Literal["photo", "text", "voice"],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    return await request_limit_info(UserRepository(session), user, kind)
 
 
 @router.get("/subscription")
@@ -407,14 +569,18 @@ async def subscription(
     usage = await request_usage_payload(repo, user)
     return {
         "active": has_active_subscription(user),
-        "until": user.subscription_until.isoformat() if user.subscription_until else None,
+        "until": user.subscription_until.isoformat()
+        if user.subscription_until
+        else None,
         "bonus_requests": int(user.bonus_requests or 0),
         **usage,
     }
 
 
 @router.post("/billing/checkout")
-async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)) -> dict:
+async def checkout(
+    body: CheckoutRequest, user: User = Depends(get_current_user)
+) -> dict:
     del body, user
     return {"status": "unavailable", "message": CHECKOUT_MESSAGE}
 
@@ -427,7 +593,14 @@ async def account_settings(
     repo = UserRepository(session)
     code = await repo.ensure_referral_code(user)
     progress, rewarded = await repo.referral_month_status(user)
+    pref = await session.get(NotificationPreference, user.id)
     return {
+        "auth_method": "telegram" if user.telegram_id is not None else "email",
+        "email": user.email,
+        "telegram_connected": user.telegram_id is not None,
+        "notification_channel": (pref.channel if pref else ("telegram" if user.telegram_id is not None else "app"))
+        if user.notifications_enabled
+        else "off",
         "notifications_enabled": bool(user.notifications_enabled),
         "referral_url": referral_url(code),
         "bonus_requests": int(user.bonus_requests or 0),
@@ -446,7 +619,9 @@ async def update_notifications(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    updated = await UserRepository(session).set_notifications_enabled(user, body.enabled)
+    updated = await UserRepository(session).set_notifications_enabled(
+        user, body.enabled
+    )
     return {"notifications_enabled": bool(updated.notifications_enabled)}
 
 

@@ -333,7 +333,8 @@ async def test_staged_activity_uses_body_metrics_prompt(
     assert [stage for _, _, stage in runner.calls] == ["classify", "calc"]
     classify_prompt = runner.calls[0][0]
     calc_prompt = runner.calls[1][0]
-    assert "weight_kg" not in classify_prompt
+    assert '"weight_kg": 72' not in classify_prompt
+    assert "User profile context:" not in classify_prompt
     assert "fitness calculation engine" in calc_prompt
     assert "- weight_kg: 72" in calc_prompt
     assert "- height_cm: 178" in calc_prompt
@@ -903,4 +904,3 @@ async def test_barcode_database_missing_is_unknown(
 
     assert result.unknown_reason == PRODUCT_DB_UNAVAILABLE
     assert [stage for _, _, stage in runner.calls] == ["classify"]
-

@@ -226,7 +226,8 @@ async def test_start_begin_starts_form_for_incomplete_profile(monkeypatch: pytes
     await start_begin(callback, state, session=MagicMock(), cleanup=cleanup)
 
     state.set_state.assert_awaited_once_with(ProfileStates.weight)
-    assert answered[0][0].startswith("Шаг 1 из 6 · Вес")
+    assert answered[0][0].startswith("Шаг 1 из 7 · Вес")
+    state.update_data.assert_awaited_with(initial_setup=True)
     callback.message.edit_reply_markup.assert_awaited()
 
 
@@ -331,4 +332,3 @@ async def test_start_begin_from_meal_card_preserves_meal_card_actions(monkeypatc
     assert "meal_delete:99" in callbacks
     assert "meal_favorite:99" in callbacks
     assert "start:begin" not in callbacks
-

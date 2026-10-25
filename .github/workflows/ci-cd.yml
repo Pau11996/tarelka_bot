@@ -43,6 +43,13 @@ jobs:
           node landing/tests/recipe-calculator.test.cjs
           node landing/tests/analytics.test.cjs
 
+      - name: Check mobile app
+        working-directory: mobile
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
   # Auto-deploy temporarily disabled
   # deploy:
   #   name: Deploy to VPS

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,6 +18,7 @@ from src.bot.services.request_limit import (
     limit_welcome_note,
     request_kind_for_input,
     request_policy,
+    refund_request,
 )
 from src.db.models import Payment, User
 from src.db.repository import UserRepository
@@ -228,6 +229,21 @@ async def test_consume_keeps_separate_limits_for_subscribers() -> None:
         (RequestKind.TEXT, settings.subscription_text_daily_limit, False),
         (RequestKind.VOICE, settings.subscription_voice_daily_limit, False),
     ]
+
+
+@pytest.mark.asyncio
+async def test_refund_after_midnight_uses_the_original_usage_day(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from src.bot.services import request_limit
+
+    first_day = date(2026, 10, 25)
+    monkeypatch.setattr(request_limit, "local_today", lambda zone: first_day)
+    repo = SimpleNamespace(try_consume_daily_request=AsyncMock(return_value=True), refund_daily_request=AsyncMock())
+    user = User(id=1, telegram_id=1, timezone="Europe/Minsk", legacy_photo_quota=False)
+    grant = await consume_request_grant(repo, user, RequestKind.PHOTO)
+    monkeypatch.setattr(request_limit, "local_today", lambda zone: first_day + timedelta(days=1))
+    await refund_request(repo, user, grant)
+    repo.refund_daily_request.assert_awaited_once_with(user.id, first_day, kind=RequestKind.PHOTO)
 
 
 def test_channel_welcome_note(monkeypatch) -> None:

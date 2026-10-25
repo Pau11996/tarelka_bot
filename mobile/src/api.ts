@@ -1,11 +1,14 @@
 import { API_URL } from "./config";
+import { isRequestLimitInfo, type RequestLimitInfo } from "./requestLimits";
 
 export class ApiError extends Error {
   status: number;
+  limitReached?: RequestLimitInfo;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, limitReached?: RequestLimitInfo) {
     super(message);
     this.status = status;
+    this.limitReached = limitReached;
   }
 }
 
@@ -19,7 +22,10 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
-export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (options.token) {
     headers.Authorization = `Bearer ${options.token}`;
@@ -38,27 +44,50 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       body,
       signal: options.signal,
     });
-  } catch {
-    throw new ApiError(0, "Не удалось связаться с сервером. Проверьте адрес API.");
+  } catch (cause) {
+    if (__DEV__) {
+      // Never log authorization headers, request bodies or login challenge IDs.
+      console.warn("[API network failure]", {
+        server: API_URL,
+        method: options.method ?? (body ? "POST" : "GET"),
+        endpoint: path.startsWith("/v1/auth/") ? "/v1/auth/…" : path.split("?")[0],
+        reason: cause instanceof Error ? cause.message : "Network request failed",
+      });
+    }
+    throw new ApiError(
+      0,
+      "Не удалось связаться с сервером. Проверьте адрес API.",
+    );
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  const payload = (await response.json().catch(() => ({}))) as { detail?: unknown };
+  const payload = (await response.json().catch(() => ({}))) as {
+    detail?: unknown;
+  };
   if (!response.ok) {
+    if (response.status === 429 && isRequestLimitInfo(payload.detail)) {
+      throw new ApiError(response.status, payload.detail.message, payload.detail);
+    }
     const fallback = options.errorDetail ?? "Не получилось выполнить запрос";
-    const detail = typeof payload.detail === "string" ? payload.detail : fallback;
+    const detail =
+      typeof payload.detail === "string" ? payload.detail : fallback;
     throw new ApiError(response.status, detail);
   }
   return payload as T;
 }
 
-export async function pollLogin(code: string): Promise<{ status: "pending" } | { access_token: string }> {
-  const payload = await api<{ status?: string; access_token?: string }>(`/v1/auth/telegram/${code}`, {
-    errorDetail: "Вход не подтвердился",
-  });
+export async function pollLogin(
+  code: string,
+): Promise<{ status: "pending" } | { access_token: string }> {
+  const payload = await api<{ status?: string; access_token?: string }>(
+    `/v1/auth/telegram/${code}`,
+    {
+      errorDetail: "Вход не подтвердился",
+    },
+  );
   if (payload.access_token) {
     return { access_token: payload.access_token };
   }

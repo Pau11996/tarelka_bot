@@ -80,6 +80,7 @@
         <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
         <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/></symbol>
         <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
     </svg>
     <a class="lp-skip" href="#main">К содержимому</a>
     <header class="lp-header">
@@ -280,6 +281,23 @@
                 <details><summary>Как отключить напоминания?<span aria-hidden="true">+</span></summary><p>Отправьте боту /notifications_off. Чтобы включить напоминания снова — /notifications_on. Сервисные сообщения об оплате могут приходить отдельно.</p></details>
                 <details><summary>Какие данные хранит «Тарелка»?<span aria-hidden="true">+</span></summary><p>Telegram ID, профиль, записи дневника, результаты анализа, историю веса, использование лимитов и сведения об оплате. Подробнее о данных и их удалении — в <a href="/privacy.html">политике конфиденциальности</a>.</p></details>
             </div></div>
+        </section>
+
+        <section class="lp-android lp-section" id="android" aria-labelledby="android-title">
+            <div class="lp-container">
+                <div class="lp-android-card">
+                    <div class="lp-android-copy">
+                        <span class="lp-eyebrow">Приложение для Android</span>
+                        <h2 id="android-title">Ваш дневник питания<br>на Android.</h2>
+                        <p>Считайте калории по фото, записывайте еду текстом или голосом. Дневник, избранное и динамика веса всегда под рукой.</p>
+                        <div class="lp-android-features"><span><svg class="lp-icon" aria-hidden="true"><use href="#i-camera"/></svg> Фото, текст и голос</span><span><svg class="lp-icon" aria-hidden="true"><use href="#i-chart"/></svg> Дневник и статистика</span></div>
+                    </div>
+                    <div class="lp-android-download">
+                        <div class="lp-android-app"><span class="lp-android-app-icon"><img src="/logo-mark.svg" width="44" height="39" loading="lazy" alt=""></span><div><strong>${LANDING_TITLE}</strong><span>Приложение для Android</span></div></div>
+                        ${ANDROID_DOWNLOAD_HTML}
+                    </div>
+                </div>
+            </div>
         </section>
 
         <section class="lp-final"><div class="lp-container"><img src="/logo-mark.svg" width="70" height="61" loading="lazy" alt=""><span class="lp-eyebrow">Всё начинается с одной тарелки</span><h2>Ваш следующий приём пищи —<br><span>первый шаг.</span></h2><p>Откройте Telegram. Отправьте фото. Готово.</p><a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=landing_footer" target="_blank" rel="noopener noreferrer"><svg class="lp-icon" aria-hidden="true"><use href="#i-telegram"/></svg> Попробовать «Тарелку»</a><span class="lp-final-note">Бесплатно · Без карты · В привычном чате</span></div></section>

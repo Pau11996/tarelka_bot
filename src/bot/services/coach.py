@@ -214,9 +214,7 @@ def format_day_label(day: date) -> str:
 def format_period_label(start: date, end: date) -> str:
     if start.month == end.month and start.year == end.year:
         return f"{start.day}–{end.day} {MONTHS_GENITIVE[end.month - 1]}"
-    return (
-        f"{format_day_label(start)} – {format_day_label(end)}"
-    )
+    return f"{format_day_label(start)} – {format_day_label(end)}"
 
 
 def _count_phrase(count: int, one: str, few: str, many: str) -> str:
@@ -261,7 +259,9 @@ def format_activity_report(entries: list[DayEntry], *, start: date, end: date) -
         lines.append(f"\n<b>{escape(format_day_label(day))}</b>")
         day_entries = sorted(
             by_day[day],
-            key=lambda entry: entry.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda entry: (
+                entry.created_at or datetime.min.replace(tzinfo=timezone.utc)
+            ),
         )
         for entry in day_entries:
             parts = [escape(entry.title or "Активность")]
@@ -321,7 +321,9 @@ def build_week_digest(
         day = start + timedelta(days=offset)
         meals = sorted(
             meals_by_day[day],
-            key=lambda entry: entry.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda entry: (
+                entry.created_at or datetime.min.replace(tzinfo=timezone.utc)
+            ),
         )
         moments = [_local_moment(entry.created_at, tz) for entry in meals]
         gaps: list[MealGap] = []
@@ -446,9 +448,9 @@ def format_week_message(review: CoachWeekReview, facts: dict) -> str:
         text = text[:3990].rstrip()
         # Never cut a Telegram HTML entity or a bold section heading in half.
         if text.rfind("<") > text.rfind(">"):
-            text = text[:text.rfind("<")]
+            text = text[: text.rfind("<")]
         if text.rfind("&") > text.rfind(";"):
-            text = text[:text.rfind("&")]
+            text = text[: text.rfind("&")]
         open_bold = text.count("<b>") - text.count("</b>")
         text += "…" + "</b>" * open_bold
     return text
@@ -526,23 +528,29 @@ async def process_sunday_coach_pushes(
             already_pushed=False,
         ):
             continue
-        facts = digest_facts(digest)
-        text: str | None = None
-        if _review_matches_period(existing, digest.end) and existing is not None:
-            text = existing.review_text
-        else:
-            try:
-                text = await writer(facts)
-            except Exception:
-                logger.exception("Failed to write week review for user_id=%s", user.id)
-                continue
-            await repo.save_coach_review(
-                user_id=user.id,
-                week_start=week_start,
-                facts=facts,
-                review_text=text,
-                refresh_used=None,
-            )
+        from src.shared.review_service import review_lock
+
+        async with review_lock(repo.session, user.id):
+            existing = await repo.get_coach_review(user.id, week_start)
+            facts = digest_facts(digest)
+            text: str | None = None
+            if _review_matches_period(existing, digest.end) and existing is not None:
+                text = existing.review_text
+            else:
+                try:
+                    text = await writer(facts)
+                except Exception:
+                    logger.exception(
+                        "Failed to write week review for user_id=%s", user.id
+                    )
+                    continue
+                await repo.save_coach_review(
+                    user_id=user.id,
+                    week_start=week_start,
+                    facts=facts,
+                    review_text=text,
+                    refresh_used=None,
+                )
         claimed = await repo.claim_coach_push(
             user_id=user.id,
             week_start=week_start,
@@ -551,16 +559,31 @@ async def process_sunday_coach_pushes(
         if not claimed or text is None:
             continue
         try:
-            await bot.send_message(user.telegram_id, text)
+            from src.shared.notifications import notify_user
+
+            await notify_user(
+                bot,
+                repo,
+                user,
+                text,
+                event_key=f"review:{week_start}",
+                path="/assistant",
+            )
             sent += 1
         except TelegramForbiddenError:
-            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
+            await repo.release_coach_push(
+                user_id=user.id, week_start=week_start, claimed_at=now
+            )
             await repo.set_notifications_enabled(user, False)
         except asyncio.CancelledError:
-            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
+            await repo.release_coach_push(
+                user_id=user.id, week_start=week_start, claimed_at=now
+            )
             raise
         except Exception:
-            await repo.release_coach_push(user_id=user.id, week_start=week_start, claimed_at=now)
+            await repo.release_coach_push(
+                user_id=user.id, week_start=week_start, claimed_at=now
+            )
             logger.exception("Failed to send week review to user_id=%s", user.id)
         await asyncio.sleep(0.05)
     return sent

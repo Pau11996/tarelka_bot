@@ -390,7 +390,7 @@ async def update_profile(
         if previous and previous.target_weight_kg == target_weight:
             # A retry of the initial form must not replay stale profile fields.
             return {**profile_out(profile), "weight_goal": goal_out(previous, await current_weight(session, user))}
-        raise HTTPException(409, "Измените цель по весу в «Достижениях».")
+        raise HTTPException(409, "Измените цель по весу в «Прогрессе».")
     if target_weight is not None and not was_complete and data["weight_kg"] is not None:
         data["goal"] = Goal(direction_for(data["weight_kg"], target_weight))
     becoming_complete = all(
@@ -539,6 +539,7 @@ async def stats(
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
+        "profile_complete": profile.is_complete(),
         "daily_calorie_target": profile.daily_calorie_target,
         "total_calories": total,
         "average_calories": (total / len(nonempty)) if nonempty else 0,

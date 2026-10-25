@@ -7,7 +7,7 @@ const { test } = require("node:test");
 
 function harness(paid = true) {
   let cursor = 0;
-  const hooks = [], cache = new Map(), requests = [];
+  const hooks = [], cache = new Map(), requests = [], navigations = [];
   const element = (type, props) => ({ type, props });
   const react = {
     forwardRef: fn => fn, memo: fn => fn, useCallback: fn => fn, startTransition: fn => fn(), useEffect() {}, useImperativeHandle() {},
@@ -16,7 +16,7 @@ function harness(paid = true) {
   };
   const report = {
     start_date: "2026-10-22", end_date: "2026-10-23", average_calories: 100,
-    daily_calorie_target: 2100, logged_days: 1, advanced_available: paid,
+    daily_calorie_target: 2100, profile_complete: true, logged_days: 1, advanced_available: paid,
     weight: [], targets: { protein_g: 115, fat_g: 63, carbs_g: 268 },
     days: [
       { date: "2026-10-22", logged: false, entry_count: 1, calories: null, water_ml: 300 },
@@ -35,7 +35,7 @@ function harness(paid = true) {
       if (name === "react/jsx-runtime") return { jsx: element, jsxs: element };
       if (name === "react-native") return { View: "View", Text: "Text", Pressable: "Pressable", ScrollView: "ScrollView", RefreshControl: "RefreshControl", StyleSheet: { create: v => v } };
       if (name === "react-native-svg") return { default: "Svg", Circle: "Circle", Line: "Line", Rect: "Rect", Path: "Path", Text: "Label" };
-      if (name === "expo-router") return { router: { push() {}, setParams() {} }, useLocalSearchParams: () => ({}) };
+      if (name === "expo-router") return { router: { push(url) { navigations.push(url); }, setParams() {} }, useLocalSearchParams: () => ({}) };
       if (name === "react-native-safe-area-context") return { SafeAreaView: "SafeAreaView" };
       if (name === "../../components/AccountMenu") return { AccountMenu: "AccountMenu" };
       if (name === "../../components/DiaryDay") return Object.fromEntries(["DiaryCalendar", "DiaryChronicle", "DiaryEnergy", "DiaryHabits", "DiaryNutrients", "StreakBadge"].map(name => [name, name]));
@@ -59,7 +59,7 @@ function harness(paid = true) {
     cache.set(filename, context.exports);
     return context.exports;
   }
-  return { report, requests, load, render: (fn, props) => { cursor = 0; return fn(props); } };
+  return { report, requests, navigations, load, render: (fn, props) => { cursor = 0; return fn(props); } };
 }
 function nodes(root, expand = false) {
   if (!root || typeof root !== "object") return [];
@@ -95,8 +95,8 @@ test("weekly reports load for free and paid accounts with period buttons above c
     assert.deepEqual(h.requests, ["/v1/stats?days=7"]);
     assert.equal(root.props.children[0].props.accessibilityLabel, "Период статистики");
     const periods = all.filter(n => n.props?.accessibilityRole === "tab");
-    assert.deepEqual(periods.map(texts), ["Неделя", "Месяц"]);
-    assert.deepEqual(periods.map(n => n.props.accessibilityState.selected), [true, false]);
+    assert.deepEqual(periods.map(texts), ["Неделя", "Месяц", "3 месяца"]);
+    assert.deepEqual(periods.map(n => n.props.accessibilityState.selected), [true, false, false]);
     assert.equal(texts(root).includes("Календарь записей"), false);
     assert.equal(texts(root).includes("Выбрать даты"), false);
     const charts = all.filter(n => n.type === "Chart");
@@ -117,11 +117,11 @@ test("week and month switch the report period for free and paid accounts", () =>
     all.find(n => n.props?.accessibilityRole === "tab" && texts(n) === "Месяц").props.onPress();
     all = nodes(h.render(DiaryStatistics, {}));
     assert.equal(h.requests.at(-1), "/v1/stats?days=30");
-    assert.deepEqual(all.filter(n => n.props?.accessibilityRole === "tab").map(n => n.props.accessibilityState.selected), [false, true]);
+    assert.deepEqual(all.filter(n => n.props?.accessibilityRole === "tab").map(n => n.props.accessibilityState.selected), [false, true, false]);
     all.find(n => n.props?.accessibilityRole === "tab" && texts(n) === "Неделя").props.onPress();
     all = nodes(h.render(DiaryStatistics, {}));
     assert.equal(h.requests.at(-1), "/v1/stats?days=7");
-    assert.deepEqual(all.filter(n => n.props?.accessibilityRole === "tab").map(n => n.props.accessibilityState.selected), [true, false]);
+    assert.deepEqual(all.filter(n => n.props?.accessibilityRole === "tab").map(n => n.props.accessibilityState.selected), [true, false, false]);
   }
 });
 
@@ -182,4 +182,15 @@ test("switching diary tabs hides the entire Android refresh wrapper and retains 
   assert.equal(panes[1].props.importantForAccessibility, "no-hide-descendants");
   assert.equal(panes[0].props.style.flex, 1);
   assert.ok(pages.every(page => page.props.refreshControl && page.props.style.display === undefined));
+});
+
+test("three months loads 90 days for subscribers and opens subscription for free accounts", () => {
+  for (const paid of [false, true]) {
+    const h = harness(paid), { DiaryStatistics } = h.load("components/DiaryStatistics.tsx");
+    const all = nodes(h.render(DiaryStatistics, {}));
+    all.find(n => n.props?.accessibilityRole === "tab" && texts(n) === "3 месяца").props.onPress();
+    h.render(DiaryStatistics, {});
+    assert.equal(h.requests.at(-1), paid ? "/v1/stats?days=90" : "/v1/stats?days=7");
+    assert.deepEqual(h.navigations, paid ? [] : ["/pay"]);
+  }
 });

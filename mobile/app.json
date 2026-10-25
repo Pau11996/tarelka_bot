@@ -3,7 +3,12 @@
     "name": "ТАРЕЛКА",
     "slug": "tarelka",
     "scheme": "tarelka",
-    "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "857cec7e-bc63-4d60-a028-04648c5f9820"
+      }
+    },
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -12,6 +17,7 @@
       "bundleIdentifier": "by.tarelka.app"
     },
     "android": {
+      "versionCode": 2,
       "package": "by.tarelka.app",
       "adaptiveIcon": {
         "backgroundColor": "#F4FBF6",

@@ -100,6 +100,13 @@ async def test_job_survives_request_and_replay_does_not_add_second_entry(
     history = (await client.get("/v1/chat", headers=h)).json()
     assert history["entries"][0]["title"] == "Обед"
     assert history["operations"][0]["text"] == "Обед"
+    from src.shared.activity import count_meal_active_users
+
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        assert await count_meal_active_users(
+            session, start_at=now - timedelta(days=1), end_at=now
+        ) == 1
 
 
 async def test_worker_rolls_back_partial_entry_before_retry(setup, monkeypatch):

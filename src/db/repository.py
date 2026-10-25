@@ -18,7 +18,6 @@ from src.db.models import (
     AIAnalysis,
     AnalysisType,
     DailyRequestUsage,
-    DailyUserActivity,
     CoachReview,
     DayEntry,
     DiaryNudge,
@@ -116,37 +115,6 @@ class UserRepository:
             self.session.add(user)
             await self.session.commit()
             await self.session.refresh(user)
-        return user
-
-    async def record_user_activity(
-        self,
-        telegram_id: int,
-        timezone_name: str,
-        *,
-        now: datetime | None = None,
-    ) -> User:
-        current = now or datetime.now(timezone.utc)
-        user = await self.get_or_create_user(telegram_id, timezone_name)
-        user.last_active_at = current
-        try:
-            activity_date = current.astimezone(ZoneInfo(user.timezone)).date()
-        except ZoneInfoNotFoundError:
-            activity_date = current.date()
-        await self.session.execute(
-            pg_insert(DailyUserActivity)
-            .values(
-                user_id=user.id,
-                activity_date=activity_date,
-            )
-            .on_conflict_do_nothing(
-                index_elements=[
-                    DailyUserActivity.user_id,
-                    DailyUserActivity.activity_date,
-                ]
-            )
-        )
-        await self.session.commit()
-        await self.session.refresh(user)
         return user
 
     async def set_acquisition_source_if_empty(self, user: User, source: str) -> bool:

@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.db.url import normalize_async_database_url
@@ -32,6 +33,12 @@ class Settings(BaseSettings):
     coach_reviews_enabled: bool = True
     coach_reviews_interval_seconds: int = 20 * 60
     support_email: str = "help.4posts@gmail.com"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_security: Literal["starttls", "ssl"] = "starttls"
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
     database_url: str = "postgresql+asyncpg://wellhealth:wellhealth@localhost:5432/wellhealth"
     ai_analyzer_url: str = "http://localhost:8000"
 

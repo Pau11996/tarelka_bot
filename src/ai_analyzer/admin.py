@@ -32,7 +32,8 @@ from src.bot.services.survey_texts import SURVEY_INVITATION
 from src.db.models import (
     AIAnalysis,
     AnalysisType,
-    DailyUserActivity,
+    DayEntry,
+    EntryType,
     MarketingCampaign,
     Payment,
     Profile,
@@ -40,6 +41,7 @@ from src.db.models import (
 )
 from src.db.repository import UserRepository
 from src.db.session import get_session
+from src.shared.activity import count_meal_active_users
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = ""
@@ -302,11 +304,7 @@ async def collect_admin_stats(
         select(func.count(User.id)).where(User.subscription_until > current)
     )
     total_stars = await session.scalar(select(func.coalesce(func.sum(Payment.stars_amount), 0)))
-    active_users = await session.scalar(
-        select(func.count(func.distinct(DailyUserActivity.user_id))).where(
-            DailyUserActivity.activity_date >= start_day
-        )
-    )
+    active_users = await count_meal_active_users(session, start_at=start_at, end_at=current)
     analyses_count = await session.scalar(
         select(func.count(AIAnalysis.id)).where(AIAnalysis.created_at >= start_at)
     )
@@ -389,21 +387,26 @@ async def collect_admin_stats(
         .exists()
     )
     signup_day = cast(func.timezone(User.timezone, User.created_at), Date)
+    meal_day = cast(func.timezone(User.timezone, DayEntry.created_at), Date)
     d1_exists = (
-        select(DailyUserActivity.id)
+        select(DayEntry.id)
         .where(
-            DailyUserActivity.user_id == User.id,
-            DailyUserActivity.activity_date == signup_day + 1,
+            DayEntry.user_id == User.id,
+            DayEntry.entry_type == EntryType.MEAL,
+            DayEntry.created_at <= current,
+            meal_day == signup_day + 1,
         )
         .correlate(User)
         .exists()
     )
     d7_exists = (
-        select(DailyUserActivity.id)
+        select(DayEntry.id)
         .where(
-            DailyUserActivity.user_id == User.id,
-            DailyUserActivity.activity_date >= signup_day + 5,
-            DailyUserActivity.activity_date <= signup_day + 8,
+            DayEntry.user_id == User.id,
+            DayEntry.entry_type == EntryType.MEAL,
+            DayEntry.created_at <= current,
+            meal_day >= signup_day + 5,
+            meal_day <= signup_day + 8,
         )
         .correlate(User)
         .exists()

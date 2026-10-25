@@ -37,6 +37,8 @@ import { colors } from "../theme";
 
 const AccessContext = createContext({ setHidden: (_hidden: boolean) => {} });
 const POSITION_KEY = "tarelka.assistant.dock.v1";
+// Temporarily hidden; the weekly review screen remains available.
+const FLOATING_ASSISTANT_ENABLED = false;
 export function useAssistantHidden(hidden: boolean) {
   const { setHidden } = useContext(AccessContext);
   useEffect(() => {
@@ -259,7 +261,7 @@ export function AssistantAccess({ children }: { children: ReactNode }) {
     <AccessContext.Provider value={access}>
       <View style={{ flex: 1 }}>
         {children}
-        {token && !hidden && !keyboard && !excluded ? (
+        {FLOATING_ASSISTANT_ENABLED && token && !hidden && !keyboard && !excluded ? (
           <Animated.View
             {...pan.panHandlers}
             style={[

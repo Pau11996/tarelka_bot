@@ -33,7 +33,6 @@ from src.bot.services.diary_nudges import run_diary_nudges_loop
 from src.bot.services.subscription_reminder import run_subscription_reminder_loop
 from src.shared.weight_reminders import run_weigh_reminders_loop
 from src.shared.achievement_messages import run_goal_messages_loop
-from src.db.repository import UserRepository
 from src.db.session import async_session_factory
 
 logger = logging.getLogger(__name__)
@@ -51,13 +50,6 @@ class DbSessionMiddleware(BaseMiddleware):
     ) -> Any:
         async with self.session_factory() as session:
             data["session"] = session
-            telegram_user = data.get("event_from_user")
-            if telegram_user is not None and not telegram_user.is_bot:
-                repo = UserRepository(session)
-                await repo.record_user_activity(
-                    telegram_user.id,
-                    settings.default_timezone,
-                )
             return await handler(event, data)
 
 

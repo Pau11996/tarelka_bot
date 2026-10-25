@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { API_URL } from "./config";
 import { authStorageKeys } from "./authStorage";
+import { setPrivateImageSession } from "./privateImage";
 import {
   createContext,
   useContext,
@@ -33,9 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? Promise.resolve().then(() => sessionStorage.getItem(TOKEN_KEY))
       : SecureStore.getItemAsync(TOKEN_KEY)
     )
-      .then((stored) => {
+      .then(async (stored) => {
         if (active) {
-          setToken(stored);
+          await setPrivateImageSession(stored);
+          if (active) setToken(stored);
         }
       })
       .catch(() => {
@@ -62,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await pauseHealthSync(true);
         if (Platform.OS === "web") sessionStorage.setItem(TOKEN_KEY, next);
         else await SecureStore.setItemAsync(TOKEN_KEY, next);
+        await setPrivateImageSession(next);
         setToken(next);
       },
       async signOut() {
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.removeItem(`draft:${token?.slice(-24)}`);
         const { unregisterPush } = await import("./notifications");
         await unregisterPush(token).catch(() => undefined);
+        await setPrivateImageSession(null);
         if (Platform.OS === "web") sessionStorage.removeItem(TOKEN_KEY);
         else
           await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined);

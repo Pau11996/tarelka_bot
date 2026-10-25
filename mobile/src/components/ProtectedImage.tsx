@@ -33,7 +33,7 @@ function Photo({
   style,
   token,
 }: Props & { token: string | null }) {
-  const [resolved, setResolved] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<PrivateImage | null>(null);
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   const protectedMedia = uri.startsWith(`${API_URL}/`);
@@ -48,7 +48,7 @@ function Photo({
     void loadPrivateImage(uri, token, controller.signal)
       .then((loaded) => {
         image = loaded;
-        if (active) setResolved(loaded.uri);
+        if (active) setResolved(loaded);
         else loaded.dispose();
       })
       .catch((error) => {
@@ -82,13 +82,16 @@ function Photo({
       {(!protectedMedia || resolved) && status !== "error" ? (
         <Image
           key={attempt}
-          source={{ uri: resolved ?? uri }}
+          source={{ uri: resolved?.uri ?? uri }}
           style={[s.image, status !== "loaded" && s.hidden]}
           resizeMethod="resize"
           resizeMode={StyleSheet.flatten(style)?.resizeMode ?? "cover"}
           accessibilityLabel="Фото еды"
           onLoad={() => setStatus("loaded")}
-          onError={() => setStatus("error")}
+          onError={() => {
+            resolved?.invalidate();
+            setStatus("error");
+          }}
         />
       ) : null}
       {status === "loading" && !previewUri ? (

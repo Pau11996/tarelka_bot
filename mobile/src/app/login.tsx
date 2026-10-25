@@ -21,6 +21,7 @@ import { api, apiFailureMessage, pollLogin } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../components/Brand";
 import { LoginWelcome } from "../components/LoginWelcome";
+import { PasswordRecoveryForm } from "../components/PasswordRecoveryForm";
 import { API_URL, SITE_URL } from "../config";
 import { authStorageKeys } from "../authStorage";
 import { colors, welcomeColors } from "../theme";
@@ -33,7 +34,7 @@ export default function LoginScreen() {
   const [waiting, setWaiting] = useState(false);
   const [botUrl, setBotUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"choose" | "register" | "login">("choose");
+  const [mode, setMode] = useState<"choose" | "register" | "login" | "recover">("choose");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -152,7 +153,7 @@ export default function LoginScreen() {
   }
 
   async function submitEmail() {
-    if (emailSending.current || mode === "choose") return;
+    if (emailSending.current || (mode !== "register" && mode !== "login")) return;
     setError(null);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError("Укажите корректный email");
@@ -230,12 +231,13 @@ export default function LoginScreen() {
           <View accessibilityViewIsModal onAccessibilityEscape={closeEmailForm} style={[s.sheet, { maxHeight: windowHeight - inset.top - 16, paddingBottom: Math.max(inset.bottom, 20) }]}>
             <View style={s.handle} />
             <View style={s.sheetHeading}>
-              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
+              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "recover" ? "Восстановление пароля" : mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Закрыть форму" disabled={emailBusy} onPress={closeEmailForm} style={s.sheetClose}>
                 <Icon name="close" size={18} />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" bounces={false} contentContainerStyle={s.form}>
+              {mode === "recover" ? <PasswordRecoveryForm email={email} onEmailChange={setEmail} onBack={() => chooseMode("login")} onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} /> : <>
               <Text style={s.formIntro}>{mode === "register" ? "Начните свой дневник с чистого листа." : "Войдите в дневник, который создали по email."}</Text>
               <View style={s.tabs}>
                 {(["login", "register"] as const).map(item => (
@@ -249,8 +251,10 @@ export default function LoginScreen() {
               {mode === "register" ? <PasswordField accessibilityLabel="Повторите пароль" placeholder="Ещё раз тот же пароль" value={confirmation} onChangeText={setConfirmation} visible={showConfirmation} onToggle={() => setShowConfirmation(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete="new-password" textContentType="newPassword" editable={!emailBusy} maxLength={128} onSubmitEditing={() => void submitEmail()} /> : null}
               <View accessibilityLiveRegion="polite"><ErrorText message={error} /></View>
               <PrimaryButton label={emailBusy ? (mode === "register" ? "Создаём аккаунт…" : "Входим…") : mode === "register" ? "Зарегистрироваться" : "Войти"} disabled={emailBusy} onPress={() => void submitEmail()} />
+              {mode === "login" ? <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("recover")} style={s.forgotButton}><Text style={s.forgotText}>Забыли пароль?</Text></Pressable> : null}
               <Text style={s.accountHint}>Аккаунт по email и аккаунт Telegram имеют отдельные дневники.</Text>
               <LegalLinks onError={setError} />
+              </>}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -314,4 +318,6 @@ const s = StyleSheet.create({
   passwordEye: { position: "absolute", right: 4, bottom: 1, width: 44, height: 44, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   passwordEyePressed: { backgroundColor: colors.soft },
   accountHint: { fontSize: 10, lineHeight: 16, color: colors.muted, textAlign: "center" },
+  forgotButton: { minHeight: 44, alignItems: "center", justifyContent: "center" },
+  forgotText: { fontSize: 13, fontWeight: "500", color: colors.accentDark },
 });

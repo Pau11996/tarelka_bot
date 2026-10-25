@@ -5,8 +5,8 @@ const flush = () => new Promise(setImmediate);
 const compile = file => ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src", file), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const measurement = { id: "manual:2", weight_kg: 75.8, recorded_at: "2026-10-25T08:00:00Z", local_date: "2026-10-25", source: "manual", origin: null };
 const payload = () => ({
-  current_weight_kg: 75.8, weight_history: [measurement], goal_history: [],
-  goal: { id: "goal-1", direction: "lose", start_weight_kg: 80, target_weight_kg: 70, progress: .42, remaining_kg: 5.8, change_kg: -4.2, reached: false },
+  current_weight_kg: 75.8, weight_history: [measurement], latest_measurement: measurement, goal_history: [],
+  goal: { id: "goal-1", direction: "lose", start_weight_kg: 80, target_weight_kg: 70, progress: .42, remaining_kg: 5.8, change_kg: -4.2, reached: false, started_at: "2026-10-01T08:00:00Z" },
   achievements: [
     { key: "first_weigh_in", title: "Первое взвешивание", description: "После начального веса", earned: true, progress: 1, target: 1 },
     { key: "diary_7_days", title: "7 дней дневника", description: "Записи каждый день", earned: false, progress: 3, target: 7 },
@@ -30,6 +30,7 @@ function setup(data = payload()) {
     "../../components/AccountMenu": { AccountMenu: "AccountMenu" },
     "../../components/Brand": { Icon: "Icon" },
     "../../components/WeightProgressChart": { WeightProgressChart: "WeightProgressChart" },
+    "../../components/WeightGoalProgress": { WeightGoalProgress: "WeightGoalProgress" },
     "../../components/AchievementMedal": { AchievementMedal: "AchievementMedal", achievementTone: () => ({ background: "soft", ink: "green" }) },
     "../../components/Screen": { State: "State" }, "../../format": { formatDay: value => value },
     "../../health/events": { healthUpdated() {} }, "../../health/math": { sourceName: value => value },
@@ -54,7 +55,12 @@ test("active goal renders one actual chart and navigation replaces the old goal 
   const chart = app.render().find(node => node.type === "WeightProgressChart");
   assert.equal(chart.props.history[0].id, measurement.id);
   assert.equal(chart.props.target, 70);
-  assert.ok(app.text().includes("42% пути пройдено"));
+  assert.equal(app.render().find(node => node.type === "WeightGoalProgress").props.progress, .42);
+  assert.ok(app.text().includes("ВАША ЦЕЛЬ 70 кг"));
+  assert.ok(app.button("Изменить цель по весу").props.accessibilityValue.text.includes("42% пути пройдено"));
+  assert.ok(app.text().includes("1 окт. 2026 — 25 окт. 2026"));
+  assert.ok(!app.text().includes("Ваш прогресс складывается"));
+  assert.ok(!app.text().includes("Привычки остаются"));
   app.button("Записать вес").props.onPress();
   assert.deepEqual(app.routes, ["/weight"]);
 });
@@ -114,7 +120,8 @@ test("without a goal the invitation and independent weigh-in remain available", 
 test("maintenance shows deviation instead of a percentage", () => {
   const data = payload();Object.assign(data.goal, { direction: "maintain", progress: null, remaining_kg: .2 });
   const app = setup(data);
-  assert.ok(app.text().includes("Поддерживаем 70 кг"));
+  assert.ok(app.text().includes("ПОДДЕРЖИВАЕМ ВЕС 70 кг"));
   assert.ok(app.text().includes("Отклонение от ориентира: 0,2 кг"));
   assert.ok(!app.text().includes("% пути"));
+  assert.equal(app.render().find(node => node.type === "WeightGoalProgress"), undefined);
 });

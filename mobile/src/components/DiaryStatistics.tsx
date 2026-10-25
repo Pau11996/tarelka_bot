@@ -6,6 +6,7 @@ import { sourceName } from "../health/math";
 import { Chart, type ChartPoint } from "./Chart";
 import { Icon } from "./Brand";
 import { State } from "./Screen";
+import { StarterTargetNotice } from "./StarterTargetNotice";
 import { diaryProgress } from "../diary";
 import { recordedAverage } from "../statistics";
 import { useResource } from "../hooks/useResource";
@@ -32,7 +33,8 @@ function StatisticsCard({ title, subtitle, action, children }: { title?: string;
 
 export type DiaryStatisticsHandle = { refresh: () => Promise<void> };
 export const DiaryStatistics = memo(forwardRef<DiaryStatisticsHandle, { targets?: NutrientTargets }>(function DiaryStatistics({ targets }, ref) {
-  const [period, setPeriod] = useState<7 | 30>(7);
+  const [period, setPeriod] = useState<7 | 30 | 90>(7);
+  const [premium, setPremium] = useState<boolean | null>(null);
   const [macro, setMacro] = useState<(typeof macros)[number]["key"]>("protein_g");
   const [habit, setHabit] = useState<"water_ml" | "activity_minutes" | null>(null);
   const { data: report, error, loading, load } = useResource<Stats>(`/v1/stats?days=${period}`);
@@ -45,16 +47,24 @@ export const DiaryStatistics = memo(forwardRef<DiaryStatisticsHandle, { targets?
 
   return <View style={s.content}>
     <View accessibilityRole="tablist" accessibilityLabel="Период статистики" style={s.periodControl}>
-      {([{ value: 7, label: "Неделя" }, { value: 30, label: "Месяц" }] as const).map(item => (
-        <Pressable key={item.value} accessibilityRole="tab" accessibilityState={{ selected: period === item.value }} onPress={() => setPeriod(item.value)} style={[s.periodItem, period === item.value && s.periodSelected]}>
+      {([{ value: 7, label: "Неделя" }, { value: 30, label: "Месяц" }, { value: 90, label: "3 месяца" }] as const).map(item => (
+        <Pressable key={item.value} accessibilityRole="tab" accessibilityLabel={item.value === 90 && (report?.advanced_available ?? premium) === false ? "3 месяца — по подписке" : item.label} accessibilityState={{ selected: period === item.value, disabled: item.value === 90 && !report && premium === null }} disabled={item.value === 90 && !report && premium === null} onPress={() => {
+          const available = report?.advanced_available ?? premium;
+          if (item.value === 90 && available === null) return;
+          if (item.value === 90 && !available) { router.push("/pay"); return; }
+          setPremium(available);
+          setPeriod(item.value);
+        }} style={[s.periodItem, period === item.value && s.periodSelected]}>
           <Text style={[s.periodText, period === item.value && s.periodTextSelected]}>{item.label}</Text>
+          {item.value === 90 && (report?.advanced_available ?? premium) === false ? <Icon name="lock" size={12} color={colors.muted} /> : null}
         </Pressable>
       ))}
     </View>
     <State loading={!report && loading} error={error} onRetry={() => void load()} />
     {report ? <>
-      <StatisticsCard title="Калории" subtitle={`Пунктир — текущая цель ${number(report.daily_calorie_target)} ккал`}>
+      <StatisticsCard title="Калории" subtitle={`Пунктир — ${report.profile_complete ? "текущая цель" : "стартовый ориентир"} ${number(report.daily_calorie_target)} ккал`}>
         <Chart key={`energy:${chartKey}`} compact points={points("calories")} target={report.daily_calorie_target} unit="ккал" />
+        {!report.profile_complete ? <StarterTargetNotice /> : null}
       </StatisticsCard>
       <StatisticsCard title="Динамика веса" action={<Text style={s.small}>Измерений: {report.weight.length}</Text>}>
         {report.weight.length ? <>
@@ -103,7 +113,7 @@ const s = StyleSheet.create({
   small: { color: colors.muted, fontSize: 10, lineHeight: 15 },
   unit: { fontSize: 11, color: colors.muted, fontWeight: "400", letterSpacing: 0 },
   periodControl: { flexDirection: "row", gap: 3, padding: 3, backgroundColor: "#eaf0e6", borderRadius: 12 },
-  periodItem: { flex: 1, minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 9 },
+  periodItem: { flex: 1, minHeight: 44, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center", borderRadius: 9 },
   periodSelected: { backgroundColor: colors.surface },
   periodText: { fontSize: 12, color: colors.muted },
   periodTextSelected: { color: colors.accentDark, fontWeight: "600" },

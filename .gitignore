@@ -23,6 +23,7 @@ mobile/node_modules/
 mobile/.expo/
 output
 /outputs/
+/landing/public/downloads/*.apk
 /.codex/
 .name
 skills-lock.json

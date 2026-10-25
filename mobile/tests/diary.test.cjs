@@ -32,6 +32,7 @@ test("chronicle offers favorites for meals, water and activity and updates the c
     if (name === "../theme") return { colors: {} };
     if (name === "./Brand") return { Icon: "Icon" };
     if (name === "./FavoriteButton") return { FavoriteButton: "FavoriteButton" };
+    if (name === "./StarterTargetNotice") return { StarterTargetNotice: "StarterTargetNotice" };
     throw Error(name);
   }};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/components/DiaryDay.tsx"), "utf8"), {

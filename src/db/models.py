@@ -93,6 +93,7 @@ class User(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    auth_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
     daily_request_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     legacy_photo_quota: Mapped[bool] = mapped_column(
@@ -191,6 +192,14 @@ class AuthRateLimit(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     resets_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class PasswordResetCode(Base):
+    __tablename__ = "password_reset_codes"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class Profile(Base):

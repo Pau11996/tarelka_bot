@@ -61,7 +61,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="achievements"
-        options={{ title: "Достижения", tabBarIcon: tabIcon("trophy") }}
+        options={{ title: "Прогресс", tabBarIcon: tabIcon("trophy") }}
       />
       <Tabs.Screen
         name="favorites"

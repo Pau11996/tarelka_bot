@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import re
+import secrets
+import smtplib
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,18 +18,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bot.config import settings
-from src.db.models import AuthRateLimit, NotificationPreference, Profile, User
+from src.db.models import AuthRateLimit, NotificationPreference, PasswordResetCode, Profile, User
 from src.db.repository import DEFAULT_DAILY_CALORIE_TARGET
 from src.db.session import get_session
 from src.mobile_api.passwords import DUMMY_HASH, hash_password, verify_password
 from src.mobile_api.tokens import issue_access_token
+from src.mobile_api.email_delivery import recovery_email_configured, send_reset_code
 
 router = APIRouter(prefix="/auth/email")
 
 
-class Credentials(BaseModel):
+class EmailAddress(BaseModel):
     email: str = Field(max_length=254)
-    password: SecretStr
 
     @field_validator("email")
     @classmethod
@@ -35,6 +38,14 @@ class Credentials(BaseModel):
         if not re.fullmatch(r"[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+", value):
             raise ValueError("Укажите корректный email")
         return value
+
+
+class Credentials(EmailAddress):
+    password: SecretStr
+
+
+class PasswordReset(Credentials):
+    code: str = Field(pattern=r"^[0-9]{6}$")
 
 
 class Registration(Credentials):
@@ -71,7 +82,67 @@ async def rate_limit(session: AsyncSession, scope: str, value: str, limit: int, 
 
 
 def access_token(user: User) -> dict:
-    return {"access_token": issue_access_token(user.id), "token_type": "bearer"}
+    return {"access_token": issue_access_token(user.id, auth_version=user.auth_version), "token_type": "bearer"}
+
+
+def reset_code_hash(email: str, code: str) -> str:
+    return hmac.new(settings.mobile_jwt_secret.encode(), f"password-reset:{email}:{code}".encode(), "sha256").hexdigest()
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: EmailAddress, request: Request, session: AsyncSession = Depends(get_session),
+):
+    await rate_limit(session, "reset-send-ip", request.client.host if request.client else "unknown", 10, 3600)
+    await rate_limit(session, "reset-send-email-hour", body.email, 5, 3600)
+    await rate_limit(session, "reset-send-email-minute", body.email, 1, 60)
+    if not recovery_email_configured():
+        raise HTTPException(503, "Отправка писем временно недоступна. Попробуйте позже.")
+    user = await session.scalar(select(User).where(User.email == body.email).with_for_update())
+    if user and user.password_hash:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        insert = sqlite_insert if session.get_bind().dialect.name == "sqlite" else pg_insert
+        values = dict(code_hash=reset_code_hash(body.email, code), expires_at=datetime.now(timezone.utc) + timedelta(minutes=10))
+        await session.execute(insert(PasswordResetCode).values(user_id=user.id, **values).on_conflict_do_update(
+            index_elements=[PasswordResetCode.user_id], set_=values,
+        ))
+        try:
+            await send_reset_code(body.email, code)
+        except (OSError, smtplib.SMTPException):
+            await session.rollback()
+            raise HTTPException(503, "Не удалось отправить письмо. Попробуйте позже.") from None
+        await session.commit()
+    return {"message": "Если аккаунт с этим email существует, мы отправили код. Проверьте входящие и папку «Спам».", "resend_after": 60}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    body: PasswordReset, request: Request, session: AsyncSession = Depends(get_session),
+):
+    password = body.password.get_secret_value()
+    if not 8 <= len(password) <= 128:
+        raise HTTPException(400, "Пароль должен содержать от 8 до 128 символов")
+    await rate_limit(session, "reset-verify-ip", request.client.host if request.client else "unknown", 30, 600)
+    await rate_limit(session, "reset-verify-email", body.email, 5, 600)
+    # Lock the user in the same order as sending; DELETE ... RETURNING consumes once.
+    user = await session.scalar(select(User).where(User.email == body.email).with_for_update())
+    consumed = None
+    if user and user.password_hash:
+        consumed = await session.scalar(delete(PasswordResetCode).where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.code_hash == reset_code_hash(body.email, body.code),
+            PasswordResetCode.expires_at > datetime.now(timezone.utc),
+        ).returning(PasswordResetCode.user_id))
+    if consumed is None:
+        raise HTTPException(400, "Код неверный или истёк. Проверьте последнее письмо или запросите новый код.")
+    user.password_hash = await asyncio.to_thread(hash_password, password)
+    user.auth_version += 1
+    # A successful recovery also clears password-login lockout for this address.
+    await session.execute(delete(AuthRateLimit).where(
+        AuthRateLimit.key == hashlib.sha256(f"login-email:{body.email}".encode()).hexdigest(),
+    ))
+    await session.commit()
+    return {"message": "Пароль изменён. Войдите с новым паролем."}
 
 
 @router.post("/register", status_code=201)

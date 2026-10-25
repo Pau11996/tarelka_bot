@@ -7,6 +7,7 @@ import { useAuth } from "../../auth";
 import { AccountMenu } from "../../components/AccountMenu";
 import { Icon } from "../../components/Brand";
 import { WeightProgressChart } from "../../components/WeightProgressChart";
+import { WeightGoalProgress } from "../../components/WeightGoalProgress";
 import { AchievementMedal, achievementTone } from "../../components/AchievementMedal";
 import { State } from "../../components/Screen";
 import { formatDay } from "../../format";
@@ -14,7 +15,7 @@ import { healthUpdated } from "../../health/events";
 import { sourceName } from "../../health/math";
 import { useResource } from "../../hooks/useResource";
 import { achievementColors as c, colors } from "../../theme";
-import { fullWeekdays, measurementLabel, parseWeight, weekdays, weightDirection, weightGoalLabels, weightNumber } from "../../weightTracking";
+import { fullWeekdays, measurementLabel, parseWeight, weekdays, weightChangePeriod, weightDirection, weightGoalLabels, weightNumber } from "../../weightTracking";
 import type { Achievements, WeighReminder } from "../../types";
 
 type Sheet = "goal" | "reminder" | "complete" | "cancel" | "history" | "awards";
@@ -108,29 +109,35 @@ export default function AchievementsScreen() {
   const informationSheet = sheet === "history" || sheet === "awards";
   const delta = goal?.change_kg;
   const deltaLabel = delta == null ? null : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${weightNumber(Math.abs(delta))} кг`;
+  const deltaPeriod = goal ? weightChangePeriod(goal.started_at, data?.latest_measurement?.recorded_at ?? history.at(-1)?.recorded_at, data?.reminder.timezone) : null;
   return <SafeAreaView edges={["top"]} style={s.page}>
-    <View style={s.header}><View style={s.heading}><Text accessibilityRole="header" style={s.title}>Достижения</Text><Text style={s.subtitle}>Ваш прогресс складывается из маленьких шагов</Text></View><AccountMenu compact /></View>
+    <View style={s.header}><View style={s.heading}><Text accessibilityRole="header" style={s.title}>Прогресс</Text></View><AccountMenu compact /></View>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={r.loading && !!data} onRefresh={() => void r.load()} tintColor={c.green} />}>
       <State loading={!data && r.loading} error={r.error} onRetry={() => void r.load()} />
       {data ? <>
         {goal ? <>
           <View style={s.overview}>
-            <Text style={s.overviewCaption}>Вес меняется. Привычки остаются.</Text>
+            <Text style={s.currentCaption}>Текущий вес</Text>
             <View style={s.weightRow}>
               <Text accessibilityLabel={`Текущий вес: ${weightNumber(data.current_weight_kg)} кг`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={s.weight}>{weightNumber(data.current_weight_kg)}<Text style={s.weightUnit}> кг</Text></Text>
               <View style={s.weightAside}>
-                {deltaLabel ? <View style={s.delta} accessibilityLabel={`Изменение от старта: ${deltaLabel}`}><Text style={s.deltaText}>{deltaLabel}</Text></View> : null}
                 <Pressable accessibilityRole="button" accessibilityLabel="Открыть историю веса" onPress={() => open("history")} style={s.historyAction}><Text style={s.link}>История</Text><Icon name="chevron" size={13} color={c.green} /></Pressable>
               </View>
             </View>
+            {deltaLabel ? <View style={s.changeSummary} accessibilityLabel={`Изменение веса от начала цели: ${deltaLabel}, ${deltaPeriod}`}>
+              <View style={s.delta}><Text style={s.deltaText}>{deltaLabel}</Text></View>
+              <View style={s.changePeriod}><Text style={s.changeCaption}>С начала цели</Text><Text style={s.changeDates}>{deltaPeriod}</Text></View>
+            </View> : null}
             <WeightProgressChart history={history} target={goal.target_weight_kg} />
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Изменить цель по весу" onPress={() => open("goal")} style={s.goalSummary}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Изменить цель по весу" accessibilityValue={{ text: `Цель ${weightNumber(goal.target_weight_kg)} кг. ${goal.progress === null ? "Поддерживаем вес" : `${Math.round(goal.progress * 100)}% пути пройдено`}` }} onPress={() => open("goal")} style={s.goalSummary}>
             <View style={s.flex}>
-              <Text style={s.summaryTitle}>{goal.reached ? "Цель достигнута!" : goal.progress === null ? `Поддерживаем ${weightNumber(goal.target_weight_kg)} кг` : `${Math.round(goal.progress * 100)}% пути пройдено`}</Text>
-              <Text style={s.hint}>{goal.progress === null ? `Отклонение от ориентира: ${weightNumber(goal.remaining_kg)} кг` : `Старт ${weightNumber(goal.start_weight_kg)} кг · ${goal.reached ? "Можно завершить или продолжить" : `Ещё ${weightNumber(goal.remaining_kg)} кг до цели`}`}</Text>
+              <View style={s.goalHeading}><Text style={s.eyebrow}>{goal.progress === null ? "ПОДДЕРЖИВАЕМ ВЕС" : "ВАША ЦЕЛЬ"}</Text><Icon name="edit" size={15} color={c.green} /></View>
+              <Text style={s.goalWeight}>{weightNumber(goal.target_weight_kg)}<Text style={s.goalUnit}> кг</Text></Text>
+              <Text style={s.goalDetail}>{goal.reached ? "Цель достигнута!" : goal.progress === null ? `Отклонение от ориентира: ${weightNumber(goal.remaining_kg)} кг` : `Ещё ${weightNumber(goal.remaining_kg)} кг до цели`}</Text>
+              <Text style={s.hint}>Старт {weightNumber(goal.start_weight_kg)} кг</Text>
             </View>
-            <Icon name="edit" size={19} color={c.green} />
+            {goal.progress !== null ? <WeightGoalProgress progress={goal.progress} /> : <Icon name="balance" size={30} color={c.green} />}
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => goal.reached ? open("complete") : router.push("/weight")} style={s.primary}><Icon name={goal.reached ? "check" : "plus"} color={c.white} size={18} /><Text style={s.primaryText}>{goal.reached ? "Завершить цель" : "Записать вес"}</Text></Pressable>
           {goal.reached ? <Pressable accessibilityRole="button" onPress={() => router.push("/weight")} style={s.secondary}><Text style={s.secondaryText}>Продолжить наблюдение · записать вес</Text></Pressable> : null}
@@ -160,9 +167,9 @@ export default function AchievementsScreen() {
 
     <Modal visible={visible} transparent statusBarTranslucent animationType="fade" onRequestClose={close}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Закрыть настройки достижений" onPress={close} disabled={busy} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Закрыть настройки прогресса" onPress={close} disabled={busy} style={StyleSheet.absoluteFill} />
         <View accessibilityViewIsModal onAccessibilityEscape={close} style={[s.sheet, { maxHeight: height - inset.top - 20, paddingBottom: Math.max(inset.bottom, 18) }]}>
-          <View style={s.handle} /><View style={s.sheetHeading}><Text accessibilityRole="header" style={s.sheetTitle}>{sheetTitles[sheet]}</Text><Pressable accessibilityRole="button" accessibilityLabel="Закрыть панель достижений" disabled={busy} onPress={close} style={s.close}><Icon name="close" size={18} /></Pressable></View>
+          <View style={s.handle} /><View style={s.sheetHeading}><Text accessibilityRole="header" style={s.sheetTitle}>{sheetTitles[sheet]}</Text><Pressable accessibilityRole="button" accessibilityLabel="Закрыть панель прогресса" disabled={busy} onPress={close} style={s.close}><Icon name="close" size={18} /></Pressable></View>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={s.sheetContent}>
             {sheet === "goal" ? <>
               {snapshot.weight === null ? <><Text style={s.hint}>Сначала запишите текущий вес. Он станет стартом вашей цели.</Text><Pressable accessibilityRole="button" onPress={() => { close(); router.push("/weight"); }} style={s.primary}><Text style={s.primaryText}>Записать текущий вес</Text></Pressable></> : <>
@@ -212,21 +219,27 @@ const s = StyleSheet.create({
   header: { width: "100%", maxWidth: 600, alignSelf: "center", paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18, flexDirection: "row", alignItems: "center", gap: 12 },
   heading: { flex: 1, minWidth: 0, gap: 6 },
   title: { fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -0.8, color: c.text },
-  subtitle: { fontSize: 10, lineHeight: 15, color: c.muted },
   content: { paddingHorizontal: 22, paddingBottom: 24, gap: 14, width: "100%", maxWidth: 600, alignSelf: "center" },
   flex: { flex: 1, minWidth: 0, gap: 4 },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  overview: { gap: 4 },
-  overviewCaption: { color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 6 },
+  overview: { gap: 8 },
+  currentCaption: { color: c.muted, fontSize: 12, lineHeight: 18 },
   weightRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 80 },
   weight: { flex: 1, minWidth: 0, color: c.text, fontSize: 62, lineHeight: 80, fontWeight: "400", letterSpacing: -2.8 },
   weightUnit: { fontSize: 17, fontWeight: "400", letterSpacing: 0, color: c.muted },
   weightAside: { alignItems: "flex-end", paddingTop: 8 },
   delta: { minWidth: 86, paddingVertical: 7, paddingHorizontal: 15, borderRadius: 16, backgroundColor: c.mint, alignItems: "center" },
   deltaText: { color: c.green, fontSize: 12, fontWeight: "600" },
+  changeSummary: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 6 },
+  changePeriod: { gap: 2 },
+  changeCaption: { color: c.muted, fontSize: 10, lineHeight: 14 },
+  changeDates: { color: c.dark, fontSize: 11, lineHeight: 16 },
   historyAction: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 },
-  goalSummary: { minHeight: 64, borderRadius: 17, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.white, flexDirection: "row", alignItems: "center", gap: 12 },
-  summaryTitle: { color: c.text, fontSize: 13, lineHeight: 19, fontWeight: "600" },
+  goalSummary: { minHeight: 140, borderRadius: 20, padding: 18, backgroundColor: c.mint, borderWidth: 1, borderColor: c.line, flexDirection: "row", alignItems: "center", gap: 14 },
+  goalHeading: { flexDirection: "row", alignItems: "center", gap: 8 },
+  goalWeight: { color: c.dark, fontSize: 36, lineHeight: 43, fontWeight: "600", letterSpacing: -1, fontVariant: ["tabular-nums"] },
+  goalUnit: { color: c.green, fontSize: 18, fontWeight: "400", letterSpacing: 0 },
+  goalDetail: { color: c.dark, fontSize: 12, lineHeight: 18, fontWeight: "500" },
   goalCard: { backgroundColor: c.mint, borderRadius: 24, padding: 18, gap: 12 },
   eyebrow: { fontSize: 10, fontWeight: "600", letterSpacing: 1.1, color: c.green },
   smallIcon: { height: 32, width: 32, borderRadius: 11, backgroundColor: c.background, justifyContent: "center", alignItems: "center" },

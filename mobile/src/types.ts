@@ -198,6 +198,7 @@ export type StatsDay = {
   fiber_g?:number|null;sugar_g?:number|null;
 };
 export type Stats = {
+  profile_complete: boolean;
   health?: import("./health/types").HealthData | null;
   start_date:string;end_date:string;daily_calorie_target:number;total_calories:number;
   average_calories:number|null;logged_days:number;advanced_available:boolean;

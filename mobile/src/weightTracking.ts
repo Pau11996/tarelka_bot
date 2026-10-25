@@ -21,3 +21,14 @@ export function measurementLabel(count: number): string {
   const word = lastTwo >= 11 && lastTwo <= 14 ? "измерений" : last === 1 ? "измерение" : last >= 2 && last <= 4 ? "измерения" : "измерений";
   return `${count} ${word}`;
 }
+
+export function weightChangePeriod(startedAt: string, measuredAt?: string | null, timeZone = "UTC"): string {
+  const start = new Date(startedAt);
+  if (!Number.isFinite(start.getTime())) return "с начала цели";
+  const date = (value: Date) => value.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric", timeZone }).replace(/\s*г\.$/, "");
+  const end = measuredAt ? new Date(measuredAt) : null;
+  // A goal can start after the last weigh-in. That record cannot define a new period.
+  if (!end || !Number.isFinite(end.getTime()) || end < start) return `с ${date(start)}`;
+  const first = date(start), last = date(end);
+  return first === last ? `за ${first}` : `${first} — ${last}`;
+}

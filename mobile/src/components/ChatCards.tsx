@@ -7,6 +7,7 @@ import { BrandMark, Icon } from "./Brand";
 import { PhotoPreview } from "./PhotoPreview";
 import { FavoriteButton } from "./FavoriteButton";
 import { DeleteEntryButton } from "./DeleteEntryButton";
+import { StarterTargetNotice } from "./StarterTargetNotice";
 
 export type CardPhoto = { uri: string; previewUri?: string };
 
@@ -40,9 +41,9 @@ export function WeightChatCard({ weight, time, photos = [] }: {
     <View style={[s.card, { padding: 16, gap: 12 }]}>
       <View style={s.between}><View style={s.category}><Icon name="scale" size={15} color={colors.accent} /><Text style={s.categoryText}>Взвешивание</Text></View>{time ? <Text style={s.time}>{time}</Text> : null}</View>
       <Text style={{ color: colors.accentDark, fontSize: 30, fontWeight: "600" }}>{weight.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}<Text style={{ fontSize: 14, fontWeight: "400", color: colors.muted }}> кг</Text></Text>
-      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Icon name="check" size={15} color={colors.accent} /><Text style={{ fontSize: 12, color: colors.muted }}>Сохранено в достижениях</Text></View>
+      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Icon name="check" size={15} color={colors.accent} /><Text style={{ fontSize: 12, color: colors.muted }}>Сохранено в «Прогрессе»</Text></View>
       {photos.length ? <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{photos.map(photo => <PhotoPreview key={photo.uri} {...photo} style={{ width: 64, height: 64, borderRadius: 12 }} />)}</ScrollView> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel="Открыть достижения" onPress={() => router.push("/(tabs)/achievements")} style={{ minHeight: 42, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }}><Icon name="trophy" size={16} color={colors.accentDark} /><Text style={{ fontSize: 12, fontWeight: "500", color: colors.accentDark }}>Посмотреть прогресс</Text><Icon name="chevron" size={13} color={colors.accentDark} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Открыть прогресс" onPress={() => router.push("/(tabs)/achievements")} style={{ minHeight: 42, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }}><Icon name="trophy" size={16} color={colors.accentDark} /><Text style={{ fontSize: 12, fontWeight: "500", color: colors.accentDark }}>Посмотреть прогресс</Text><Icon name="chevron" size={13} color={colors.accentDark} /></Pressable>
     </View>
   </View>;
 }
@@ -58,7 +59,7 @@ export function GoalReachedChatCard({ notice, time }: { notice: AchievementMessa
       <Text style={{ fontSize: 20, fontWeight: "600", color: colors.accentDark }}>{notice.title}</Text>
       <Text style={{ fontSize: 14, lineHeight: 21, color: colors.text }}>{notice.message}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Открыть достигнутую цель" onPress={() => router.push("/(tabs)/achievements")} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.accentDark }}>Открыть достижения</Text><Icon name="chevron" size={14} color={colors.accentDark} />
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.accentDark }}>Открыть прогресс</Text><Icon name="chevron" size={14} color={colors.accentDark} />
       </Pressable>
     </View>
   </View>;
@@ -251,16 +252,17 @@ export function DaySummary({
   onPress: () => void;
 }) {
   const target = day.balance.target + day.balance.activity_bonus;
+  const starter = !day.profile_complete;
   const progress = Math.max(
     0,
     Math.min(1, day.balance.consumed / Math.max(1, target)),
   );
   return (
-    <Pressable
+    <View style={s.summary}><Pressable
       accessibilityRole="button"
       accessibilityLabel="Открыть дневник"
       onPress={onPress}
-      style={s.summary}
+      style={{ gap: 8 }}
     >
       <View style={s.summaryTop}>
         <Text style={s.summaryTitle}>Сегодня</Text>
@@ -276,12 +278,14 @@ export function DaySummary({
         <View style={[s.progress, { width: `${progress * 100}%` }]} />
       </View>
       <Text style={s.summaryHint}>
-        {day.balance.remaining >= 0
+        {starter ? `Стартовый ориентир ${Math.round(day.balance.target).toLocaleString("ru-RU")} ккал` : day.balance.remaining >= 0
           ? `Осталось ${Math.round(day.balance.remaining).toLocaleString("ru-RU")} ккал до цели`
           : `Сверх цели ${Math.round(-day.balance.remaining).toLocaleString("ru-RU")} ккал`}{" "}
         · <Text style={{ color: colors.accentDark }}>В дневник →</Text>
       </Text>
     </Pressable>
+      {starter ? <StarterTargetNotice /> : null}
+    </View>
   );
 }
 const s = StyleSheet.create({

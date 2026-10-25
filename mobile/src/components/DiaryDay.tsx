@@ -9,6 +9,7 @@ import { colors } from "../theme";
 import type { DayView, Entry } from "../types";
 import { Icon, type IconName } from "./Brand";
 import { FavoriteButton } from "./FavoriteButton";
+import { StarterTargetNotice } from "./StarterTargetNotice";
 
 const weekdays = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
 const macros = [
@@ -97,6 +98,7 @@ export function DiaryCalendar({ selected, entryDates, isToday, onSelect, onToday
 }
 
 export function DiaryEnergy({ day }: { day: DayView }) {
+  const starter = !day.profile_complete;
   const target = day.balance.target + day.balance.activity_bonus;
   const progress = diaryProgress(day.balance.consumed, target);
   const over = day.balance.remaining < 0;
@@ -106,7 +108,7 @@ export function DiaryEnergy({ day }: { day: DayView }) {
     <View style={s.energyCard}>
       <View style={s.energyTop}>
         <View style={s.energyNumbers}>
-          <Text style={s.muted}>{over ? "Выше текущей цели" : "Осталось на день"}</Text>
+          <Text style={s.muted}>{starter ? (over ? "Выше стартового ориентира" : "До стартового ориентира") : over ? "Выше текущей цели" : "Осталось на день"}</Text>
           <Text style={[s.energyValue, over && { color: colors.danger }]}>{Math.round(Math.abs(day.balance.remaining)).toLocaleString("ru-RU")} <Text style={s.energyUnit}>ккал</Text></Text>
         </View>
         <View style={s.ring} accessible accessibilityRole="progressbar" accessibilityLabel="Калории за день" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100), text: `${kcal(day.balance.consumed)} из ${kcal(target)}` }}>
@@ -117,7 +119,8 @@ export function DiaryEnergy({ day }: { day: DayView }) {
           <Text style={[s.ringText, over && { color: colors.danger }]}>{Math.round(progress * 100)}%</Text>
         </View>
       </View>
-      <Text style={s.energyHint}>Записано {kcal(day.balance.consumed)} · цель {kcal(day.balance.target)}{day.balance.activity_bonus > 0 ? ` + ${kcal(day.balance.activity_bonus)} за активность` : ""}</Text>
+      <Text style={s.energyHint}>Записано {kcal(day.balance.consumed)} · {starter ? "ориентир" : "цель"} {kcal(day.balance.target)}{day.balance.activity_bonus > 0 ? ` + ${kcal(day.balance.activity_bonus)} за активность` : ""}</Text>
+      {starter ? <StarterTargetNotice /> : null}
     </View>
   );
 }

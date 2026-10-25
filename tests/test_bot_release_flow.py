@@ -224,6 +224,22 @@ async def test_all_public_menu_commands_reply_without_ai(actor):
     actor.ai.analyze_text.assert_not_awaited()
 
 
+async def test_menu_does_not_write_user_activity(actor):
+    from src.db.models import DailyUserActivity
+
+    async with actor.factory() as session:
+        user = await UserRepository(session).get_user_by_telegram_id(actor.uid)
+        last_active = user.last_active_at
+    for command in ["/profile", "/today", "/stats", "/weight", "/favorites", "/premium", "/help"]:
+        await actor.send(command)
+    async with actor.factory() as session:
+        user = await UserRepository(session).get_user_by_telegram_id(actor.uid)
+        assert user.last_active_at == last_active
+        assert not (await session.scalars(
+            select(DailyUserActivity).where(DailyUserActivity.user_id == user.id)
+        )).all()
+
+
 @pytest.mark.parametrize("kind", ["text", "photo", "voice", "transcription"])
 async def test_failed_analysis_does_not_spend_request_quota(actor, kind):
     failure = httpx.ConnectError("offline failure fixture")

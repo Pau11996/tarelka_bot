@@ -290,7 +290,7 @@ export default function ProfileScreen() {
                 <View style={s.section}>
                   <Text accessibilityRole="header" style={s.sectionTitle}>Ваша цель</Text>
                   {profile.weight_goal ? <Pressable accessibilityRole="button" accessibilityLabel="Изменить цель по весу" onPress={() => router.push("/(tabs)/achievements?editGoal=1")} style={s.activity}>
-                    <View style={s.activityCopy}><Text style={s.activityTitle}>{profile.weight_goal.direction_label} · {weightNumber(profile.weight_goal.target_weight_kg)} кг</Text><Text style={s.activityHint}>Управление целью в «Достижениях»</Text></View><Icon name="chevron" size={15} color="#93a598" />
+                    <View style={s.activityCopy}><Text style={s.activityTitle}>{profile.weight_goal.direction_label} · {weightNumber(profile.weight_goal.target_weight_kg)} кг</Text><Text style={s.activityHint}>Управление целью в «Прогрессе»</Text></View><Icon name="chevron" size={15} color="#93a598" />
                   </Pressable> : <View accessibilityRole="radiogroup" accessibilityLabel="Цель питания" style={s.goalOptions}>
                     {goals.map(option => {
                       const selected = profile.goal === option.value;

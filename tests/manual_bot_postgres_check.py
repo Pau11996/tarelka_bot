@@ -1,6 +1,6 @@
 """Run explicitly against local PostgreSQL; create and always drop an isolated DB."""
 import asyncio
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -11,9 +11,48 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.bot.config import settings
-from src.db.models import AchievementMessage, DayEntry, EntryType, FavoriteMeal, Payment, User, WeightHistory
+from src.db.models import AchievementMessage, AIAnalysis, AnalysisType, DailyUserActivity, DayEntry, EntryType, FavoriteMeal, Payment, User, WeightHistory
 from src.db.repository import UserRepository
 from src.shared.weight_tracking import active_goal, record_weight, set_weight_goal
+from src.ai_analyzer.admin import collect_admin_stats
+
+
+async def check_meal_activity(factory):
+    now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+    signup = datetime(2026, 10, 18, 21, 30, tzinfo=timezone.utc)
+    day1 = datetime(2026, 10, 19, 21, 15, tzinfo=timezone.utc)
+    day7 = datetime(2026, 10, 24, 21, 15, tzinfo=timezone.utc)
+    async with factory() as session:
+        users = [User(telegram_id=798800000 + n, timezone="Europe/Minsk",
+                      acquisition_source="meal-activity-check", created_at=signup)
+                 for n in range(5)]
+        app_user = User(email="activity@example.test", password_hash="fixture",
+                        timezone="Europe/Minsk", created_at=signup)
+        session.add_all([*users, app_user])
+        await session.flush()
+        click, meal_user, water, old, future = users
+        for user in [click, meal_user, water, future]:
+            session.add(AIAnalysis(user_id=user.id, analysis_type=AnalysisType.FOOD_TEXT,
+                                   created_at=signup + timedelta(hours=1)))
+        for user in [click, water]:
+            for day in [date(2026, 10, 20), date(2026, 10, 25)]:
+                session.add(DailyUserActivity(user_id=user.id, activity_date=day))
+        for user, kind, created_at in [
+            (meal_user, EntryType.MEAL, day1), (meal_user, EntryType.MEAL, day7),
+            (meal_user, EntryType.MEAL, day7), (water, EntryType.WATER, day1),
+            (water, EntryType.ACTIVITY, day7),
+            (old, EntryType.MEAL, now - timedelta(days=30)),
+            (future, EntryType.MEAL, now + timedelta(hours=1)),
+            (app_user, EntryType.MEAL, now - timedelta(hours=1)),
+        ]:
+            session.add(DayEntry(user_id=user.id, entry_type=kind, title="Fixture",
+                                 calories=100, entry_date=date(2026, 9, 1), created_at=created_at))
+        await session.commit()
+        stats = await collect_admin_stats(session, days=8, now=now)
+        assert stats.totals.active_users == 2, stats.totals.active_users
+        source = next(row for row in stats.sources if row.source == "meal-activity-check")
+        assert source.d1_users == 1 and source.d7_users == 1, (source.d1_users, source.d7_users)
+    print("Meal-based activity and local-day retention ignore legacy menu clicks: OK", flush=True)
 
 
 async def check_operations(url):
@@ -76,6 +115,7 @@ async def check_operations(url):
             for model in [User, WeightHistory, DayEntry, FavoriteMeal, Payment, AchievementMessage]:
                 assert await session.scalar(select(func.count()).select_from(model)) == 0, model.__name__
         print("Account deletion removes associated data: OK", flush=True)
+        await check_meal_activity(factory)
     finally:
         await engine.dispose()
 

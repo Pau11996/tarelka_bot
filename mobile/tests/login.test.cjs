@@ -33,6 +33,7 @@ function setup({ api, pollLogin } = {}) {
     "../config": { API_URL: "https://api.example.test", SITE_URL: "https://example.test" },
     "../theme": { colors: {}, welcomeColors: {} }, "../components/Brand": { Icon: "Icon" },
     "../components/LoginWelcome": { LoginWelcome: props => element("Welcome", props) },
+    "../components/PasswordRecoveryForm": { PasswordRecoveryForm: "PasswordRecoveryForm" },
     "../ui": { Field: "Field", Loading: "Loading", PrimaryButton: "PrimaryButton", SecondaryButton: "SecondaryButton", ErrorText: ({ message }) => message ? element("Text", { children: message }) : null },
   };
   const context = { exports: {}, require: name => modules[name], setTimeout };

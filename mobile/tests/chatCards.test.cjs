@@ -16,6 +16,7 @@ const context = { exports: {}, require(name) {
   if (name === "./PhotoPreview") return { PhotoPreview: "PhotoPreview" };
   if (name === "./FavoriteButton") return { FavoriteButton: "FavoriteButton" };
   if (name === "./DeleteEntryButton") return { DeleteEntryButton: "DeleteEntryButton" };
+  if (name === "./StarterTargetNotice") return { StarterTargetNotice: "StarterTargetNotice" };
   throw Error(name);
 }};
 vm.runInNewContext(ts.transpileModule(
@@ -76,4 +77,15 @@ test("successful analysis keeps every photo inside its card with independent pre
   const details = all.find(n => n.props?.accessibilityLabel === "Открыть запись: Обед");
   assert.ok(details);
   assert.equal(nodes(details).some(n => n.type === "PhotoPreview"), false);
+});
+
+test("a starter calorie reference depends on profile completion, not the number 2000", () => {
+  for (const complete of [false, true]) {
+    const tree = context.exports.DaySummary({ day: { profile_complete: complete, balance: { target: 2000, activity_bonus: 0, consumed: 500, remaining: 1500 } }, onPress() {} });
+    const all = nodes(tree);
+    assert.equal(all.some(n => n.type === "StarterTargetNotice"), !complete);
+    const copy = all.filter(n => n.type === "Text").flatMap(n => [n.props.children].flat()).join(" ");
+    assert.equal(copy.includes("Стартовый ориентир"), !complete);
+    assert.equal(copy.includes("до цели"), complete);
+  }
 });

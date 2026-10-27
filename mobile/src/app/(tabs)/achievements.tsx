@@ -16,12 +16,22 @@ import { sourceName } from "../../health/math";
 import { useResource } from "../../hooks/useResource";
 import { achievementColors as c, colors } from "../../theme";
 import { fullWeekdays, measurementLabel, parseWeight, weekdays, weightChangePeriod, weightDirection, weightGoalLabels, weightNumber } from "../../weightTracking";
-import type { Achievements, WeighReminder } from "../../types";
+import type { Achievement, Achievements, WeighReminder } from "../../types";
 
 type Sheet = "goal" | "reminder" | "complete" | "cancel" | "history" | "awards";
 const statuses = { completed: "Завершена", cancelled: "Отменена", replaced: "Изменена", active: "Активна" };
 const sheetTitles: Record<Sheet, string> = { goal: "Желаемый вес", reminder: "Раз в неделю", complete: "Завершить цель?", cancel: "Отменить цель?", history: "История веса", awards: "Ваши награды" };
 const shortBadgeTitles: Record<string, string> = { first_weigh_in: "Первый шаг", diary_7_days: "7 дней", diary_30_days: "30 дней", weight_4_weeks: "4 недели", weight_12_weeks: "12 недель", weight_goal_completed: "Цель достигнута" };
+
+function AwardProgress({ item }: { item: Achievement }) {
+  const tone = achievementTone(item.key);
+  const progress = item.target > 0 ? Math.min(1, Math.max(0, item.progress / item.target)) : 0;
+  return item.earned ? <View style={[s.awardEarned, { backgroundColor: tone.background }]}><Icon name="check" size={13} color={tone.ink} /><Text style={[s.awardEarnedText, { color: tone.ink }]}>Получено</Text></View>
+    : <View style={s.awardProgress}>
+      <View style={s.rowBetween}><Text style={s.awardProgressLabel}>Прогресс</Text><Text style={s.awardProgressValue}>{item.progress} / {item.target}</Text></View>
+      <View accessibilityRole="progressbar" accessibilityLabel={item.title} accessibilityValue={{ min: 0, max: item.target, now: Math.min(item.target, Math.max(0, item.progress)) }} style={s.awardTrack}><View style={{ width: `${progress * 100}%`, height: "100%", backgroundColor: tone.ink, borderRadius: 3 }} /></View>
+    </View>;
+}
 
 export default function AchievementsScreen() {
   const { token, signOut } = useAuth();
@@ -151,8 +161,9 @@ export default function AchievementsScreen() {
 
         <View style={s.awardsSection}>
           <View style={s.rowBetween}><Text accessibilityRole="header" style={s.sectionTitle}>Награды</Text><Pressable accessibilityRole="button" accessibilityLabel={`Все награды. Получено ${earned} из ${awards.length}`} onPress={() => open("awards")} style={s.historyAction}><Text style={s.link}>{earned} из {awards.length}</Text><Icon name="chevron" size={13} color={c.green} /></Pressable></View>
-          <View style={s.badgePreviews}>{previewAwards.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.earned ? "Получено" : `${item.progress} из ${item.target}`}. Открыть все награды`} onPress={() => open("awards")} style={[s.badgePreview, { backgroundColor: achievementTone(item.key).background }]}>
-            <AchievementMedal badgeKey={item.key} earned={item.earned} /><View style={s.badgePreviewText}><Text style={s.badgePreviewTitle}>{shortBadgeTitles[item.key] ?? item.title}</Text><Text style={[s.badgePreviewCaption, { color: achievementTone(item.key).ink }]}>{item.earned ? "Получено" : `${item.progress} / ${item.target}`}</Text></View>
+          <View style={s.badgePreviews}>{previewAwards.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.earned ? "Получено" : `${item.progress} из ${item.target}`}. Открыть все награды`} onPress={() => open("awards")} style={({ pressed }) => [s.badgePreview, item.earned && { borderColor: achievementTone(item.key).border }, pressed && s.badgePressed]}>
+            <View style={s.badgePreviewHeading}><AchievementMedal badgeKey={item.key} earned={item.earned} size={48} /><Text style={s.badgePreviewTitle}>{shortBadgeTitles[item.key] ?? item.title}</Text></View>
+            <View style={s.awardFooter}><AwardProgress item={item} /></View>
           </Pressable>)}</View>
         </View>
 
@@ -191,9 +202,9 @@ export default function AchievementsScreen() {
               {history.length ? [...history].reverse().map(row => <View key={row.id} style={s.historyRow}><View style={s.flex}><Text style={s.historyDate}>{formatDay(row.local_date)}</Text><Text style={s.tiny}>{row.source === "health_connect" ? `Health Connect${row.origin ? ` · ${sourceName(row.origin)}` : ""}` : "Записано вручную"}</Text></View><Text style={s.historyValue}>{weightNumber(row.weight_kg)} кг</Text></View>) : <Text style={s.hint}>Измерений пока нет. Начните с записи текущего веса.</Text>}
               {data.goal_history.length ? <View style={s.pastGoals}><Text style={s.cardTitle}>Предыдущие цели</Text>{data.goal_history.map(item => <View key={item.id} style={s.rowBetween}><Text style={s.hint}>{weightNumber(item.start_weight_kg)} → {weightNumber(item.target_weight_kg)} кг</Text><Text style={s.tiny}>{statuses[item.status]}</Text></View>)}</View> : null}
             </> : sheet === "awards" ? <>
-              <Text style={s.hint}>Получено {earned} из {awards.length}. Награды остаются с вами после прерывания серии.</Text>
-              <View style={s.badges}>{awards.map(item => <View key={item.key} accessible accessibilityLabel={`${item.title}. ${item.description}. ${item.earned ? "Получено" : `${item.progress} из ${item.target}`}`} style={[s.badge, item.earned && { backgroundColor: achievementTone(item.key).background }]}>
-                <AchievementMedal badgeKey={item.key} earned={item.earned} /><Text style={s.badgeTitle}>{item.title}</Text><Text style={s.badgeDescription}>{item.description}</Text><Text style={[s.badgeProgress, item.earned && { color: achievementTone(item.key).ink }]}>{item.earned ? "Получено ✓" : `${item.progress} / ${item.target}`}</Text>
+              <View style={s.awardsSummary}><Text style={s.awardsCount}>Получено {earned} из {awards.length}</Text><Text style={s.badgeDescription}>Награды остаются с вами после прерывания серии.</Text></View>
+              <View style={s.badges}>{awards.map(item => <View key={item.key} accessible accessibilityLabel={`${item.title}. ${item.description}. ${item.earned ? "Получено" : `${item.progress} из ${item.target}`}`} style={[s.badge, item.earned && { borderColor: achievementTone(item.key).border }]}>
+                <AchievementMedal badgeKey={item.key} earned={item.earned} /><Text style={s.badgeTitle}>{item.title}</Text><Text style={s.badgeDescription}>{item.description}</Text><View style={s.awardFooter}><AwardProgress item={item} /></View>
               </View>)}</View>
             </> : <Text style={s.hint}>{sheet === "complete" ? "Цель сохранится в истории и появится награда. Норма калорий останется прежней." : "Все измерения и история сохранятся. Новую цель можно задать позже."}</Text>}
             {error ? <Text accessibilityLiveRegion="polite" style={s.error}>{error}</Text> : null}
@@ -259,22 +270,30 @@ const s = StyleSheet.create({
   bell: { height: 33, width: 33, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: c.mint },
   cardTitle: { fontSize: 12, lineHeight: 18, color: c.text, fontWeight: "500" },
   sectionTitle: { fontSize: 16, lineHeight: 22, fontWeight: "600", color: c.text, letterSpacing: -0.3 },
-  awardsSection: { gap: 2 },
-  badgePreviews: { flexDirection: "row", gap: 10 },
-  badgePreview: { flex: 1, minWidth: 0, minHeight: 80, flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 18 },
-  badgePreviewText: { flex: 1, minWidth: 0, gap: 5 },
-  badgePreviewTitle: { fontSize: 11, lineHeight: 16, fontWeight: "500", color: c.text },
-  badgePreviewCaption: { fontSize: 10, lineHeight: 15 },
+  awardsSection: { gap: 4 },
+  badgePreviews: { flexDirection: "row", gap: 12 },
+  badgePreview: { flex: 1, minWidth: 0, gap: 12, padding: 14, borderRadius: 18, backgroundColor: c.white, borderWidth: 1, borderColor: c.line },
+  badgePreviewHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 },
+  badgePreviewTitle: { flex: 1, minWidth: 72, fontSize: 14, lineHeight: 19, fontWeight: "600", color: c.text },
+  badgePressed: { backgroundColor: "#f0f5ec", borderColor: c.green },
   previousGoals: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
   historyRow: { minHeight: 53, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   historyDate: { fontSize: 12, color: c.text },
   historyValue: { fontSize: 15, fontWeight: "500", color: c.dark },
   pastGoals: { gap: 12, paddingTop: 10 },
-  badges: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  badge: { width: "48%", flexGrow: 1, minWidth: 120, backgroundColor: c.white, borderRadius: 18, padding: 13, gap: 8 },
-  badgeTitle: { fontSize: 12, lineHeight: 17, color: c.text, fontWeight: "600" },
-  badgeDescription: { fontSize: 10, lineHeight: 16, color: c.muted },
-  badgeProgress: { fontSize: 10, lineHeight: 16, color: c.muted, marginTop: "auto" },
+  awardsSummary: { gap: 5, paddingBottom: 2 },
+  awardsCount: { fontSize: 14, lineHeight: 20, color: c.dark, fontWeight: "600" },
+  badges: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  badge: { flexBasis: "45%", flexGrow: 1, minWidth: 120, backgroundColor: c.white, borderWidth: 1, borderColor: c.line, borderRadius: 18, padding: 14, gap: 10 },
+  badgeTitle: { fontSize: 14, lineHeight: 20, color: c.text, fontWeight: "600" },
+  badgeDescription: { fontSize: 12, lineHeight: 18, color: colors.muted },
+  awardFooter: { marginTop: "auto", paddingTop: 2 },
+  awardEarned: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8 },
+  awardEarnedText: { fontSize: 11, lineHeight: 16, fontWeight: "600" },
+  awardProgress: { gap: 7 },
+  awardProgressLabel: { fontSize: 11, lineHeight: 16, color: colors.muted },
+  awardProgressValue: { fontSize: 12, lineHeight: 16, fontWeight: "600", color: c.text, fontVariant: ["tabular-nums"] },
+  awardTrack: { height: 5, borderRadius: 3, backgroundColor: "#e8ede4", overflow: "hidden" },
   overlay: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: c.overlay },
   sheet: { width: "100%", maxWidth: 460, flexShrink: 1, backgroundColor: c.sheet, borderTopLeftRadius: 26, borderTopRightRadius: 26, overflow: "hidden" },
   handle: { width: 35, height: 4, borderRadius: 4, backgroundColor: c.handle, alignSelf: "center", marginTop: 9, marginBottom: 9 },

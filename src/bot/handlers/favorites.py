@@ -1,4 +1,9 @@
+import asyncio
+import secrets
+from weakref import WeakValueDictionary
+
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -7,7 +12,9 @@ from src.bot.config import settings
 from src.bot.handlers.food import send_result_card
 from src.bot.keyboards.menus import (
     FAVORITES_BUTTON,
+    FAVORITES_ORDER_PAGE_SIZE,
     favorites_keyboard,
+    favorites_order_keyboard,
     meal_card_keyboard,
 )
 from src.bot.services.entry_service import EntryService
@@ -25,10 +32,118 @@ from src.bot.services.messaging import (
 )
 from src.bot.services.message_cleanup import MessageCleanupService
 from src.db.models import DIARY_ENTRY_TYPES, EntryType
-from src.db.repository import UserRepository
+from src.db.repository import FavoriteOrderConflict, UserRepository
 from src.shared.schemas import AnalysisResult, NutrientItem
 
 router = Router()
+
+# Serialize taps while Telegram edits the message. Weak values avoid retaining
+# a lock for every user who has ever opened this screen.
+_order_locks: WeakValueDictionary[tuple, asyncio.Lock] = WeakValueDictionary()
+
+
+async def _edit_order_message(callback, cleanup, text, markup):
+    try:
+        await edit_ephemeral(callback, cleanup, text, reply_markup=markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+
+
+async def _close_order(callback, state, cleanup, favorites):
+    await _edit_order_message(
+        callback, cleanup, format_favorites_list(favorites),
+        favorites_keyboard(favorites) if favorites else None,
+    )
+    await state.update_data(favorite_order=None)
+
+
+@router.callback_query(F.data.startswith("favorites_order:"))
+async def change_favorites_order(callback: CallbackQuery, state: FSMContext, session, cleanup: MessageCleanupService):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Откройте избранное заново: /favorites", show_alert=True)
+        return
+    key = (callback.bot.id, callback.message.chat.id, callback.from_user.id)
+    lock = _order_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        await _change_favorites_order(callback, state, session, cleanup)
+
+
+async def _change_favorites_order(callback, state, session, cleanup):
+    repo = UserRepository(session)
+    user = await repo.get_or_create_user(callback.from_user.id, settings.default_timezone)
+    favorites = await repo.get_favorites(user.id)
+    current_ids = [item.id for item in favorites]
+    parts = callback.data.split(":")
+    if parts == ["favorites_order", "start"]:
+        if len(favorites) < 2:
+            await callback.answer("Для перестановки нужны хотя бы две записи")
+            return
+        await state.clear()
+        draft = {"nonce": secrets.token_hex(3), "version": 0, "page": 0,
+                 "message_id": callback.message.message_id,
+                 "original_ids": current_ids, "ids": current_ids[:]}
+    else:
+        stored = (await state.get_data()).get("favorite_order")
+        if (not stored or len(parts) not in (4, 5) or parts[1] != stored["nonce"]
+                or callback.message.message_id != stored["message_id"]):
+            await callback.answer("Режим перестановки закрыт. Откройте /favorites заново.", show_alert=True)
+            return
+        if parts[2] != str(stored["version"]):
+            await callback.answer("Список обновился. Нажмите ещё раз.")
+            return
+        draft = {**stored, "ids": stored["ids"][:]}
+        action = parts[3]
+        if action == "hint":
+            await callback.answer("Нажмите ↑ или ↓ рядом с записью")
+            return
+        if action == "cancel":
+            await _close_order(callback, state, cleanup, favorites)
+            await callback.answer("Порядок не изменён")
+            return
+        if action == "save":
+            try:
+                favorites = await repo.reorder_favorites(user.id, draft["ids"], draft["original_ids"])
+            except FavoriteOrderConflict:
+                await _close_order(callback, state, cleanup, await repo.get_favorites(user.id))
+                await callback.answer("Избранное изменилось. Начните перестановку заново.", show_alert=True)
+                return
+            await _close_order(callback, state, cleanup, favorites)
+            await callback.answer("Порядок сохранён в боте и приложении")
+            return
+        if current_ids != draft["original_ids"]:
+            await _close_order(callback, state, cleanup, favorites)
+            await callback.answer("Избранное изменилось. Начните перестановку заново.", show_alert=True)
+            return
+        if len(parts) != 5 or not parts[4].isdigit():
+            await callback.answer("Откройте избранное заново: /favorites")
+            return
+        target = int(parts[4])
+        if action in ("up", "down") and target in draft["ids"]:
+            index = draft["ids"].index(target)
+            destination = index + (-1 if action == "up" else 1)
+            if not 0 <= destination < len(favorites):
+                await callback.answer()
+                return
+            draft["ids"][index], draft["ids"][destination] = draft["ids"][destination], draft["ids"][index]
+            draft["page"] = destination // FAVORITES_ORDER_PAGE_SIZE
+        elif action == "page" and 0 <= target < (len(favorites) + FAVORITES_ORDER_PAGE_SIZE - 1) // FAVORITES_ORDER_PAGE_SIZE:
+            draft["page"] = target
+        else:
+            await callback.answer("Запись не найдена")
+            return
+        draft["version"] += 1
+    by_id = {item.id: item for item in favorites}
+    ordered = [by_id[item_id] for item_id in draft["ids"]]
+    await _edit_order_message(
+        callback, cleanup,
+        "↕️ <b>Порядок в избранном</b>\n\n"
+        "Поставьте частые записи наверх.\nНажимайте ↑ или ↓ рядом с записью.\n\n"
+        "Когда закончите, нажмите «Готово».",
+        favorites_order_keyboard(ordered, nonce=draft["nonce"], version=draft["version"], page=draft["page"]),
+    )
+    await state.update_data(favorite_order=draft)
+    await callback.answer()
 
 
 async def _update_meal_card_keyboard(

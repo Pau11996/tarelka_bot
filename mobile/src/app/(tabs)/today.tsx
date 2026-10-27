@@ -3,9 +3,9 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { AccountMenu } from "../../components/AccountMenu";
-import { DiaryCalendar, DiaryChronicle, DiaryEnergy, DiaryHabits, DiaryNutrients, StreakBadge } from "../../components/DiaryDay";
+import { DiaryCalendar, DiaryChronicle, DiaryEnergy, DiaryNutrients, StreakBadge } from "../../components/DiaryDay";
+import { DiaryDetails } from "../../components/DiaryDetails";
 import { DiaryStatistics, type DiaryStatisticsHandle } from "../../components/DiaryStatistics";
-import { DeviceHealthDay } from "../../components/DeviceHealth";
 import { State } from "../../components/Screen";
 import { diaryDate } from "../../diary";
 import { formatDay } from "../../format";
@@ -29,8 +29,7 @@ const DayContent = memo(function DayContent({ day, date, error, loading, load, o
       {date ? <Text style={s.selectedDate}>{formatDay(day.date)}</Text> : null}
       <DiaryEnergy day={day} />
       <DiaryNutrients day={day} />
-      <DiaryHabits day={day} />
-      <DeviceHealthDay health={day.health} />
+      <DiaryDetails key={day.date} day={day} />
       <DiaryChronicle entries={day.entries} onFavoriteChange={onFavorite} />
     </> : null}
   </>;

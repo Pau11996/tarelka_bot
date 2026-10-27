@@ -38,6 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.mobile_api.routes import router
 from src.mobile_api.email_auth import router as email_auth_router
+from src.mobile_api.favorites import router as favorites_router
 from src.shared.logging_config import setup_logging
 
 
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(router, prefix="/v1")
     app.include_router(email_auth_router, prefix="/v1")
     app.include_router(experience_router, prefix="/v1")
+    app.include_router(favorites_router, prefix="/v1")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

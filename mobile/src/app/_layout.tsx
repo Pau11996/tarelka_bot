@@ -51,7 +51,7 @@ function AuthenticatedStack() {
           options={{ title: "Добавить", presentation: "modal" }}
         />
         <Stack.Screen name="entry/[id]" options={{ title: "Запись" }} />
-        <Stack.Screen name="favorite/[id]" options={{ title: "Запись" }} />
+        <Stack.Screen name="favorite/[id]" options={{ title: "Избранное" }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="assistant" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />

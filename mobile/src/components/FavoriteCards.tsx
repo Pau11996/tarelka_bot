@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { grams, kcal, ml } from "../format";
 import { colors } from "../theme";
@@ -31,18 +32,21 @@ function Illustration({ item }: { item: Favorite }) {
   );
 }
 
-export function FavoriteCard({ item, disabled, busy, onOpen, onLog }: {
+export function FavoriteCard({ item, disabled, busy, onOpen, onLog, reorderHandle }: {
   item: Favorite;
   disabled: boolean;
   busy: boolean;
   onOpen: () => void;
   onLog: () => void;
+  reorderHandle?: ReactNode;
 }) {
   const { color } = appearance(item);
   return (
     <View style={s.card}>
       <Pressable
-        accessibilityRole="button"
+        accessibilityRole={reorderHandle ? undefined : "button"}
+        accessible={!reorderHandle}
+        disabled={!!reorderHandle}
         accessibilityLabel={`Открыть избранное: ${item.title}`}
         onPress={onOpen}
         style={({ pressed }) => [s.cardBody, pressed && { opacity: 0.65 }]}
@@ -62,7 +66,7 @@ export function FavoriteCard({ item, disabled, busy, onOpen, onLog }: {
           ) : null}
         </View>
       </Pressable>
-      <Pressable
+      {reorderHandle ?? <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Добавить на сегодня: ${item.title}`}
         accessibilityState={{ disabled, busy }}
@@ -73,7 +77,7 @@ export function FavoriteCard({ item, disabled, busy, onOpen, onLog }: {
         <View style={s.addCircle}>
           {busy ? <ActivityIndicator size="small" color={colors.accent} /> : <Icon name="plus" size={19} color={colors.accent} />}
         </View>
-      </Pressable>
+      </Pressable>}
     </View>
   );
 }

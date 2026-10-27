@@ -97,6 +97,10 @@ async def process_one():
                     result = await service.correct(
                         user, job.payload["entry_id"], job.payload["text"]
                     )
+                elif job.kind == "correct_favorite":
+                    result = await service.correct_favorite(
+                        user, job.payload["favorite_id"], job.payload["text"]
+                    )
                 else:
                     media = list(
                         (

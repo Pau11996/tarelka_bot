@@ -69,3 +69,16 @@ test("goal congratulations remain in chronological chat history once across relo
   assert.deepEqual(keys(rows), ["entry:1", "operation:weight", "notice:goal-reached", "entry:2"]);
   assert.equal(rows[2].notice.message, "Поздравляем!");
 });
+
+test("several local sends stay in send order as uploads and analyses finish out of order", () => {
+  const pending = ["a", "b", "c"].map((key, index) => ({ requestKey: key, createdAt: `2026-10-23T12:0${index}:00Z`, text: key }));
+  const anchors = Object.fromEntries(pending.map(item => [item.requestKey, item.createdAt]));
+  assert.deepEqual(keys(buildChatTimeline([], [], pending)), ["pending:a", "pending:b", "pending:c"]);
+  const ops = [operation("b", "08", "done", { request_key: "b", entry_id: 2 }), operation("a", "07", "running", { request_key: "a" })];
+  const partial = buildChatTimeline([entry(2, "10")], ops, pending, [], anchors);
+  assert.deepEqual(keys(partial), ["message:a", "message:b", "message:c"]);
+  ops[1] = { ...ops[1], status: "done", entry_id: 1 };
+  const done = buildChatTimeline([entry(2, "10"), entry(1, "11")], ops, pending, [], anchors);
+  assert.deepEqual(keys(done), ["message:a", "message:b", "message:c"]);
+  assert.equal(done[0].createdAt, pending[0].createdAt);
+});

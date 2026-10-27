@@ -8,8 +8,8 @@ import { PhotoPreview } from "../../components/PhotoPreview";
 import { useRequestLimit } from "../../components/RequestLimitDialog";
 import { isLegacyLimitMessage } from "../../requestLimits";
 import { operationLimitKind, useOperationLimitNotice } from "../../hooks/useOperationLimitNotice";
-import { Operation, requestKey, waitOperation } from "../../operations";
-import { buildChatTimeline, type ChatMessage, type ChatTimelineItem, type PendingChatMessage } from "../../chatTimeline";
+import { Operation, requestKey } from "../../operations";
+import { buildChatTimeline, type ChatTimelineItem, type PendingChatMessage } from "../../chatTimeline";
 import { useAssistantHidden } from "../../components/AssistantAccess";
 import {
   ActivityIndicator,
@@ -49,21 +49,20 @@ import { AccountMenu } from "../../components/AccountMenu";
 import { VoiceSheet } from "../../components/VoiceSheet";
 import { MediaPermissionDialog, type MediaPermissionKind } from "../../components/MediaPermissionDialog";
 import { useVoiceDraft } from "../../hooks/useVoiceDraft";
-import { appendMedia, type LocalMedia } from "../../media";
+import type { LocalMedia } from "../../media";
 import { colors } from "../../theme";
-import type { AchievementMessage, AnalyzeResponse, DayView, Entry } from "../../types";
+import type { DayView, Entry } from "../../types";
 import { healthUpdated } from "../../health/events";
-
-type History = {
-  notices?: AchievementMessage[];
-  entries: Entry[];
-  operations: Operation[];
-  media: { id: string; operation_id: string; mime: string; url: string }[];
-  next_before: number | null;
-};
-type SentMessage = ChatMessage;
+import { enqueueMessage, observeOutbox, reconcileOutbox, reopenOutbox, retryMessage, useChatOutbox } from "../../outbox/session";
+import { ChatPoller } from "../../outbox/poller";
+import type { OutgoingMessage } from "../../outbox/queue";
+import { recoverOutboxHistory, type ChatHistory as History } from "../../outbox/history";
 
 const MAX_PHOTOS = 10;
+
+function localMessage(item: OutgoingMessage): PendingChatMessage {
+  return { ...item, photos: item.photos.map(photo => photo.uri), voiceUri: item.voiceMedia?.uri };
+}
 
 function clock(iso: string | null) {
   if (!iso) return "";
@@ -167,22 +166,21 @@ function ProcessingStatus({
   hasPhotos,
   correcting,
 }: {
-  status: "uploading" | "queued" | "running";
+  status: "waiting" | "uploading" | "queued" | "running";
   hasPhotos: boolean;
   correcting: boolean;
 }) {
-  const title = status === "uploading"
-    ? hasPhotos ? "Загружаю фото…" : "Отправляю запись…"
-    : status === "queued"
-      ? hasPhotos ? "Готовлю анализ фото…" : "Запись в очереди…"
-      : correcting ? "Уточняю запись…" : hasPhotos ? "Анализирую фото…" : "Анализирую запись…";
+  const title = status === "waiting" ? "Ожидает загрузки…"
+    : status === "uploading" ? hasPhotos ? "Загружаю фото…" : "Отправляю запись…"
+    : status === "queued" ? "В очереди…"
+    : correcting ? "Уточняю запись…" : "Анализирую…";
   return (
     <View style={s.processing} accessibilityRole="progressbar" accessibilityLabel={title} accessibilityLiveRegion="polite">
       <ActivityIndicator color={colors.accent} size="small" />
       <View style={s.processingText}>
         <Text style={s.processingTitle}>{title}</Text>
         <Text style={s.small}>
-          {status === "uploading"
+          {status === "waiting" ? "Сообщение сохранено и будет отправлено по очереди." : status === "uploading"
             ? "Отправляем вложения. Это может занять немного времени."
             : hasPhotos
               ? "Определяю блюда, порции и БЖУ. Результат сохранится в дневнике."
@@ -197,20 +195,25 @@ export default function ChatScreen() {
   const { token, signOut } = useAuth();
   const { handleLimit, openLimit } = useRequestLimit();
   const [history, setHistory] = useState<History | null>(null);
-  const submission = useRef<string | null>(null);
+  const outbox = useChatOutbox();
+  const outboxRef = useRef(outbox);
+  outboxRef.current = outbox;
+  const poller = useRef<ChatPoller | null>(null);
+  const consumedDraft = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const inFlightVersion = useRef(0);
+  const refreshController = useRef<AbortController | null>(null);
+  const canRefresh = useRef(false);
+  const earlierLoaded = useRef(false);
   const draftReady = useRef(false);
   const [day, setDay] = useState<DayView | null>(null);
   const [text, setText] = useState("");
   const [photos, setPhotos] = useState<LocalMedia[]>([]);
-  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaPermission, setMediaPermission] = useState<MediaPermissionKind | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [sent, setSent] = useState<Record<number, SentMessage>>({});
-  const [pending, setPending] = useState<PendingChatMessage | null>(null);
-  const [operationMessages, setOperationMessages] = useState<Record<string, SentMessage>>({});
   const [correction, setCorrection] = useState<Entry | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [previousCalories, setPreviousCalories] = useState<
@@ -219,21 +222,22 @@ export default function ChatScreen() {
   const [notedId, setNotedId] = useState<number | null>(null);
   const input = useRef<TextInputInstance>(null);
   const scroll = useRef<FlatList<ChatTimelineItem>>(null);
-  const sending = useRef(false);
   const retrying = useRef(new Set<string>());
+  const [retryIds, setRetryIds] = useState<Set<string>>(new Set());
   const picking = useRef(false);
   const revision = useRef(0);
   const shouldScroll = useRef(true);
-  const markLimitShown = useOperationLimitNotice(history?.operations, busy);
 
   const voice = useVoiceDraft(token, signOut);
+  const markLimitShown = useOperationLimitNotice(history?.operations, inputFocused || voice.visible);
+  useEffect(() => { consumedDraft.current = false; }, [text, photos, correction, voice.transcript, voice.mediaId]);
   useEffect(() => {
     if (!error) return;
     const timer = setTimeout(() => setError(null), 8000);
     return () => clearTimeout(timer);
   }, [error]);
   useAssistantHidden(
-    busy || inputFocused || voice.visible || photos.length > 0 || !!correction || !!mediaPermission,
+    inputFocused || voice.visible || photos.length > 0 || !!correction || !!mediaPermission,
   );
   useEffect(() => {
     let active = true;
@@ -259,6 +263,7 @@ export default function ChatScreen() {
 
   const updateOperation = useCallback((operation: Operation) => {
     revision.current += 1;
+    observeOutbox([operation]);
     setHistory((current) => ({
       entries: current?.entries ?? [],
       notices: current?.notices ?? [],
@@ -268,66 +273,93 @@ export default function ChatScreen() {
     }));
   }, []);
 
-  const load = useCallback(async () => {
-    const version = ++revision.current;
-    try {
-      const [next, chat] = await Promise.all([
-        api<DayView>("/v1/today", { token }),
-        api<History>("/v1/chat", { token }),
-      ]);
-      if (version === revision.current) {
-        setDay(next);
-        setHistory(chat);
+  const load = useCallback((): Promise<void> => {
+    if (!canRefresh.current) return Promise.resolve();
+    if (inFlight.current) return inFlightVersion.current === revision.current
+      ? inFlight.current : inFlight.current.then(() => load());
+    const version = revision.current;
+    inFlightVersion.current = version;
+    const controller = new AbortController();
+    refreshController.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const task = (async () => {
+      try {
+        const latest = await api<History>("/v1/chat", { token, signal: controller.signal });
+        const recovered = await recoverOutboxHistory(latest, outboxRef.current.items,
+          <T,>(path: string) => api<T>(path, { token, signal: controller.signal }));
+        if (version !== revision.current) return;
+        const chat = recovered.chat;
+        const keepPages = earlierLoaded.current;
+        if (recovered.recovered) earlierLoaded.current = true;
+        observeOutbox(recovered.observed);
+        for (const item of outboxRef.current.items) {
+          const op = chat.operations.find(value => value.request_key === item.requestKey);
+          if (op?.status === "done" && item.entryId != null && item.previousCalories != null) {
+            setPreviousCalories(current => ({ ...current, [item.entryId!]: item.previousCalories! }));
+            setNotedId(item.entryId);
+          }
+          if (op?.status === "done" && op.result?.status === "weight_saved") healthUpdated();
+        }
+        setHistory(current => {
+          if (!earlierLoaded.current || !current) return chat;
+          const oldest = Math.min(...latest.entries.map(entry => entry.id));
+          const older = current.entries.filter(entry => entry.id < oldest && !chat.entries.some(value => value.id === entry.id));
+          const olderIds = new Set(older.map(entry => entry.id));
+          const olderOps = current.operations.filter(op => op.entry_id != null && olderIds.has(op.entry_id)
+            && !chat.operations.some(value => value.id === op.id));
+          const olderOpIds = new Set(olderOps.map(op => op.id));
+          return { ...chat, next_before: keepPages ? current.next_before : chat.next_before,
+            entries: [...older, ...chat.entries], operations: [...olderOps, ...chat.operations],
+            media: [...current.media.filter(file => olderOpIds.has(file.operation_id)), ...chat.media] };
+        });
+        reconcileOutbox(chat.operations, chat.entries.map(entry => entry.id));
         setLoadError(null);
+        setLoading(false);
+        // Fetch balance after history so a completed analysis cannot leave an older balance.
+        const next = await api<DayView>("/v1/today", { token, signal: controller.signal });
+        if (version === revision.current) setDay(next);
+      } catch (caught) {
+        if (version === revision.current) setLoadError(await apiFailureMessage(caught, "Не удалось загрузить чат", signOut));
+      } finally {
+        if (version === revision.current) setLoading(false);
       }
-    } catch (caught) {
-      if (version === revision.current)
-        setLoadError(
-          await apiFailureMessage(caught, "Не удалось загрузить чат", signOut),
-        );
-    } finally {
-      if (version === revision.current) setLoading(false);
-    }
-  }, [token, signOut]);
-  useFocusEffect(
-    useCallback(() => {
-      scroll.current?.scrollToOffset({ offset: 0, animated: false });
-      void load();
-      let active = true;
-      // Goal updates from Telegram or another device should appear in an open chat.
-      const timer = setInterval(() => {
-        if (AppState.currentState !== "active") return;
-        void api<{ notices: AchievementMessage[] }>("/v1/chat/notices", { token }).then((next) => {
-          if (active) setHistory((current) => current ? { ...current, notices: next.notices } : current);
-        }).catch(() => {});
-      }, 15000);
-      return () => {
-        active = false;
-        clearInterval(timer);
-        revision.current += 1;
-        voice.cancel();
-        setMediaPermission(null);
-        setError(null);
-      };
-    }, [load, token, voice.cancel]),
-  );
-
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void load();
+    })().finally(() => {
+      clearTimeout(timeout);
+      if (inFlight.current === task) { inFlight.current = null; refreshController.current = null; }
     });
-    return () => sub.remove();
-  }, [load]);
-  useEffect(() => {
-    if (
-      !history?.operations.some(
-        (o) => o.status === "queued" || o.status === "running",
-      )
-    )
-      return;
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
-  }, [history, load]);
+    inFlight.current = task;
+    return task;
+  }, [token, signOut]);
+  const hasWork = outbox.items.some(item => ["preparing", "waiting", "uploading"].includes(item.state)
+    || (item.operation && ["queued", "running"].includes(item.operation.status)))
+    || history?.operations.some(op => op.status === "queued" || op.status === "running");
+  const hasWorkRef = useRef(hasWork);
+  hasWorkRef.current = hasWork;
+  useFocusEffect(useCallback(() => {
+    scroll.current?.scrollToOffset({ offset: 0, animated: false });
+    const loop = new ChatPoller(load, () => hasWorkRef.current ? 3000 : 15000);
+    poller.current = loop;
+    canRefresh.current = AppState.currentState === "active";
+    loop.setActive(canRefresh.current);
+    const subscription = AppState.addEventListener("change", state => {
+      canRefresh.current = state === "active";
+      if (state !== "active") { revision.current += 1; refreshController.current?.abort(); }
+      loop.setActive(state === "active");
+    });
+    return () => {
+      canRefresh.current = false;
+      loop.setActive(false);
+      subscription.remove();
+      poller.current = null;
+      revision.current += 1;
+      refreshController.current?.abort();
+      voice.cancel();
+      setMediaPermission(null);
+      setError(null);
+    };
+  }, [load, voice.cancel]));
+  const receipts = outbox.items.filter(item => item.operation).map(item => item.operation!.id).join(",");
+  useEffect(() => { poller.current?.wake(); }, [receipts]);
   async function earlier() {
     if (!history?.next_before) return;
     const version = revision.current;
@@ -337,6 +369,8 @@ export default function ChatScreen() {
         { token },
       );
       if (version !== revision.current) return;
+      earlierLoaded.current = true;
+      reconcileOutbox(next.operations, next.entries.map(entry => entry.id));
       setHistory((old) =>
         old
           ? {
@@ -375,11 +409,6 @@ export default function ChatScreen() {
     setDay((current) => current ? { ...current, entries: current.entries.filter((entry) => entry.id !== entryId) } : current);
     setCorrection((current) => current?.id === entryId ? null : current);
     setNotedId((current) => current === entryId ? null : current);
-    setSent((current) => {
-      const next = { ...current };
-      delete next[entryId];
-      return next;
-    });
     setPreviousCalories((current) => {
       const next = { ...current };
       delete next[entryId];
@@ -394,8 +423,9 @@ export default function ChatScreen() {
   }
 
   async function retry(op: Operation) {
-    if (retrying.current.has(op.id)) return;
+    if (retrying.current.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))) return;
     retrying.current.add(op.id);
+    setRetryIds(new Set(retrying.current));
     markLimitShown(op.id);
     let accepted = false;
     try {
@@ -403,7 +433,7 @@ export default function ChatScreen() {
       const next = await api<Operation>(`/v1/operations/${op.id}/retry`, { token, method: "POST" });
       accepted = true;
       updateOperation(next);
-      await waitOperation(next, token, updateOperation);
+      poller.current?.wake();
     } catch (e) {
       if (await handleLimit(e, operationLimitKind(op))) {
         if (!accepted) updateOperation({
@@ -416,11 +446,12 @@ export default function ChatScreen() {
       if (!accepted && message) updateOperation({ ...op, status: "failed", error: message, limit_reached: null });
     } finally {
       retrying.current.delete(op.id);
-      void load();
+      setRetryIds(new Set(retrying.current));
+      poller.current?.wake();
     }
   }
   async function pick(camera: boolean) {
-    if (picking.current || sending.current) return;
+    if (picking.current) return;
     picking.current = true;
     setError(null);
     try {
@@ -486,137 +517,28 @@ export default function ChatScreen() {
     }
   }
 
-  async function submit(
-    override?: string,
-    extra?: {
-      voiceSeconds?: number;
-      voiceUri?: string;
-      voiceId?: string | null;
-    },
-  ) {
+  function submit(override?: string, extra?: { voiceSeconds?: number; voiceMedia?: LocalMedia; voiceId?: string | null }) {
     const message = (override ?? text).trim();
     const attachments = extra?.voiceId ? [] : photos;
-    if (
-      sending.current ||
-      (!message && attachments.length === 0) ||
-      (correction && !message)
-    )
+    if (consumedDraft.current || (!message && !attachments.length) || (correction && !message)) return;
+    if (correction && isCorrecting(correction.id)) {
+      setError("Эта запись уже уточняется. Дождитесь результата.");
       return;
-    sending.current = true;
-    revision.current += 1;
-    const editing = correction;
-    const userMessage: SentMessage = {
-      text: message,
-      photos: attachments.map((item) => item.uri),
-      voiceSeconds: extra?.voiceSeconds,
-      voiceUri: extra?.voiceUri,
-    };
-    setBusy(true);
-    setError(null);
-    submission.current ??= requestKey();
-    const currentRequestKey = submission.current;
-    setPending({ ...userMessage, requestKey: currentRequestKey, createdAt: new Date().toISOString() });
-    shouldScroll.current = true;
-    scroll.current?.scrollToOffset({ offset: 0, animated: true });
-    Keyboard.dismiss();
-    let operationId: string | null = null;
+    }
     try {
-      const form = new FormData();
-      form.append("request_key", currentRequestKey);
-      if (message) form.append("text", message);
-      if (editing) form.append("entry_id", String(editing.id));
-      if (extra?.voiceId) form.append("voice_id", extra.voiceId);
-      for (const attachment of attachments)
-        await appendMedia(form, "image", attachment);
-      const op = await api<Operation>("/v1/operations", { token, body: form });
-      operationId = op.id;
-      setOperationMessages((current) => ({ ...current, [op.id]: userMessage }));
-      updateOperation(op);
-      submission.current = null;
-      setText("");
-      setPhotos([]);
-      voice.cancel();
-      await AsyncStorage.removeItem(`draft:${token?.slice(-24)}`);
-      const completed = await waitOperation(op, token, updateOperation);
-      const result = completed.result as AnalyzeResponse;
-      if (result.status === "unknown") {
-        return;
-      }
-      if (result.status === "weight_saved") {
-        healthUpdated();
-        shouldScroll.current = true;
-        await load();
-        return;
-      }
-      setSent((current) => ({
-        ...current,
-        [result.entry.id]: editing
-          ? { ...current[result.entry.id], text: message }
-          : userMessage,
-      }));
-      // Keep the saved exchange visible even if refreshing history loses its connection.
-      setHistory((current) => ({
-        entries: [
-          ...(current?.entries ?? []).filter((entry) => entry.id !== result.entry.id),
-          result.entry,
-        ].sort((a, b) => a.id - b.id),
-        operations: [
-          ...(current?.operations ?? []).filter((operation) => operation.id !== completed.id),
-          completed,
-        ],
-        media: current?.media ?? [],
-        notices: current?.notices ?? [],
-        next_before: current?.next_before ?? null,
-      }));
-      if (editing) {
-        setPreviousCalories((current) => ({
-          ...current,
-          [result.entry.id]: editing.calories,
-        }));
-        setNotedId(result.entry.id);
-      }
-      setDay((current) =>
-        current
-          ? {
-              ...current,
-              balance: result.balance,
-              entries: [
-                ...current.entries.filter(
-                  (entry) => entry.id !== result.entry.id,
-                ),
-                result.entry,
-              ].sort((a, b) => a.id - b.id),
-            }
-          : null,
-      );
+      enqueueMessage({ requestKey: requestKey(), createdAt: new Date().toISOString(),
+        text: message, photos: attachments, voiceId: extra?.voiceId ?? undefined,
+        voiceMedia: extra?.voiceMedia, voiceSeconds: extra?.voiceSeconds,
+        entryId: correction?.id, previousCalories: correction?.calories });
+      consumedDraft.current = true;
       setText("");
       setPhotos([]);
       setCorrection(null);
+      setError(null);
+      voice.cancel();
       shouldScroll.current = true;
-      await load();
     } catch (caught) {
-      if (await handleLimit(caught, editing ? "text" : attachments.length ? "photo" : extra?.voiceId ? "voice" : "text")) {
-        if (operationId) markLimitShown(operationId);
-        else {
-          setText(message);
-          setPhotos(attachments);
-          setCorrection(editing);
-        }
-      } else {
-        const failure = await apiFailureMessage(
-          caught,
-          caught instanceof Error
-            ? caught.message
-            : "Не удалось отправить. Проверьте историю перед повтором.",
-          signOut,
-        );
-        if (!operationId && failure) setError(failure);
-      }
-    } finally {
-      setPending(null);
-      setBusy(false);
-      sending.current = false;
-      void load();
+      setError(caught instanceof Error ? caught.message : "Не удалось сохранить сообщение.");
     }
   }
 
@@ -629,12 +551,13 @@ export default function ChatScreen() {
       return;
     void submit(voice.transcript, {
       voiceSeconds: voice.draft?.seconds,
-      voiceUri: voice.draft?.media.uri,
+      voiceMedia: voice.draft?.media,
       voiceId: voice.mediaId,
     });
   }
 
   function correct(entry: Entry) {
+    if (isCorrecting(entry.id)) return;
     setCorrection(entry);
     setPhotos([]);
     setText("");
@@ -644,8 +567,24 @@ export default function ChatScreen() {
   function removePhoto(uri: string) {
     setPhotos((current) => current.filter((item) => item.uri !== uri));
   }
-  const entries = history?.entries ?? day?.entries ?? [];
-  const timeline = buildChatTimeline(entries, history?.operations ?? [], pending, history?.notices ?? []);
+  const operations = [...new Map([
+    ...outbox.items.flatMap(item => item.operation ? [item.operation] : []),
+    ...(history?.operations ?? []),
+  ].map(op => [op.id, op])).values()];
+  // An idempotent replay can return a finished result before the next history read.
+  const entries = [...new Map([
+    ...outbox.items.flatMap(item => item.operation?.status === "done" && item.operation.result?.entry
+      ? [item.operation.result.entry as Entry] : []),
+    ...(history?.entries ?? day?.entries ?? []),
+  ].map(entry => [entry.id, entry])).values()];
+  const pending = outbox.items.map(localMessage);
+  const messagesByKey = new Map(pending.map(message => [message.requestKey, message]));
+  function isCorrecting(entryId: number) {
+    return outbox.items.some(item => item.entryId === entryId && item.state !== "failed"
+      && (!item.operation || ["queued", "running"].includes(item.operation.status)))
+      || operations.some(op => op.kind === "correct" && op.entry_id === entryId && (["queued", "running"].includes(op.status) || retrying.current.has(op.id)));
+  }
+  const timeline = buildChatTimeline(entries, operations, pending, history?.notices ?? [], outbox.anchors);
   const isEmpty = !loading && !loadError && timeline.length === 0;
 
   return (
@@ -693,10 +632,8 @@ export default function ChatScreen() {
                 refreshing={refreshing}
                 tintColor={colors.accent}
                 onRefresh={() => {
-                  if (!busy) {
-                    setRefreshing(true);
-                    void load().finally(() => setRefreshing(false));
-                  }
+                  setRefreshing(true);
+                  void load().finally(() => setRefreshing(false));
                 }}
               />
             )
@@ -730,21 +667,18 @@ export default function ChatScreen() {
                     icon="camera"
                     title="Сфотографировать еду"
                     subtitle="Быстро добавить приём пищи"
-                    disabled={busy}
                     onPress={() => void pick(Platform.OS !== "web")}
                   />
                   <ActionRow
                     icon="mic"
                     title="Рассказать голосом"
                     subtitle="Про еду или тренировку"
-                    disabled={busy}
                     onPress={() => void voice.start()}
                   />
                   <ActionRow
                     icon="lines"
                     title="Написать в чат"
                     subtitle="Например: омлет из двух яиц"
-                    disabled={busy}
                     onPress={() => input.current?.focus()}
                   />
                   <Text style={s.footerNote}>
@@ -792,13 +726,20 @@ export default function ChatScreen() {
                     {message.voiceUri ? <VoiceBubble uri={message.voiceUri} seconds={message.voiceSeconds ?? 0} /> : null}
                     {message.text ? <View style={s.userBubble}><Text style={s.bodyText}>{message.text}</Text></View> : null}
                   </View>
-                  <ProcessingStatus status="uploading" hasPhotos={Boolean(message.photos?.length)} correcting={Boolean(correction)} />
+                  {message.state === "failed" ? (
+                    <AnalysisFailureCard message={message.error ?? "Не удалось отправить сообщение."}
+                      time={clock(message.createdAt)}
+                      disabled={message.entryId != null && isCorrecting(message.entryId)}
+                      onRetry={() => retryMessage(message.requestKey)}
+                      onLimit={message.limitReached ? () => void openLimit(message.limitReached, message.limitReached?.kind ?? "photo") : undefined} />
+                  ) : <ProcessingStatus status={message.state === "uploading" ? "uploading" : "waiting"}
+                    hasPhotos={Boolean(message.photos?.length)} correcting={message.entryId != null} />}
                 </View>
               );
             }
             if (item.kind === "operation") {
               const op = item.operation;
-              const local = operationMessages[op.id] ?? (pending?.requestKey === op.request_key ? pending : undefined);
+              const local = messagesByKey.get(op.request_key);
               const media = history?.media.filter((file) => file.operation_id === op.id) ?? [];
               const remotePhotos = media.filter((file) => file.mime.startsWith("image/"));
               const cardPhotos = remotePhotos.length
@@ -833,11 +774,11 @@ export default function ChatScreen() {
                       message={limited ? "Не удалось обработать запись: достигнут дневной лимит." : op.error ?? op.result?.message ?? "Не удалось обработать запись."}
                       photos={cardPhotos}
                       time={clock(op.created_at)}
-                      disabled={busy}
                       onLimit={limited ? () => {
                         markLimitShown(op.id);
                         void openLimit(op.limit_reached, operationLimitKind(op));
                       } : undefined}
+                      disabled={retryIds.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))}
                       onRetry={op.status === "failed" ? () => void retry(op) : undefined}
                     />
                   )}
@@ -846,8 +787,8 @@ export default function ChatScreen() {
             }
             const entry = item.entry;
             const ops =
-              history?.operations.filter((o) => o.entry_id === entry.id && o.status === "done" && o.result?.status !== "unknown")
-                .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)) ?? [];
+              operations.filter((o) => o.entry_id === entry.id && o.status === "done" && o.result?.status !== "unknown")
+                .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
             const op = ops.at(-1);
             const media =
               history?.media.filter((m) =>
@@ -857,7 +798,7 @@ export default function ChatScreen() {
             const remotePhotos = media
               .filter((m) => m.mime.startsWith("image/"))
               .map((m) => API_URL + m.url);
-            const localMessage = sent[entry.id] ?? (op ? operationMessages[op.id] : undefined);
+            const localMessage = op ? messagesByKey.get(op.request_key) : undefined;
             const message = op
               ? {
                   text: op.text,
@@ -866,7 +807,7 @@ export default function ChatScreen() {
                   voiceSeconds: localMessage?.voiceSeconds ?? (audio ? 0 : undefined),
                 }
               : localMessage;
-            const when = clock(entry.created_at);
+            const when = clock(item.createdAt);
             const activity = entry.entry_type === "activity";
             const water = entry.entry_type === "water";
             const revised = previousCalories[entry.id] !== undefined;
@@ -918,7 +859,7 @@ export default function ChatScreen() {
                 ) : null}
                 <EntryCard
                   entry={entry}
-                  disabled={busy}
+                  disabled={isCorrecting(entry.id)}
                   fromPhoto={Boolean(message?.photos?.length)}
                   photos={(message?.photos ?? []).map((uri, i) => ({ uri, previewUri: localMessage?.photos?.[i] }))}
                   previousCalories={
@@ -945,6 +886,10 @@ export default function ChatScreen() {
           }}
         />
         <View style={s.composerArea}>
+          {outbox.error ? <View style={s.composerNotice}>
+            <Text accessibilityRole="alert" style={s.composerNoticeText}>{outbox.error}</Text>
+            <Pressable accessibilityRole="button" onPress={() => void reopenOutbox()}><Text style={s.link}>Повторить</Text></Pressable>
+          </View> : null}
           {error ? (
             <View style={s.composerNotice}>
               <Text accessibilityRole="alert" style={s.composerNoticeText}>{error}</Text>
@@ -962,7 +907,6 @@ export default function ChatScreen() {
               <IconButton
                 name="close"
                 label="Отменить исправление"
-                disabled={busy}
                 onPress={() => setCorrection(null)}
               />
             </View>
@@ -983,7 +927,6 @@ export default function ChatScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Убрать фото"
-                    disabled={busy}
                     onPress={() => removePhoto(item.uri)}
                     style={s.thumbRemove}
                   >
@@ -1013,7 +956,6 @@ export default function ChatScreen() {
                   <IconButton
                     name="clip"
                     label="Выбрать фото из галереи"
-                    disabled={busy}
                     onPress={() => void pick(false)}
                   />
                 ) : null}
@@ -1032,7 +974,6 @@ export default function ChatScreen() {
                   onChangeText={setText}
                   multiline
                   maxLength={2000}
-                  editable={!busy}
                   placeholder={
                     photos.length > 0
                       ? "Подпись"
@@ -1043,11 +984,7 @@ export default function ChatScreen() {
                   placeholderTextColor={colors.muted}
                   style={s.input}
                 />
-                {busy ? (
-                  <View style={s.busy}>
-                    <ActivityIndicator color="white" />
-                  </View>
-                ) : text.trim() || photos.length > 0 ? (
+                {text.trim() || photos.length > 0 ? (
                   <IconButton
                     name="arrow"
                     label={
@@ -1283,15 +1220,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     minHeight: 48,
     maxHeight: 120,
-  },
-  busy: {
-    height: 40,
-    width: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 2,
   },
   correction: {
     flexDirection: "row",

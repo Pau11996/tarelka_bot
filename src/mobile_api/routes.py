@@ -36,7 +36,7 @@ from src.db.models import (
     Sex,
     User,
 )
-from src.db.repository import UserRepository
+from src.db.repository import FavoriteOrderConflict, UserRepository
 from src.db.session import get_session
 from src.mobile_api.analysis import AnalysisService
 from src.mobile_api.deps import get_current_user
@@ -85,6 +85,11 @@ class WeightUpdate(BaseModel):
 
 class CorrectionRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class FavoriteOrderRequest(BaseModel):
+    favorite_ids: list[Annotated[int, Field(strict=True, gt=0)]]
+    original_ids: list[Annotated[int, Field(strict=True, gt=0)]]
 
 
 class CheckoutRequest(BaseModel):
@@ -286,6 +291,23 @@ async def list_favorites(
     return {"favorites": [favorite_out(item) for item in favorites]}
 
 
+@router.put("/favorites/order")
+async def reorder_favorites(
+    body: FavoriteOrderRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    try:
+        favorites = await UserRepository(session).reorder_favorites(
+            user.id, body.favorite_ids, body.original_ids
+        )
+    except FavoriteOrderConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"favorites": [favorite_out(item) for item in favorites]}
+
+
 @router.post("/entries/{entry_id}/favorite")
 async def favorite_entry(
     entry_id: int,
@@ -310,12 +332,16 @@ async def log_favorite(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     from src.bot.services.entry_service import EntryService
+    from src.mobile_api.favorites import latest_correction
 
     repo = UserRepository(session)
     await repo.ensure_default_profile(user.id)
     favorite = await repo.get_favorite(favorite_id, user.id)
     if favorite is None:
         raise HTTPException(status_code=404, detail="Запись не найдена")
+    correction = await latest_correction(session, user.id, favorite_id)
+    if correction and correction.status in ("queued", "running"):
+        raise HTTPException(409, "Избранное уточняется. Дождитесь результата перед добавлением.")
     service = EntryService(session)
     if favorite.entry_type == EntryType.ACTIVITY:
         entry, balance = await service.save_activity_from_favorite(

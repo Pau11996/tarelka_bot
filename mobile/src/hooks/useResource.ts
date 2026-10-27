@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, type SetStateAction } from "react";
 import { useFocusEffect } from "expo-router";
 import { AppState } from "react-native";
 import { api, apiFailureMessage } from "../api";
@@ -10,6 +10,14 @@ export function useResource<T>(path: string) {
     [error, setError] = useState<string | null>(null),
     [loading, setLoading] = useState(true);
   const revision = useRef(0);
+  const updateData = useCallback((value: SetStateAction<T | null>) => {
+    // A successful mutation supersedes any GET started before it. In particular,
+    // a foreground refresh must not restore the old profile after a save.
+    revision.current++;
+    setData(value);
+    setError(null);
+    setLoading(false);
+  }, []);
   const load = useCallback(async () => {
     const id = ++revision.current;
     setLoading(true);
@@ -20,10 +28,10 @@ export function useResource<T>(path: string) {
         setError(null);
       }
     } catch (e) {
-      if (id === revision.current)
-        setError(
-          await apiFailureMessage(e, "Не удалось загрузить данные", signOut),
-        );
+      if (id === revision.current) {
+        const message = await apiFailureMessage(e, "Не удалось загрузить данные", signOut);
+        if (id === revision.current) setError(message);
+      }
     } finally {
       if (id === revision.current) setLoading(false);
     }
@@ -45,5 +53,5 @@ export function useResource<T>(path: string) {
   useEffect(() => {
     setData(null);
   }, [path, token]);
-  return { data, error, loading, load, setData };
+  return { data, error, loading, load, setData: updateData };
 }

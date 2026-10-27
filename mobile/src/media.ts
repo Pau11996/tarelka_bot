@@ -12,9 +12,10 @@ export async function appendMedia(
   form: FormData,
   field: string,
   media: LocalMedia,
+  signal?: AbortSignal,
 ) {
   if (Platform.OS === "web") {
-    const blob = media.file ?? (await (await fetch(media.uri)).blob());
+    const blob = media.file ?? (await (await fetch(media.uri, { signal })).blob());
     form.append(field, blob, media.name);
   } else {
     const { File } = await import("expo-file-system");

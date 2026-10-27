@@ -289,6 +289,9 @@ async def retry_operation(
     )
     if not op:
         raise HTTPException(404, "Запрос не найден")
+    if op.kind == "correct_favorite":
+        # The template endpoint also rejects retries superseded by a later edit.
+        raise HTTPException(409, "Повторите уточнение в карточке избранного")
     if op.kind == "review" and not has_active_subscription(user):
         raise HTTPException(403, "Разбор недели входит в подписку")
     if op.status == "failed":
@@ -325,7 +328,7 @@ async def chat(
                 select(MobileOperation)
                 .where(
                     MobileOperation.user_id == user.id,
-                    MobileOperation.kind != "review",
+                    MobileOperation.kind.in_(("analyze", "correct")),
                     or_(
                         MobileOperation.entry_id.in_(ids),
                         MobileOperation.status.in_(["queued", "running", "failed"]),

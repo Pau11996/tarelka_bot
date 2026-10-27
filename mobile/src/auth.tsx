@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import { API_URL } from "./config";
 import { authStorageKeys } from "./authStorage";
 import { setPrivateImageSession } from "./privateImage";
+import { setChatOutboxSession } from "./outbox/session";
 import {
   createContext,
   useContext,
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(async (stored) => {
         if (active) {
           await setPrivateImageSession(stored);
+          await setChatOutboxSession(stored);
           if (active) setToken(stored);
         }
       })
@@ -65,9 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (Platform.OS === "web") sessionStorage.setItem(TOKEN_KEY, next);
         else await SecureStore.setItemAsync(TOKEN_KEY, next);
         await setPrivateImageSession(next);
+        await setChatOutboxSession(next);
         setToken(next);
       },
       async signOut() {
+        await setChatOutboxSession(null);
         const { pauseHealthSync } = await import("./health/service");
         await pauseHealthSync(true);
         await AsyncStorage.removeItem(`draft:${token?.slice(-24)}`);

@@ -1,14 +1,15 @@
-import { useRef, useState } from "react";
-import { router } from "expo-router";
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen, State } from "../../components/Screen";
 import { FavoriteCard } from "../../components/FavoriteCards";
+import { FavoriteOrderEditor } from "../../components/FavoriteOrderEditor";
 import { TransientNotice } from "../../components/TransientNotice";
 import { Icon } from "../../components/Brand";
 import { useResource } from "../../hooks/useResource";
 import { useTransientNotice } from "../../hooks/useTransientNotice";
 import { useAuth } from "../../auth";
-import { api, apiFailureMessage } from "../../api";
+import { api, ApiError, apiFailureMessage } from "../../api";
 import { colors } from "../../theme";
 import type { EntryType, Favorite } from "../../types";
 
@@ -28,6 +29,66 @@ export default function Favorites() {
   const { message: notice, show: showNotice, clear: clearNotice } = useTransientNotice();
   const [busy, setBusy] = useState<number | null>(null);
   const lock = useRef(false);
+  const [draft, setDraft] = useState<Favorite[] | null>(null);
+  const originalOrder = useRef<number[]>([]);
+  const orderLock = useRef(false);
+  const orderGeneration = useRef(0);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderConflict, setOrderConflict] = useState(false);
+
+  useFocusEffect(useCallback(() => () => {
+    orderGeneration.current++;
+    orderLock.current = false;
+    setDraft(null);
+    setSavingOrder(false);
+    setOrderError(null);
+    setOrderConflict(false);
+  }, []));
+
+  function cancelOrder() {
+    if (orderLock.current) return;
+    setDraft(null); setOrderError(null); setOrderConflict(false);
+    void r.load();
+  }
+
+  useEffect(() => {
+    if (!draft) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => { cancelOrder(); return true; });
+    return () => sub.remove();
+  }, [draft, r.load]);
+
+  function startOrder() {
+    const all = r.data?.favorites ?? [];
+    if (lock.current || orderLock.current || all.length < 2) return;
+    Keyboard.dismiss(); clearNotice();
+    originalOrder.current = all.map(item => item.id);
+    setOrderError(null); setOrderConflict(false); setDraft([...all]);
+  }
+
+  async function saveOrder() {
+    if (!draft || orderLock.current || orderConflict) return;
+    orderLock.current = true;
+    const generation = orderGeneration.current;
+    setSavingOrder(true); setOrderError(null);
+    try {
+      const result = await api<{ favorites: Favorite[] }>("/v1/favorites/order", {
+        token, method: "PUT", json: { favorite_ids: draft.map(item => item.id), original_ids: originalOrder.current },
+      });
+      if (generation !== orderGeneration.current) return;
+      r.setData(result); setDraft(null);
+      showNotice("Порядок сохранён");
+      // Invalidate any older background GET that overlapped the save.
+      void r.load();
+    } catch (e) {
+      const message = await apiFailureMessage(e, "Не удалось сохранить порядок. Попробуйте ещё раз.", signOut);
+      if (generation !== orderGeneration.current) return;
+      setOrderError(message);
+      setOrderConflict(e instanceof ApiError && e.status === 409);
+    } finally {
+      if (generation === orderGeneration.current) { orderLock.current = false; setSavingOrder(false); }
+    }
+  }
 
   async function log(item: Favorite) {
     if (lock.current) return;
@@ -52,6 +113,11 @@ export default function Favorites() {
     (filter === "all" || item.entry_type === filter)
     && item.title.toLocaleLowerCase("ru").includes(normalizedQuery),
   );
+
+  if (draft) return <FavoriteOrderEditor
+    items={draft} saving={savingOrder} error={orderError} conflict={orderConflict}
+    onChange={setDraft} onSave={() => void saveOrder()} onCancel={cancelOrder}
+  />;
 
   return (
     <View style={s.page}>
@@ -102,9 +168,15 @@ export default function Favorites() {
           ) : undefined}
           onRetry={() => { setError(null); void r.load(); }}
         />
-        {items.length ? (
+        {favorites.length ? (
           <View style={s.list}>
-            <Text style={s.listTitle}>Сохранённые записи</Text>
+            <View style={s.listHeading}>
+              <Text style={s.listTitle}>Сохранённые записи</Text>
+              {favorites.length > 1 ? <Pressable accessibilityRole="button" accessibilityLabel="Изменить порядок"
+                disabled={busy !== null} onPress={startOrder} style={[s.order, busy !== null && { opacity: 0.5 }]}>
+                <Icon name="sort" size={16} color={colors.accentDark} /><Text style={s.orderText}>Порядок</Text>
+              </Pressable> : null}
+            </View>
             {items.map((item) => (
               <FavoriteCard
                 key={item.id}
@@ -113,7 +185,7 @@ export default function Favorites() {
                 busy={busy === item.id}
                 onOpen={() => {
                   Keyboard.dismiss();
-                  router.push(item.source_entry_id != null ? `/entry/${item.source_entry_id}` : `/favorite/${item.id}`);
+                  router.push(`/favorite/${item.id}`);
                 }}
                 onLog={() => void log(item)}
               />
@@ -138,4 +210,7 @@ const s = StyleSheet.create({
   filterTextActive: { color: "white", fontWeight: "600" },
   list: { gap: 9 },
   listTitle: { color: colors.muted, fontSize: 12, fontWeight: "600", marginBottom: 3 },
+  listHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  order: { minHeight: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.soft, flexDirection: "row", alignItems: "center", gap: 5 },
+  orderText: { fontSize: 12, fontWeight: "600", color: colors.accentDark },
 });

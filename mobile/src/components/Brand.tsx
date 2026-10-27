@@ -19,6 +19,8 @@ const paths = {
   camera: "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z M16 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
   mic: "M8 6a4 4 0 0 1 8 0v5a4 4 0 0 1-8 0z M5 11v1a7 7 0 0 0 14 0v-1 M12 19v3 M9 22h6",
   plus: "M12 5v14 M5 12h14",
+  grip: "M8 5h2 M14 5h2 M8 12h2 M14 12h2 M8 19h2 M14 19h2",
+  sort: "M7 19V5 M3 9l4-4 4 4 M17 5v14 M13 15l4 4 4-4",
   arrow: "M12 19V5 M6 11l6-6 6 6",
   arrowRight: "M4 12h16 M14 6l6 6-6 6",
   trendDown: "M5 6l14 12 M9 18h10V8",

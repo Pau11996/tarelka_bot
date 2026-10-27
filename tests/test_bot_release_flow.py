@@ -18,7 +18,7 @@ from src.bot.handlers import correction, food, subscription
 from src.bot.services.links import MENU_COMMANDS
 from src.bot.services.nutrition import local_today
 from src.bot.states import ProfileStates, WeightTrackingStates, StatisticsStates, CorrectionStates, SurveyStates
-from src.db.models import Base, DayEntry, FavoriteMeal, Payment, Profile, User, WeightGoal, WeightHistory
+from src.db.models import Base, DayEntry, EntryType, FavoriteMeal, Payment, Profile, User, WeightGoal, WeightHistory
 from src.db.repository import UserRepository
 from src.shared.schemas import AnalysisResult
 from src.shared.achievement_messages import deliver_goal_messages
@@ -51,7 +51,7 @@ class OfflineTelegram(BaseSession):
             return True
         assert name in {"sendMessage", "editMessageText", "sendPhoto", "sendInvoice"}, name
         markup = getattr(method, "reply_markup", None)
-        sent = Message(message_id=10000 + len(self.messages), date=datetime.now(timezone.utc),
+        sent = Message(message_id=method.message_id if name == "editMessageText" else 10000 + len(self.messages), date=datetime.now(timezone.utc),
                        chat=Chat(id=method.chat_id, type="private"),
                        text=getattr(method, "text", None) or getattr(method, "caption", None) or "Invoice",
                        reply_markup=markup if isinstance(markup, InlineKeyboardMarkup) else None).as_(bot)
@@ -343,3 +343,69 @@ async def test_weekly_reminder_is_sent_once_and_opens_manual_weight_input(actor)
     async with actor.factory() as session:
         user = await UserRepository(session).get_user_by_telegram_id(actor.uid)
         assert not (await reminder_out(session, user))["enabled"]
+
+
+async def _seed_order_favorites(actor, count=3):
+    async with actor.factory() as session:
+        repo = UserRepository(session)
+        user = await repo.get_user_by_telegram_id(actor.uid)
+        for index in range(count):
+            entry = await repo.create_entry(user_id=user.id, entry_date=local_today(user.timezone),
+                                            entry_type=[EntryType.MEAL, EntryType.WATER, EntryType.ACTIVITY][index % 3],
+                                            title=f"Запись {index}", calories=100)
+            await repo.create_favorite_from_entry(entry)
+        return user.id, [item.id for item in await repo.get_favorites(user.id)]
+
+
+def _order_button(actor, suffix):
+    return next(button.callback_data for row in actor.last().reply_markup.inline_keyboard for button in row
+                if button.callback_data.endswith(suffix))
+
+
+async def _saved_order(actor, uid):
+    async with actor.factory() as session:
+        return [item.id for item in await UserRepository(session).get_favorites(uid)]
+
+
+async def test_favorite_order_draft_cancel_save_and_stale_taps(actor):
+    uid, original = await _seed_order_favorites(actor)
+    await actor.send("/favorites")
+    message_id = actor.last().message_id
+    await actor.click("favorites_order:start")
+    assert actor.last().message_id == message_id
+    up = _order_button(actor, f"up:{original[1]}")
+    await actor.click(up)
+    data = (await actor.state.get_data())["favorite_order"]
+    assert data["ids"] == [original[1], original[0], original[2]]
+    assert await _saved_order(actor, uid) == original
+    await actor.click(up)  # Old message version: never move twice.
+    assert (await actor.state.get_data())["favorite_order"]["ids"] == data["ids"]
+    await actor.click(_order_button(actor, ":cancel"))
+    assert await _saved_order(actor, uid) == original
+    assert (await actor.state.get_data())["favorite_order"] is None
+    await actor.click("favorites_order:start")
+    await actor.click(_order_button(actor, f"up:{original[1]}"))
+    save = _order_button(actor, ":save")
+    await actor.click(save)
+    assert await _saved_order(actor, uid) == [original[1], original[0], original[2]]
+    await actor.click(save)  # Closed editor cannot save again.
+    assert (await actor.state.get_data())["favorite_order"] is None
+    assert len(await actor.rows(DayEntry)) == 3  # Reordering never logs meals.
+
+
+async def test_favorite_order_crosses_pages_and_rejects_external_changes(actor):
+    uid, original = await _seed_order_favorites(actor, count=10)
+    await actor.send("/favorites")
+    await actor.click("favorites_order:start")
+    await actor.click(_order_button(actor, ":page:1"))
+    await actor.click(_order_button(actor, f"up:{original[8]}"))
+    draft = (await actor.state.get_data())["favorite_order"]
+    assert draft["ids"][7] == original[8]
+    assert draft["page"] == 0
+    assert all(len(button.callback_data.encode()) <= 64 for row in actor.last().reply_markup.inline_keyboard for button in row)
+    async with actor.factory() as session:
+        await UserRepository(session).reorder_favorites(uid, original[::-1], original)
+    await actor.click(_order_button(actor, ":save"))
+    assert await _saved_order(actor, uid) == original[::-1]
+    assert (await actor.state.get_data())["favorite_order"] is None
+    assert "Избранное изменилось" in actor.transport.calls[-1].text

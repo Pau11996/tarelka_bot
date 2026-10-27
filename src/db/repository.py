@@ -36,6 +36,10 @@ DEFAULT_DAILY_CALORIE_TARGET = 2000.0
 _REFERRAL_FALLBACK_TIMEZONE = "Europe/Moscow"
 
 
+class FavoriteOrderConflict(ValueError):
+    """The user changed favorites after this ordering session began."""
+
+
 @dataclass(frozen=True)
 class ReferralGrant:
     referrer: User
@@ -673,9 +677,33 @@ class UserRepository:
         result = await self.session.execute(
             select(FavoriteMeal)
             .where(FavoriteMeal.user_id == user_id)
-            .order_by(FavoriteMeal.created_at.desc())
+            .order_by(FavoriteMeal.sort_order, FavoriteMeal.created_at.desc(), FavoriteMeal.id.desc())
         )
         return list(result.scalars().all())
+
+    async def reorder_favorites(
+        self, user_id: int, favorite_ids: list[int], original_ids: list[int]
+    ) -> list[FavoriteMeal]:
+        if (len(set(favorite_ids)) != len(favorite_ids)
+                or len(set(original_ids)) != len(original_ids)
+                or set(favorite_ids) != set(original_ids)):
+            raise ValueError("Передайте все записи без повторений")
+        # The same lock also protects additions and removals from both clients.
+        await self.session.execute(select(User.id).where(User.id == user_id).with_for_update())
+        favorites = await self.get_favorites(user_id)
+        current_ids = [item.id for item in favorites]
+        # A retry after a lost response is safe, even if the original list is old.
+        if current_ids == favorite_ids:
+            await self.session.commit()
+            return favorites
+        if current_ids != original_ids:
+            raise FavoriteOrderConflict("Избранное изменилось. Обновите список и измените порядок заново.")
+        by_id = {item.id: item for item in favorites}
+        ordered = [by_id[item_id] for item_id in favorite_ids]
+        for position, item in enumerate(ordered):
+            item.sort_order = position
+        await self.session.commit()
+        return ordered
 
     async def get_favorite(self, favorite_id: int, user_id: int) -> FavoriteMeal | None:
         result = await self.session.execute(
@@ -716,9 +744,13 @@ class UserRepository:
         if existing is not None:
             await self.session.commit()
             return existing
+        first_position = await self.session.scalar(
+            select(func.min(FavoriteMeal.sort_order)).where(FavoriteMeal.user_id == entry.user_id)
+        )
         favorite = FavoriteMeal(
             user_id=entry.user_id,
             source_entry_id=entry.id,
+            sort_order=first_position - 1 if first_position is not None else 0,
             entry_type=entry.entry_type,
             title=entry.title,
             calories=entry.calories,
@@ -736,6 +768,7 @@ class UserRepository:
         return favorite
 
     async def delete_favorite(self, favorite: FavoriteMeal) -> None:
+        await self.session.execute(select(User.id).where(User.id == favorite.user_id).with_for_update())
         await self.session.delete(favorite)
         await self.session.commit()
 

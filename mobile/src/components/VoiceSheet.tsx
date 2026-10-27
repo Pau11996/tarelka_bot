@@ -85,11 +85,11 @@ export function VoiceSheet({
           />
         ) : null}
         <IconButton
-          name="arrow"
+          name={recording ? "stop" : "arrow"}
           label={
             recording
-              ? "Остановить и отправить"
-              : "Отправить голосовое сообщение"
+              ? "Остановить запись"
+              : "Отправить сообщение"
           }
           filled
           disabled={transcribing || (reviewing && !transcript.trim())}
@@ -97,7 +97,7 @@ export function VoiceSheet({
         />
       </View>
       {recording ? (
-        <Text style={s.hint}>Нажмите стрелку, чтобы отправить</Text>
+        <Text style={s.hint}>Остановите запись, затем проверьте текст.</Text>
       ) : null}
       {reviewing ? (
         <>
@@ -111,7 +111,7 @@ export function VoiceSheet({
             style={s.transcript}
             maxLength={2000}
           />
-          <Text style={s.hint}>Проверьте текст перед отправкой.</Text>
+          <Text style={s.hint}>Проверьте текст и нажмите стрелку, чтобы отправить.</Text>
         </>
       ) : null}
       {error ? (

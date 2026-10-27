@@ -15,7 +15,7 @@ const metrics = [
 ] as const;
 const number = (value: number | null | undefined, scale = 1) => value == null ? "—" : (value / scale).toLocaleString("ru-RU", { maximumFractionDigits: scale === 1000 ? 1 : 0 });
 function Heading({ connected }: { connected: boolean }) {
-  return <View style={s.heading}><Icon name="walk" size={17} color={colors.accentDark} /><Text accessibilityRole="header" style={s.title}>С устройств</Text><Pressable accessibilityRole="button" accessibilityLabel="Устройства и здоровье" onPress={() => router.push("/health")} style={s.settings}><Text style={s.link}>{connected ? "Настроить →" : "Отключено →"}</Text></Pressable></View>;
+  return <View style={s.heading}><Icon name="walk" size={17} color={colors.accentDark} /><Text accessibilityRole="header" style={s.title}>Активность с устройств</Text><Pressable accessibilityRole="button" accessibilityLabel="Устройства и здоровье" onPress={() => router.push("/health")} style={s.settings}><Text style={s.link}>{connected ? "Настроить →" : "Отключено →"}</Text></Pressable></View>;
 }
 export function DeviceHealthDay({ health }: { health?: HealthData | null }) {
   if (!health || (!health.connected && !health.last_synced_at)) return null;
@@ -24,7 +24,7 @@ export function DeviceHealthDay({ health }: { health?: HealthData | null }) {
     <Heading connected={health.connected} />
     <View style={s.metrics}>{metrics.map(metric => <View key={metric.key} style={s.metric}><Text style={s.hint}>{metric.label}</Text><Text style={s.value}>{number(day?.[metric.key], metric.scale)}<Text style={s.unit}>{metric.key === "steps" ? "" : ` ${metric.unit}`}</Text></Text></View>)}</View>
     <Text style={s.hint}>Health Connect · {health.last_synced_at ? `обновлено ${new Date(health.last_synced_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "ожидаем первое обновление"}</Text>
-    <Text style={s.hint}>Калории с устройств не добавляются к норме питания. Ручная активность учитывается отдельно.</Text>
+    <Text style={s.hint}>Для справки: эти калории не увеличивают остаток на день. Активность из дневника учитывается отдельно.</Text>
     {health.workouts.map(workout => <View key={workout.id} style={s.workout}><Icon name="walk" size={16} color="#946821" /><View style={{ flex: 1, gap: 3 }}><Text style={s.workoutTitle}>{workout.title || "Тренировка"}{workout.duration_minutes != null ? ` · ${number(workout.duration_minutes)} мин` : ""}</Text><Text style={s.hint}>{sourceName(workout.origin)} · {new Date(workout.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: health.timezone })}</Text></View></View>)}
   </View>;
 }

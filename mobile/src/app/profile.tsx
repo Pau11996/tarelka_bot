@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, usePreventRemove } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform,
@@ -11,6 +11,7 @@ import { useAuth } from "../auth";
 import { BrandMark, Icon, type IconName } from "../components/Brand";
 import { State } from "../components/Screen";
 import { TransientNotice } from "../components/TransientNotice";
+import { ProfileLeaveDialog } from "../components/ProfileLeaveDialog";
 import { useResource } from "../hooks/useResource";
 import { useTransientNotice } from "../hooks/useTransientNotice";
 import { colors } from "../theme";
@@ -46,6 +47,13 @@ const metricSheets = {
   desiredWeight: { title: "Желаемый вес", label: "Желаемый вес, кг", unit: "кг", placeholder: "70", keyboard: "decimal-pad" },
 } as const;
 
+// Formatting alone (72,5 / 72.50) is not an unsaved change. Empty or invalid
+// input remains distinct so leaving an unfinished field still asks for a choice.
+function sameNumber(input: string, saved: number | null | undefined) {
+  const text = input.trim().replace(",", ".");
+  return text === "" ? saved == null : saved != null && Number(text) === saved;
+}
+
 export default function ProfileScreen() {
   const { token, signOut } = useAuth();
   const params = useLocalSearchParams<{ setup?: string; userId?: string }>();
@@ -65,6 +73,13 @@ export default function ProfileScreen() {
   const [calorieError, setCalorieError] = useState<string | null>(null);
   const [metricDraft, setMetricDraft] = useState("");
   const [metricError, setMetricError] = useState<string | null>(null);
+  const [savedProfile, setSavedProfile] = useState<Profile | null>(null);
+  const [exitPrompt, setExitPrompt] = useState(false);
+  const [exitApproved, setExitApproved] = useState(false);
+  const pendingExit = useRef<(() => void) | null>(null);
+  const mounted = useRef(true);
+  const account = useRef(token);
+  account.current = token;
   const metricInput = useRef<TextInputInstance>(null);
   const notice = useTransientNotice();
   const saving = useRef(false);
@@ -74,17 +89,72 @@ export default function ProfileScreen() {
   const compactSetup = windowHeight - inset.top - inset.bottom < 740;
   const metricSheet = sheet && sheet in metricSheets ? sheet as MetricSheet : null;
   const metricConfig = metricSheet ? metricSheets[metricSheet] : null;
+  const hasUnsavedChanges = !!(profile && savedProfile && (
+    !sameNumber(weight, savedProfile.weight_kg) || !sameNumber(height, savedProfile.height_cm) ||
+    !sameNumber(age, savedProfile.age) || !sameNumber(calories, Math.round(savedProfile.daily_calorie_target)) ||
+    profile.sex !== savedProfile.sex || profile.goal !== savedProfile.goal || profile.activity_level !== savedProfile.activity_level ||
+    (isSetup && !sameNumber(desiredWeight, savedProfile.weight_goal?.target_weight_kg))
+  ));
+  const disableLeaveGuard = usePreventRemove(!!token && !isSetup && !exitApproved && (hasUnsavedChanges || busy), ({ repeat }) => requestLeave(repeat));
 
   useEffect(() => {
-    if (!resource.data) return;
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!resource.data || saving.current) return;
     const next = resource.data;
+    // A foreground/focus refresh may update untouched values, but never the
+    // user's edits. The separate input inside an open sheet is kept as well.
+    setProfile(current => current && savedProfile ? {
+      ...next,
+      sex: current.sex !== savedProfile.sex ? current.sex : next.sex,
+      goal: current.goal !== savedProfile.goal ? current.goal : next.goal,
+      activity_level: current.activity_level !== savedProfile.activity_level ? current.activity_level : next.activity_level,
+    } : next);
+    setWeight(value => savedProfile && !sameNumber(value, savedProfile.weight_kg) ? value : next.weight_kg?.toString() ?? "");
+    setHeight(value => savedProfile && !sameNumber(value, savedProfile.height_cm) ? value : next.height_cm?.toString() ?? "");
+    setAge(value => savedProfile && !sameNumber(value, savedProfile.age) ? value : next.age?.toString() ?? "");
+    setCalories(value => savedProfile && !sameNumber(value, Math.round(savedProfile.daily_calorie_target)) ? value : String(Math.round(next.daily_calorie_target)));
+    setDesiredWeight(value => savedProfile && !sameNumber(value, savedProfile.weight_goal?.target_weight_kg) ? value : isSetup && next.weight_goal ? String(next.weight_goal.target_weight_kg) : "");
+    setSavedProfile(next);
+  }, [resource.data]);
+
+  function acceptSavedProfile(next: Profile) {
     setProfile(next);
+    setSavedProfile(next);
     setWeight(next.weight_kg?.toString() ?? "");
     setHeight(next.height_cm?.toString() ?? "");
     setAge(next.age?.toString() ?? "");
     setCalories(String(Math.round(next.daily_calorie_target)));
     setDesiredWeight(isSetup && next.weight_goal ? String(next.weight_goal.target_weight_kg) : "");
-  }, [resource.data]);
+  }
+
+  function requestLeave(action: () => void = () => router.dismissTo("/account")) {
+    if (saving.current || leaving.current) return;
+    if (!hasUnsavedChanges) { action(); return; }
+    Keyboard.dismiss();
+    pendingExit.current = action;
+    setExitPrompt(true);
+  }
+
+  function continueEditing() {
+    if (saving.current) return;
+    pendingExit.current = null;
+    setExitPrompt(false);
+  }
+
+  function completeExit() {
+    if (leaving.current) return;
+    const action = pendingExit.current;
+    pendingExit.current = null;
+    leaving.current = true;
+    setExitApproved(true);
+    setExitPrompt(false);
+    disableLeaveGuard();
+    action?.();
+  }
 
   function change(update: () => void) {
     notice.clear();
@@ -104,7 +174,7 @@ export default function ProfileScreen() {
     router.replace("/(tabs)/chat");
   }
 
-  async function save() {
+  async function save(exitAfterSave = false) {
     if (!profile || saving.current) return;
     saving.current = true;
     setBusy(true);
@@ -138,14 +208,19 @@ export default function ProfileScreen() {
       if (effectiveGoal) body.goal = effectiveGoal;
       if (profile.activity_level) body.activity_level = profile.activity_level;
       const next = await api<Profile>("/v1/profile", { method: "PUT", token, json: body });
+      if (!mounted.current || account.current !== token) return;
       resource.setData(next);
+      acceptSavedProfile(next);
       if (isSetup && next.is_complete) await finishSetup();
+      else if (exitAfterSave) completeExit();
       else notice.show(next.is_complete ? "Профиль сохранён" : "Сохранено. Заполните остальные поля профиля.");
     } catch (e) {
-      setError(await apiFailureMessage(e, e instanceof Error ? e.message : "Не удалось сохранить профиль", signOut));
+      if (!mounted.current || account.current !== token) return;
+      const message = await apiFailureMessage(e, e instanceof Error ? e.message : "Не удалось сохранить профиль", signOut);
+      if (mounted.current && account.current === token) setError(message);
     } finally {
       saving.current = false;
-      setBusy(false);
+      if (mounted.current && account.current === token) setBusy(false);
     }
   }
 
@@ -216,7 +291,7 @@ export default function ProfileScreen() {
           <View style={s.setupBrand}><BrandMark size={27} /><Text style={s.setupBrandText}>тарелка</Text></View>
           <Text style={s.setupEyeline}>Знакомство</Text>
         </View> : <View style={s.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Назад" onPress={() => router.dismissTo("/account")} style={s.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Назад" disabled={busy} onPress={() => requestLeave()} style={s.back}>
             <Icon name="left" size={21} />
           </Pressable>
           <Text accessibilityRole="header" style={s.title}>Мой профиль</Text>
@@ -276,7 +351,7 @@ export default function ProfileScreen() {
                     <MetricField label="Возраст" unit="лет" accessibilityLabel="Возраст" value={age} onChangeText={value => change(() => setAge(value))} keyboardType="number-pad" disabled={busy} divided />
                   </View>
                 </View>
-                <Pressable accessibilityRole="button" onPress={() => router.push("/weight")} style={s.recordWeight}><Icon name="plus" size={15} color={colors.accentDark} /><Text style={s.recordWeightText}>Записать новое взвешивание</Text></Pressable>
+                <Pressable accessibilityRole="button" disabled={busy} onPress={() => router.push("/weight")} style={s.recordWeight}><Icon name="plus" size={15} color={colors.accentDark} /><Text style={s.recordWeightText}>Записать новое взвешивание</Text></Pressable>
                 <View style={s.sexRow}>
                   <Text style={s.label}>Пол</Text>
                   <View accessibilityRole="radiogroup" accessibilityLabel="Пол" style={s.sexOptions}>
@@ -289,7 +364,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={s.section}>
                   <Text accessibilityRole="header" style={s.sectionTitle}>Ваша цель</Text>
-                  {profile.weight_goal ? <Pressable accessibilityRole="button" accessibilityLabel="Изменить цель по весу" onPress={() => router.push("/(tabs)/achievements?editGoal=1")} style={s.activity}>
+                  {profile.weight_goal ? <Pressable accessibilityRole="button" accessibilityLabel="Изменить цель по весу" disabled={busy} onPress={() => router.push("/(tabs)/achievements?editGoal=1")} style={s.activity}>
                     <View style={s.activityCopy}><Text style={s.activityTitle}>{profile.weight_goal.direction_label} · {weightNumber(profile.weight_goal.target_weight_kg)} кг</Text><Text style={s.activityHint}>Управление целью в «Прогрессе»</Text></View><Icon name="chevron" size={15} color="#93a598" />
                   </Pressable> : <View accessibilityRole="radiogroup" accessibilityLabel="Цель питания" style={s.goalOptions}>
                     {goals.map(option => {
@@ -321,6 +396,7 @@ export default function ProfileScreen() {
         </View>
         {profile || isSetup ? (
           <View style={[s.footer, isSetup && s.setupFooter]}>
+            {!isSetup && hasUnsavedChanges ? <Text accessibilityLiveRegion="polite" style={s.unsaved}>Есть несохранённые изменения</Text> : null}
             {isSetup ? <View accessibilityLiveRegion="polite" accessibilityLabel="Рассчитанная дневная норма" style={s.setupResult}>
               <View style={s.setupResultHeading}>
                 <Text style={s.setupResultLabel}>Ваша дневная норма</Text>
@@ -361,7 +437,7 @@ export default function ProfileScreen() {
                   <Text style={s.weightSheetUnit}>{metricConfig.unit}</Text>
                 </View>
                 {metricError ? <Text accessibilityLiveRegion="polite" style={s.error}>{metricError}</Text> : null}
-                <Pressable accessibilityRole="button" onPress={applyMetric} style={s.sheetApply}><Text style={s.saveText}>Сохранить</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={applyMetric} style={s.sheetApply}><Text style={s.saveText}>Готово</Text></Pressable>
               </> : null}
               {sheet === "sex" && profile ? <View accessibilityRole="radiogroup" accessibilityLabel="Пол" style={s.activityChoices}>
                 {sexes.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: profile.sex === option.value }} onPress={() => { change(() => setProfile({ ...profile, sex: option.value })); setSheet(null); }} style={[s.activityChoice, profile.sex === option.value && s.goalSelected]}>
@@ -401,6 +477,7 @@ export default function ProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {exitPrompt ? <ProfileLeaveDialog busy={busy} error={error} onSave={() => void save(true)} onContinue={continueEditing} onDiscard={() => { if (!saving.current) completeExit(); }} /> : null}
     </SafeAreaView>
   );
 }
@@ -528,6 +605,7 @@ const s = StyleSheet.create({
   choiceTitle: { flex: 1 },
   activityHint: { fontSize: 11, lineHeight: 15, color: colors.muted },
   footer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: "#f8faf6" },
+  unsaved: { fontSize: 12, lineHeight: 18, color: "#826028", textAlign: "center", marginBottom: 10 },
   save: { width: "100%", maxWidth: 480, alignSelf: "center", minHeight: 48, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.accent, borderRadius: 14 },
   saveText: { fontSize: 13, lineHeight: 19, fontWeight: "600", color: "white", textAlign: "center" },
   sheetHost: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "#182c2355" },

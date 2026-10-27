@@ -120,6 +120,39 @@ def favorites_keyboard(favorites: list) -> InlineKeyboardMarkup:
         ]
         for favorite in favorites
     ]
+    if len(favorites) > 1:
+        rows.append([InlineKeyboardButton(text="↕️ Изменить порядок", callback_data="favorites_order:start")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+FAVORITES_ORDER_PAGE_SIZE = 8
+
+
+def favorites_order_keyboard(favorites: list, *, nonce: str, version: int, page: int) -> InlineKeyboardMarkup:
+    prefix = f"favorites_order:{nonce}:{version}:"
+    rows = []
+    start = page * FAVORITES_ORDER_PAGE_SIZE
+    for index in range(start, min(start + FAVORITES_ORDER_PAGE_SIZE, len(favorites))):
+        item = favorites[index]
+        emoji = {"meal": "🍽", "water": "💧", "activity": "🏃"}[item.entry_type.value]
+        rows.append([
+            InlineKeyboardButton(text=f"{index + 1}. {emoji} {item.title[:28]}", callback_data=prefix + "hint"),
+            InlineKeyboardButton(text="↑" if index else "·", callback_data=prefix + (f"up:{item.id}" if index else "hint")),
+            InlineKeyboardButton(text="↓" if index < len(favorites) - 1 else "·", callback_data=prefix + (f"down:{item.id}" if index < len(favorites) - 1 else "hint")),
+        ])
+    pages = (len(favorites) + FAVORITES_ORDER_PAGE_SIZE - 1) // FAVORITES_ORDER_PAGE_SIZE
+    if pages > 1:
+        navigation = []
+        if page:
+            navigation.append(InlineKeyboardButton(text="‹ Назад", callback_data=prefix + f"page:{page - 1}"))
+        navigation.append(InlineKeyboardButton(text=f"{page + 1} / {pages}", callback_data=prefix + "hint"))
+        if page + 1 < pages:
+            navigation.append(InlineKeyboardButton(text="Дальше ›", callback_data=prefix + f"page:{page + 1}"))
+        rows.append(navigation)
+    rows.extend([
+        [InlineKeyboardButton(text="✓ Готово", callback_data=prefix + "save")],
+        [InlineKeyboardButton(text="Отмена", callback_data=prefix + "cancel")],
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

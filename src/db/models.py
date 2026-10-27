@@ -502,6 +502,7 @@ class DailyUserActivity(Base):
 class FavoriteMeal(Base):
     __tablename__ = "favorite_meals"
     __table_args__ = (
+        Index("ix_favorite_meals_user_order", "user_id", "sort_order"),
         Index("uq_favorite_meals_user_source_entry", "user_id", "source_entry_id", unique=True,
               postgresql_where=text("source_entry_id IS NOT NULL"),
               sqlite_where=text("source_entry_id IS NOT NULL")),
@@ -519,6 +520,7 @@ class FavoriteMeal(Base):
         default=EntryType.MEAL,
     )
     title: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     calories: Mapped[float] = mapped_column(Float)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     volume_ml: Mapped[float | None] = mapped_column(Float, nullable=True)

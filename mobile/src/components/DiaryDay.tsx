@@ -19,7 +19,7 @@ const macros = [
 ] as const;
 const additional = [
   { key: "fiber_g", label: "Клетчатка", icon: "leaf", color: "#557645" },
-  { key: "sugar_g", label: "Сахар", icon: "cube", color: "#a17848" },
+  { key: "sugar_g", label: "Сахар в продуктах", icon: "cube", color: "#a17848" },
 ] as const;
 
 const decimalGrams = (value: number) => `${value.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} г`;
@@ -126,7 +126,6 @@ export function DiaryEnergy({ day }: { day: DayView }) {
 }
 
 export function DiaryNutrients({ day }: { day: DayView }) {
-  const details = additional.map((nutrient) => ({ ...nutrient, ...dayNutrient(day.entries, nutrient.key), target: day.nutrient_targets.micronutrients[nutrient.key] }));
   return (
     <View style={s.nutrientCard}>
       <View style={s.macros}>
@@ -141,19 +140,27 @@ export function DiaryNutrients({ day }: { day: DayView }) {
           );
         })}
       </View>
+
+    </View>
+  );
+}
+
+export function DiaryAdditionalNutrients({ day }: { day: DayView }) {
+  const details = additional.map((nutrient) => ({ ...nutrient, ...dayNutrient(day.entries, nutrient.key), target: nutrient.key === "sugar_g" ? 0 : day.nutrient_targets.micronutrients[nutrient.key] }));
+  return <View style={s.nutrientCard}>
       <View style={s.additional}>
         {details.map(({ key, label, icon, color, value, target, partial }) => (
-          <View key={key} style={s.additionalItem} accessible accessibilityLabel={`${label}: ${value === null ? "нет данных" : decimalGrams(value)}${target > 0 ? `, ${key === "sugar_g" ? "дневной ориентир до" : "дневная цель"} ${decimalGrams(target)}` : ""}${partial ? ", данные неполные" : ""}`}>
+          <View key={key} style={s.additionalItem} accessible accessibilityLabel={`${label}: ${value === null ? "нет данных" : decimalGrams(value)}${target > 0 ? `, дневная цель ${decimalGrams(target)}` : ""}${partial ? ", данные неполные" : ""}`}>
             <View style={s.nutrientHeading}><Icon name={icon} size={15} color={color} /><Text style={s.nutrientLabel}>{label}</Text></View>
             <Text style={s.additionalAmount}>{value === null ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}<Text style={s.additionalTarget}>{target > 0 ? ` / ${decimalGrams(target)}` : " г"}</Text></Text>
-            <View style={s.track}><View style={[s.fill, { width: `${diaryProgress(value ?? 0, target) * 100}%`, backgroundColor: color }]} /></View>
+            {target > 0 ? <View style={s.track}><View style={[s.fill, { width: `${diaryProgress(value ?? 0, target) * 100}%`, backgroundColor: color }]} /></View> : null}
             {value === null ? <Text style={s.nutrientHint}>Нет данных</Text> : null}
+            {key === "sugar_g" ? <Text style={s.nutrientHint}>Весь сахар по записям еды. Добавленный сахар отдельно не определяется.</Text> : null}
           </View>
         ))}
       </View>
       {details.filter((item) => item.partial).map((item) => <Text key={item.key} style={s.partial}>Неполный итог ({item.label.toLowerCase()}): данные есть в {item.recorded} из {item.meals} записей еды.</Text>)}
-    </View>
-  );
+  </View>;
 }
 
 export function DiaryHabits({ day }: { day: DayView }) {
@@ -161,7 +168,7 @@ export function DiaryHabits({ day }: { day: DayView }) {
   const minutes = activities.reduce((sum, entry) => sum + (entry.duration_minutes ?? 0), 0);
   return <View style={s.habits}>
     <View style={s.habit}><Icon name="drop" size={21} color="#3776a2" /><View style={s.habitText}><Text style={s.habitLabel}>Вода</Text><Text style={s.habitAmount}>{ml(day.balance.water_ml ?? 0)}</Text></View></View>
-    <View style={s.habit}><Icon name="walk" size={21} color="#946821" /><View style={s.habitText}><Text style={s.habitLabel}>Активность</Text><Text style={s.habitAmount}>{activities.length ? `${minutes ? `${minutes} мин · ` : ""}${kcal(day.balance.activity_bonus)}` : "Пока нет записей"}</Text></View></View>
+    <View style={s.habit}><Icon name="walk" size={21} color="#946821" /><View style={s.habitText}><Text style={s.habitLabel}>Активность в дневнике</Text><Text style={s.habitAmount}>{activities.length ? `${minutes ? `${minutes} мин · ` : ""}${kcal(day.balance.activity_bonus)}` : "Пока нет записей"}</Text></View></View>
   </View>;
 }
 
@@ -174,7 +181,7 @@ export function DiaryChronicle({ entries, onFavoriteChange }: { entries: Entry[]
   const rows = diaryChronicle(entries);
   return (
     <View style={s.chronicle}>
-      <View style={s.chronicleHeading}><Text accessibilityRole="header" style={s.chronicleTitle}>Хроника дня</Text><Pressable accessibilityRole="button" accessibilityLabel="Добавить запись в чате" onPress={() => router.push("/(tabs)/chat")} style={s.addButton}><Icon name="plus" size={15} color={colors.accentDark} /><Text style={s.link}>В чат</Text></Pressable></View>
+      <View style={s.chronicleHeading}><Text accessibilityRole="header" style={s.chronicleTitle}>Хроника дня</Text></View>
       {!rows.length ? <View style={s.empty}><Text style={s.emptyTitle}>День начинается с первой записи</Text><Text style={s.muted}>Отправьте фото еды, напишите про воду или прогулку в чате.</Text></View> : null}
       {rows.map((entry, index) => {
         const water = entry.entry_type === "water", activity = entry.entry_type === "activity";
@@ -192,7 +199,7 @@ export function DiaryChronicle({ entries, onFavoriteChange }: { entries: Entry[]
           </View>
         </View>;
       })}
-      {rows.length > 0 && !rows.some((entry) => entry.entry_type === "activity") ? <Text style={s.activityHint}>Активность пока не записана. Добавьте прогулку или тренировку в чате.</Text> : null}
+      {rows.length > 0 && !rows.some((entry) => entry.entry_type === "activity") ? <Text style={s.activityHint}>В дневнике пока нет прогулок и тренировок. Их можно добавить в чате.</Text> : null}
     </View>
   );
 }
@@ -236,7 +243,7 @@ const s = StyleSheet.create({
   macroAmount: { color: colors.text, fontSize: 12, lineHeight: 17, fontWeight: "600", fontVariant: ["tabular-nums"] },
   track: { height: 4, borderRadius: 3, backgroundColor: "#edf1e8", overflow: "hidden" },
   fill: { height: "100%", borderRadius: 3 },
-  additional: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, flexDirection: "row", gap: 16 },
+  additional: { flexDirection: "row", gap: 16 },
   additionalItem: { flex: 1, minWidth: 0, gap: 6 },
   nutrientHeading: { flexDirection: "row", alignItems: "center", gap: 5 },
   additionalAmount: { fontSize: 18, lineHeight: 24, color: colors.text, fontWeight: "600", fontVariant: ["tabular-nums"] },
@@ -251,7 +258,6 @@ const s = StyleSheet.create({
   chronicle: { gap: 0, marginTop: 2 },
   chronicleHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 },
   chronicleTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
-  addButton: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 8 },
   chronicleRow: { flexDirection: "row", alignItems: "stretch", minHeight: 82 },
   time: { width: 39, paddingTop: 27, fontSize: 10, color: colors.muted },
   rail: { width: 18, alignItems: "center", justifyContent: "center", paddingBottom: 10 },

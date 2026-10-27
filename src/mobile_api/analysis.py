@@ -6,6 +6,7 @@ from datetime import date
 import httpx
 from aiogram import Bot
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ai_analyzer.products import BARCODE_FAILURES
@@ -22,7 +23,7 @@ from src.bot.services.request_limit import (
 )
 from src.db.models import DIARY_ENTRY_TYPES, AnalysisType, EntryType, User
 from src.db.repository import UserRepository
-from src.mobile_api.serializers import balance_out, entry_out
+from src.mobile_api.serializers import balance_out, entry_out, favorite_out
 from src.mobile_api.request_limits import request_limit_error
 from src.shared.schemas import AnalysisResult, MANUAL_WEIGHT_ENTRY
 
@@ -91,6 +92,49 @@ class AnalysisService:
         self.repo = UserRepository(session)
         self.entries = EntryService(session)
         self.ai = ai_client or AIAnalyzerClient()
+
+    async def correct_favorite(self, user: User, favorite_id: int, text: str) -> dict:
+        # In the worker this lock lasts until the template and job result commit.
+        # It also prevents deletion while AI is calculating the new template.
+        await self.session.execute(select(User.id).where(User.id == user.id).with_for_update())
+        favorite = await self.repo.get_favorite(favorite_id, user.id)
+        if favorite is None:
+            raise HTTPException(404, detail="Запись в избранном не найдена")
+        mode = favorite.entry_type.value
+        previous = AnalysisResult(
+            type=mode, title=favorite.title, total_calories=favorite.calories,
+            protein_g=favorite.protein_g, fat_g=favorite.fat_g, carbs_g=favorite.carbs_g,
+            micronutrients=favorite.micronutrients or {}, items=favorite.items or [],
+            duration_minutes=favorite.duration_minutes, volume_ml=favorite.volume_ml,
+        ).model_dump()
+        grant = await consume_request_grant(self.repo, user, RequestKind.TEXT)
+        if grant is None:
+            raise await request_limit_error(self.repo, user, RequestKind.TEXT)
+        try:
+            _, result = await self.ai.analyze_text(mode=mode, text=text, previous_result=previous)
+            if result.type == "unknown" or result.type != mode:
+                await refund_request(self.repo, user, grant)
+                return {
+                    "status": "unknown",
+                    "message": unknown_message(result) if result.type == "unknown" else "Уточните порцию или состав этой записи избранного.",
+                }
+            favorite.title = result.title or favorite.title
+            favorite.calories = 0 if mode == "water" else result.total_calories
+            favorite.protein_g = result.protein_g if mode == "meal" else 0
+            favorite.fat_g = result.fat_g if mode == "meal" else 0
+            favorite.carbs_g = result.carbs_g if mode == "meal" else 0
+            favorite.micronutrients = result.micronutrients if mode == "meal" else None
+            favorite.items = [item.model_dump() for item in result.items] if mode == "meal" else None
+            favorite.volume_ml = result.volume_ml if mode == "water" else None
+            favorite.duration_minutes = result.duration_minutes if mode == "activity" else None
+            await self.session.commit()
+        except httpx.HTTPError as exc:
+            await refund_request(self.repo, user, grant)
+            raise HTTPException(503, ANALYSIS_UNAVAILABLE) from exc
+        except Exception:
+            await refund_request(self.repo, user, grant)
+            raise
+        return {"status": "saved", "favorite": favorite_out(favorite)}
 
     async def analyze(
         self,

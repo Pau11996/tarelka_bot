@@ -6,7 +6,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
 function auth(platform) {
-  const slots = [], effects = [], sessions = [];
+  const slots = [], effects = [], sessions = [], outboxSessions = [];
   let cursor = 0, stored = "restored-token";
   const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/auth.tsx"), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -33,13 +33,14 @@ function auth(platform) {
     if (name === "./config") return { API_URL: "https://api.example" };
     if (name === "./authStorage") return { authStorageKeys: () => ({ token: "token-key" }) };
     if (name === "./privateImage") return { setPrivateImageSession: async (token) => sessions.push(token) };
+    if (name === "./outbox/session") return { setChatOutboxSession: async (token) => outboxSessions.push(token) };
     if (name === "./health/service") return { pauseHealthSync: async () => {} };
     if (name === "./notifications") return { unregisterPush: async () => {} };
     throw new Error(name);
   }};
   vm.runInNewContext(code, context);
   const render = () => { cursor = 0; return context.exports.AuthProvider({ children: null }).props.value; };
-  return { render, effects, sessions, stored: () => stored };
+  return { render, effects, sessions, outboxSessions, stored: () => stored };
 }
 
 for (const platform of ["android", "web"]) {
@@ -59,6 +60,7 @@ for (const platform of ["android", "web"]) {
     assert.equal(app.render().token, null);
     assert.equal(app.stored(), null);
     assert.deepEqual(app.sessions, ["restored-token", "new-token", null]);
+    assert.deepEqual(app.outboxSessions, ["restored-token", "new-token", null]);
     cleanup();
   });
 }

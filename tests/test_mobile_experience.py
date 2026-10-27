@@ -703,3 +703,88 @@ async def test_expired_subscription_cannot_read_review_via_job_or_chat(setup):
         )
     ).status_code == 409
     assert not (await client.get("/v1/chat", headers=h)).json()["operations"]
+
+
+async def test_multiple_photo_jobs_finish_without_chat_polling_and_keep_their_photos(setup, monkeypatch):
+    client, factory, headers, uid = setup
+    calls = []
+
+    async def analyze(self, user, **kwargs):
+        images = [await image.read() for image in kwargs["image"]]
+        calls.append((kwargs["text"], images))
+        entry = await self.repo.create_entry(
+            user_id=user.id, entry_date=date.today(), entry_type=EntryType.MEAL,
+            title=kwargs["text"], calories=100 * len(images),
+        )
+        return {"status": "saved", "entry": {"id": entry.id}, "balance": {}}
+
+    monkeypatch.setattr(AnalysisService, "analyze", analyze)
+    groups = [("First", [b"first-a", b"first-b"]), ("Second", [b"second"]), ("Third", [b"third"])]
+    jobs = []
+    for index, (caption, images) in enumerate(groups):
+        response = await client.post(
+            "/v1/operations", headers=headers,
+            data={"request_key": f"batch-photo-{index}", "text": caption},
+            files=[("image", (f"{i}.jpg", image, "image/jpeg")) for i, image in enumerate(images)],
+        )
+        assert response.status_code == 202
+        jobs.append(response.json())
+    assert not calls
+    # No requests from the app while the independent worker drains the durable queue.
+    for _ in jobs:
+        assert await worker.process_one()
+    assert not await worker.process_one()
+    assert calls == groups
+    history = (await client.get("/v1/chat", headers=headers)).json()
+    for index, job in enumerate(jobs):
+        result = next(op for op in history["operations"] if op["id"] == job["id"])
+        assert result["status"] == "done"
+        entry = next(entry for entry in history["entries"] if entry["id"] == result["entry_id"])
+        assert entry["title"] == groups[index][0]
+        media = [media for media in history["media"] if media["operation_id"] == job["id"]]
+        actual = [(await client.get(media["url"], headers=headers)).content for media in media]
+        assert sorted(actual) == sorted(groups[index][1])
+        # Simulate a lost receipt and restored outbox after returning to the app.
+        replay = await client.post("/v1/operations", headers=headers, data={"request_key": job["request_key"], "text": groups[index][0]})
+        assert replay.json()["id"] == job["id"]
+        assert replay.json()["status"] == "done"
+    assert not await worker.process_one()
+    assert len(calls) == 3
+    async with factory() as session:
+        assert len(await UserRepository(session).get_entries_for_date(uid, date.today())) == 3
+
+
+async def test_failed_and_limited_jobs_do_not_stop_later_queued_messages(setup, monkeypatch):
+    from fastapi import HTTPException
+
+    client, _, headers, _ = setup
+    calls = []
+    limit = {"code": "daily_limit_reached", "kind": "photo", "message": "Достигнут дневной лимит фото"}
+
+    async def analyze(self, user, **kwargs):
+        text = kwargs["text"]
+        calls.append(text)
+        if text == "failure":
+            raise RuntimeError("AI unavailable")
+        if text == "limit":
+            raise HTTPException(429, limit)
+        entry = await self.repo.create_entry(
+            user_id=user.id, entry_date=date.today(), entry_type=EntryType.MEAL,
+            title=text, calories=200,
+        )
+        return {"status": "saved", "entry": {"id": entry.id}, "balance": {}}
+
+    monkeypatch.setattr(AnalysisService, "analyze", analyze)
+    jobs = []
+    for text in ["failure", "limit", "success"]:
+        response = await client.post("/v1/operations", headers=headers, data={"request_key": f"isolated-{text}", "text": text})
+        assert response.status_code == 202
+        jobs.append(response.json())
+    for _ in jobs:
+        assert await worker.process_one()
+    assert calls == ["failure", "limit", "success"]
+    results = [(await client.get(f"/v1/operations/{job['id']}", headers=headers)).json() for job in jobs]
+    assert [result["status"] for result in results] == ["failed", "failed", "done"]
+    assert results[0]["limit_reached"] is None
+    assert results[1]["limit_reached"] == limit
+    assert results[2]["entry_id"] is not None

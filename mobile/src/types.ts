@@ -120,6 +120,7 @@ export type Favorite = {
   micronutrients?: Record<string, number> | null;
   items?: NutrientItem[] | null;
   created_at?: string | null;
+  media?: EntryDetails["media"];
 };
 
 export type Profile = {

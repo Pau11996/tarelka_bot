@@ -50,6 +50,7 @@ function app() {
       enqueueMessage: message => { submissions.push(message); outbox.items = [...outbox.items, { ...message, state: "uploading" }]; outbox.anchors[message.requestKey] = message.createdAt; },
       reconcileOutbox: operations => { outbox.items = outbox.items.filter(item => !operations.some(op => op.request_key === item.requestKey && op.status === "done")); },
       reopenOutbox() {}, retryMessage() {}, observeOutbox() {},
+      dismissChatFailure: key => { outbox.dismissedFailures = [...(outbox.dismissedFailures ?? []), key]; },
     };
     if (name.endsWith("/outbox/history")) return { recoverOutboxHistory: async chat => ({ chat, observed: [], recovered: false }) };
     if (name.endsWith("/outbox/poller")) return { ChatPoller: class {
@@ -128,4 +129,37 @@ test("a queued correction disables only its entry; the composer and another entr
   screen.input().props.onChangeText("another meal"); screen.render(); screen.send().props.onPress(); screen.render();
   assert.equal(screen.submissions.length, 2);
   assert.equal(screen.submissions[0].entryId, 1); assert.equal(screen.submissions[1].entryId, undefined);
+});
+
+test("microphone startup errors are visible while the voice sheet is closed", async t => {
+  const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick();
+  screen.voice.error = "Не удалось начать запись";
+  screen.render();
+  assert.equal(screen.find("VoiceSheet"), undefined);
+  assert.ok(screen.nodes().some(node => node.type === "Text" && node.props.accessibilityRole === "alert"
+    && node.props.children === screen.voice.error));
+  assert.ok(screen.find("IconButton", "Записать голосовое сообщение"));
+});
+
+test("closing local and server error cards hides the matching exchange after history refresh", async t => {
+  const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();
+  screen.input().props.onChangeText("local failure"); screen.render(); screen.send().props.onPress();
+  screen.outbox.items[0].state = "failed";
+  screen.render();
+  const card = row => {
+    const list = screen.find("FlatList");
+    return screen.nodes(list.props.renderItem({ item: row, index: screen.rows().indexOf(row) }))
+      .find(node => node.type === "AnalysisFailureCard");
+  };
+  card(screen.rows()[0]).props.onDismiss(); screen.render();
+  assert.equal(screen.rows().length, 0);
+  const history = { entries: [], media: [], notices: [], next_before: null, operations: [
+    { id: "op-local", kind: "analyze", status: "failed", request_key: screen.submissions[0].requestKey, created_at: screen.submissions[0].createdAt },
+    { id: "op-other", kind: "analyze", status: "failed", request_key: "other", created_at: "2026-10-28T12:00:00Z" },
+  ] };
+  await screen.refresh(history);
+  assert.equal(screen.rows().length, 1);
+  card(screen.rows()[0]).props.onDismiss(); screen.render();
+  await screen.refresh(structuredClone(history));
+  assert.equal(screen.rows().length, 0);
 });

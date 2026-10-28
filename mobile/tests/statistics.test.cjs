@@ -41,6 +41,7 @@ function harness(paid = true) {
       if (name === "../../components/DiaryDay") return Object.fromEntries(["DiaryCalendar", "DiaryChronicle", "DiaryEnergy", "DiaryHabits", "DiaryNutrients", "StreakBadge"].map(name => [name, name]));
       if (name === "../../components/DiaryStatistics") return { DiaryStatistics: "DiaryStatistics" };
       if (name === "../../components/DiaryDetails") return { DiaryDetails: "DiaryDetails" };
+      if (name === "../../components/DailyNormShare") return { DailyNormShare: "DailyNormShare" };
       if (name === "../../components/DeviceHealth") return { DeviceHealthDay: "DeviceHealthDay" };
       if (name === "../../components/Screen") return { State: "State" };
       if (name === "../../hooks/useResource") return { useResource: () => ({ data: { date: "2026-10-23", balance: { streak: 3 }, entries: [], nutrient_targets: {} }, loading: false, error: null, async load() {}, setData() {} }) };

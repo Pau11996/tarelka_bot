@@ -49,7 +49,7 @@ class OfflineTelegram(BaseSession):
             return True
         if name == "editMessageReplyMarkup":
             return True
-        assert name in {"sendMessage", "editMessageText", "sendPhoto", "sendInvoice"}, name
+        assert name in {"sendMessage", "editMessageText", "sendPhoto", "sendDocument", "sendInvoice"}, name
         markup = getattr(method, "reply_markup", None)
         sent = Message(message_id=method.message_id if name == "editMessageText" else 10000 + len(self.messages), date=datetime.now(timezone.utc),
                        chat=Chat(id=method.chat_id, type="private"),
@@ -109,6 +109,31 @@ async def actor(release_bot, monkeypatch):
     await send("/start")
     return SimpleNamespace(**vars(r), uid=uid, state=state, ai=ai, send=send, click=click, rows=rows,
                            last=lambda: next(message for message in reversed(r.transport.messages) if message.chat.id == uid))
+
+
+async def test_today_exports_a_shareable_photo_and_original_png_without_ai_usage(actor):
+    await actor.send("/today")
+    button = actor.last().reply_markup.inline_keyboard[0][0]
+    assert button.text == "↗ Поделиться нормой"
+    await actor.click(button.callback_data)
+    card = actor.last()
+    assert "Стартовый ориентир" in card.text
+    download = card.reply_markup.inline_keyboard[0][0]
+    photo = next(call for call in reversed(actor.transport.calls) if call.__api_method__ == "sendPhoto")
+    async with actor.factory() as session:
+        repo = UserRepository(session)
+        user = await repo.get_user_by_telegram_id(actor.uid)
+        person = await repo.get_profile(user.id)
+        person.daily_calorie_target = 1800
+        await session.commit()
+    await actor.click(download.callback_data)
+    document = next(call for call in reversed(actor.transport.calls) if call.__api_method__ == "sendDocument")
+    assert document.document.data == photo.photo.data
+    assert document.document.filename == "tarelka-daily-norm.png"
+    actor.ai.analyze_text.assert_not_awaited()
+    actor.ai.analyze_image.assert_not_awaited()
+    async with actor.factory() as session:
+        assert await UserRepository(session).get_daily_usage_counts(user.id, local_today(user.timezone)) == (0, 0, 0, 0)
 
 
 @pytest.mark.parametrize("state", [ProfileStates.weight, ProfileStates.height, ProfileStates.age,

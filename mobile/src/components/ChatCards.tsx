@@ -204,6 +204,7 @@ export function AnalysisFailureCard({
   time,
   onLimit,
   onRetry,
+  onDismiss,
   disabled,
 }: {
   message: string;
@@ -211,6 +212,7 @@ export function AnalysisFailureCard({
   time?: string;
   onLimit?: () => void;
   onRetry?: () => void;
+  onDismiss?: () => void;
   disabled?: boolean;
 }) {
   return (
@@ -218,9 +220,15 @@ export function AnalysisFailureCard({
       <AssistantLabel />
       <View style={[s.card, s.failureCard]}>
         <View style={[s.cardBody, s.failureBody]}>
-          <View style={s.overview}>
+          <View style={[s.overview, s.failureOverview]}>
             {photos[0] ? <PhotoPreview uri={photos[0].uri} previewUri={photos[0].previewUri} style={s.photo} /> : null}
-            <Text accessibilityRole="alert" style={[s.title, s.failureMessage]}>{message}</Text>
+            <Text accessibilityRole="alert" style={s.failureMessage}>{message}</Text>
+            {onDismiss ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Скрыть сообщение об ошибке"
+                onPress={onDismiss} style={({ pressed }) => [s.failureClose, pressed && { opacity: 0.5 }]}>
+                <Icon name="close" size={16} color="#82776c" />
+              </Pressable>
+            ) : null}
           </View>
           <AdditionalPhotos photos={photos} />
         </View>
@@ -313,11 +321,13 @@ const s = StyleSheet.create({
   overviewText: { flex: 1, gap: 3 },
   photo: { width: 56, height: 56, borderRadius: 10 },
   additionalPhotos: { gap: 8 },
-  failureCard: { backgroundColor: colors.dangerSoft, borderColor: "#f0c5c0" },
+  failureCard: { backgroundColor: "#f8f6f2", borderColor: "#e8e2d9" },
   failureBody: { paddingTop: 12 },
-  failureMessage: { flex: 1, color: colors.danger, fontSize: 14, lineHeight: 20 },
-  failureActions: { borderTopColor: "#f0c5c0", flexWrap: "wrap" },
-  failureLink: { color: colors.danger },
+  failureOverview: { alignItems: "flex-start" },
+  failureMessage: { flex: 1, color: "#73665b", fontSize: 14, lineHeight: 21, fontWeight: "400" },
+  failureClose: { width: 44, height: 44, marginTop: -8, marginRight: -8, marginLeft: -4, alignItems: "center", justifyContent: "center", borderRadius: 22 },
+  failureActions: { borderTopColor: "#e8e2d9", flexWrap: "wrap" },
+  failureLink: { color: "#73665b", fontWeight: "500" },
   between: {
     flexDirection: "row",
     alignItems: "center",

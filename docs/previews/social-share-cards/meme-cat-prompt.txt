@@ -1,0 +1,9 @@
+Д6 «Это на весь день?!» — источник изображения
+
+Инструмент: встроенный imagegen, прозрачный фон.
+Готовая карточка: exports/day-06.jpg (1080 × 216).
+Исходник кота: assets/meme-cat.png. Оригинальный сгенерированный персонаж.
+Данные КБЖУ демонстрационные. Только дизайн-макет.
+
+Точный промпт:
+Use case: photorealistic-natural. Asset type: transparent cutout of an original funny reaction cat for a compact food diary social share card. Primary request: a very expressive ginger tabby cat, facing the camera, head and upper chest only, wide open round greenish eyes, small slightly open mouth as if saying 'wait, what?', ears upright, comically surprised but not scared or distressed. Style: realistic candid internet-cat photograph, detailed ginger fur, charming slightly goofy expression, natural soft daylight, crisp enough to read as a small sticker. Composition: square canvas, the complete head including both ears entirely visible with comfortable 8% margin, face centered, upper chest at bottom edge. Background: truly transparent alpha, isolated clean cutout with natural fur edges. No text, no captions, no collar, no props, no food, no logo, no frame, no drawn white sticker outline. Original generic cat, not a copy of any specific famous meme photo.

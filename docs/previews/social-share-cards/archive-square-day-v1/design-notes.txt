@@ -1,0 +1,19 @@
+ТАРЕЛКА — концепции карточек для соцсетей
+28 октября 2026
+
+10 макетов: Д1–Д5 — итоги дня; Б1–Б3 — блюда; Б4–Б5 — товары.
+Формат: 1080 × 1080, JPEG. Интерфейс приложения не изменён.
+Все значения демонстрационные и не являются оценкой изображённой еды.
+День: 1650 / 2100 ккал, осталось 450 ккал; Б100 / Ж50 / У200 г.
+Б1: паста с креветками, 320 г, 520 ккал, Б32 / Ж16 / У62 г.
+Б2: йогурт с ягодами и гранолой, 280 г, 365 ккал, Б18 / Ж13 / У44 г.
+Б3: оладьи с вишней, 250 г, 410 ккал, Б12 / Ж14 / У59 г.
+Б4–Б5: условный греческий йогурт 2%, 170 г, 124 ккал, Б17 / Ж3,4 / У6,3 г.
+
+Композиции, графика и типографика: отдельные HTML/CSS-макеты.
+Логотип: существующий BrandMark приложения. Шрифты: Liberation Sans / Serif.
+Фото блюд: существующие материалы проекта, файлы из mobile/assets и promo.
+Фото упаковки: новый вымышленный товар; встроенный инструмент imagegen, не CLI.
+Точный промпт генерации упаковки:
+
+Use case: product-mockup. Create a single premium photorealistic product photography asset for a food diary social share design concept. A small 170g cylindrical Greek yogurt cup, white paper/plastic cup with simple sage-green typography and an olive green foil lid, standing upright, slight 3/4 angle showing front. Generic fictional unbranded packaging. Exact clean Russian package text, centered: 'ГРЕЧЕСКИЙ' then 'ЙОГУРТ' then small 'БЕЗ ДОБАВОК' then '2%' and '170 г'. Tiny minimal leaf symbol only, no company names or logos. Entire cup visible with generous 15% margins, soft natural studio light, gently directional shadow. Isolated on a solid warm ivory background #f4f1e8. Square composition, crisp professional editorial still life, minimal, appetizing, realistic materials. No spoons, no berries, no hands, no other objects, no additional text outside packaging.

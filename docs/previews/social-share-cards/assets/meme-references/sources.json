@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cat-cake",
+    "animal": "Кот",
+    "name": "Торт меняет всё",
+    "image": "https://i.imgflip.com/2s5ct6.jpg",
+    "source": "https://imgflip.com/i/2s5ct6",
+    "site": "Imgflip",
+    "caption": "Я больше не могу. А, вы про торт?",
+    "fit": "Выразительная поза: удобно оставить кота слева от КБЖУ."
+  },
+  {
+    "id": "cat-fridge",
+    "animal": "Кот",
+    "name": "Перекус после ужина",
+    "image": "https://i.chzbgr.com/full/10616530176/h6D1420B2/looking-little-snack-after-eating-full-meal-zach-mcclintic-cream",
+    "source": "https://cheezburger.com/44738309/a-fancy-feast-of-24-feline-feel-goods-to-browse-on-a-cozy-saturday-morning-march-21-2026",
+    "site": "Cheezburger",
+    "caption": "Норму съел. Теперь бы перекусить.",
+    "fit": "Сюжет про холодильник; лучше работает целой фотографией."
+  },
+  {
+    "id": "cat-bowls",
+    "animal": "Кот",
+    "name": "В этом доме нечего есть",
+    "image": "https://i.chzbgr.com/full/10523729152/hE119B37B/there-is-nothing-eat-this-house",
+    "source": "https://cheezburger.com/41264133/20-foodie-feline-memes-for-cat-pawrents-who-cant-eat-without-being-watched",
+    "site": "Cheezburger",
+    "caption": "Пять мисок. Ноль подходящих вариантов.",
+    "fit": "Смешная ситуация; миски важны для смысла мема."
+  },
+  {
+    "id": "dog-chonk",
+    "animal": "Собака",
+    "name": "Пёс и его плюшевая версия",
+    "image": "https://i.imgflip.com/54ljq7.jpg",
+    "source": "https://imgflip.com/i/54ljq7",
+    "site": "Imgflip",
+    "caption": "Это не лишнее. Это запас на потом.",
+    "fit": "Круглый силуэт хорошо узнаётся даже маленьким."
+  },
+  {
+    "id": "dog-dessert",
+    "animal": "Собака",
+    "name": "Для десерта место найдётся",
+    "image": "https://images-cdn.9gag.com/photo/aAeyn0o_700b.jpg",
+    "source": "https://9gag.com/gag/aAeyn0o",
+    "site": "9GAG",
+    "caption": "Я сыт. Но десерт — отдельный вопрос.",
+    "fit": "Взгляд назад хорошо передаёт реакцию на еду."
+  },
+  {
+    "id": "dog-cakes",
+    "animal": "Собака",
+    "name": "Ещё тортика!",
+    "image": "https://i.imgflip.com/3zqhar.jpg",
+    "source": "https://imgflip.com/i/3zqhar",
+    "site": "Imgflip",
+    "caption": "Моя дневная норма: ещё.",
+    "fit": "Самая гротескная морда; для более абсурдного юмора."
+  }
+]

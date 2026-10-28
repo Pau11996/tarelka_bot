@@ -55,6 +55,7 @@ export function enqueueMessage(input: OutboxInput) {
   queue.enqueue(input);
 }
 export function retryMessage(key: string) { queue?.retry(key); }
+export function dismissChatFailure(key: string) { queue?.dismissFailure(key); }
 export function reopenOutbox() { return queue?.initialize(); }
 export function reconcileOutbox(operations: Operation[], entryIds: number[]) { queue?.reconcile(operations, entryIds); }
 export function observeOutbox(operations: Operation[]) { queue?.observe(operations); }

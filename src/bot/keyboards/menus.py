@@ -166,6 +166,18 @@ def statistics_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def daily_norm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="↗ Поделиться нормой", callback_data="share:norm"),
+    ]])
+
+
+def daily_norm_download_keyboard(callback_data: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📎 Скачать PNG", callback_data=callback_data),
+    ]])
+
+
 def coach_refresh_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

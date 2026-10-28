@@ -131,6 +131,21 @@ test("read failure cannot overwrite a saved queue; reopening retries the read", 
   assert.throws(() => queue.enqueue(message("one")), /загружается/);
   fail = false; await queue.initialize(); assert.equal(queue.getSnapshot().ready, true);
 });
+
+test("dismissed local and server failures survive restart and retry can show a new failure", async t => {
+  const disk = storage();
+  const queue = await setup(t, async () => { throw Error("offline"); }, disk);
+  queue.enqueue(message("local")); await tick();
+  queue.dismissFailure("local"); queue.dismissFailure("server"); queue.dismissFailure("local");
+  await tick();
+  assert.deepEqual(disk.saved().dismissedFailures, ["local", "server"]);
+  const restored = await setup(t, async () => { throw Error("offline"); }, storage(disk.saved()));
+  assert.deepEqual(Array.from(restored.getSnapshot().dismissedFailures), ["local", "server"]);
+  assert.equal(restored.getSnapshot().items[0].state, "failed");
+  restored.retry("local"); await tick();
+  assert.deepEqual(Array.from(restored.getSnapshot().dismissedFailures), ["server"]);
+  assert.equal(restored.getSnapshot().items[0].state, "failed");
+});
 test("one poll loop coalesces wakeups, pauses in background and refreshes immediately on return", async () => {
   const timers = new Map(); let id = 0, calls = 0; const first = deferred();
   const { ChatPoller } = load("outbox/poller.ts", undefined, {

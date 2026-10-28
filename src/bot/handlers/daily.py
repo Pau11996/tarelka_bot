@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.bot.config import settings
-from src.bot.keyboards.menus import TODAY_BUTTON
+from src.bot.keyboards.menus import TODAY_BUTTON, daily_norm_keyboard
 from src.bot.services.formatting import format_daily_balance, format_entry_list
 from src.bot.services.messaging import answer_ephemeral
 from src.bot.services.message_cleanup import MessageCleanupService
@@ -34,4 +34,4 @@ async def show_today(message: Message, state: FSMContext, session, cleanup: Mess
 
     text = format_daily_balance(balance, profile=profile, streak=streak)
     text += "\n\n" + format_entry_list(entries)
-    await answer_ephemeral(message, cleanup, text)
+    await answer_ephemeral(message, cleanup, text, reply_markup=daily_norm_keyboard())

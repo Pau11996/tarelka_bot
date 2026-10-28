@@ -69,6 +69,16 @@ test("older pages and successful requests do not revive old limit notices", () =
   assert.equal(app.opened.length, 0);
 });
 
+test("dismissed failures do not reopen the quota dialog or fall back to an older failure", () => {
+  const app = setup();
+  const latest = operation({ request_key: "hidden" });
+  const older = operation({ id: "older", request_key: "older", created_at: "2026-10-22T18:00:00Z" });
+  app.useOperationLimitNotice([older, latest], false, ["hidden"]);
+  assert.equal(app.opened.length, 0);
+  app.useOperationLimitNotice([latest, operation({ id: "new", request_key: "new", created_at: "2026-10-22T20:00:00Z" })], false, ["hidden"]);
+  assert.equal(app.opened.length, 1);
+});
+
 test("legacy quota failures use the information button flow with the matching request kind", () => {
   const app = setup();
   app.useOperationLimitNotice([operation({

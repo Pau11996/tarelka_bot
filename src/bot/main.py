@@ -21,6 +21,7 @@ from src.bot.handlers import (
     food,
     profile,
     referrals,
+    sharing,
     start,
     statistics,
     subscription,
@@ -82,6 +83,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(feedback.router)
     dp.include_router(survey.router)
     dp.include_router(daily.router)
+    dp.include_router(sharing.router)
     dp.include_router(statistics.router)
     dp.include_router(coach.router)
     dp.include_router(favorites.router)

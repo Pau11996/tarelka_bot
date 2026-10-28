@@ -36,8 +36,10 @@ export function buildChatTimeline(
   pending: PendingChatMessage | PendingChatMessage[] | null = null,
   notices: AchievementMessage[] = [],
   anchors: Record<string, string> = {},
+  dismissedFailures: readonly string[] = [],
 ): ChatTimelineItem[] {
   const items: ChatTimelineItem[] = [];
+  const dismissed = new Set(dismissedFailures);
   const jobs = [...new Map(operations.map((value) => [value.id, value])).values()];
   for (const notice of new Map(notices.map((value) => [value.id, value])).values()) {
     items.push({ kind: "notice", key: `notice:${notice.id}`, notice,
@@ -53,6 +55,8 @@ export function buildChatTimeline(
   }
   for (const operation of jobs) {
     if (operation.kind === "review") continue;
+    if (dismissed.has(operation.request_key) && (operation.status === "failed"
+      || (operation.status === "done" && operation.result?.status === "unknown"))) continue;
     if (operation.status === "done" && !["unknown", "weight_saved"].includes(operation.result?.status)) continue;
     items.push({
       kind: "operation", key: anchors[operation.request_key] ? `message:${operation.request_key}` : `operation:${operation.id}`, operation,
@@ -60,6 +64,7 @@ export function buildChatTimeline(
     });
   }
   for (const message of Array.isArray(pending) ? pending : pending ? [pending] : []) {
+    if (message.state === "failed" && dismissed.has(message.requestKey)) continue;
     if (jobs.some(operation => operation.request_key === message.requestKey)) continue;
     items.push({
       kind: "pending", key: anchors[message.requestKey] ? `message:${message.requestKey}` : `pending:${message.requestKey}`, message,

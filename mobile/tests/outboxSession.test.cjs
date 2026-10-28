@@ -44,10 +44,13 @@ test("switching accounts aborts the previous request, clears its queue and ignor
   });
   t.after(() => service.setChatOutboxSession(null));
   await service.setChatOutboxSession("old"); service.enqueueMessage(item("old-message")); await tick();
+  service.dismissChatFailure("old-failure"); await tick();
+  assert.ok(service.useChatOutbox().dismissedFailures.includes("old-failure"));
   await service.setChatOutboxSession("new");
   assert.equal(calls[0].signal.aborted, true);
   assert.equal(service.stores.has("old"), false);
   assert.equal(service.useChatOutbox().items.length, 0);
+  assert.equal(service.useChatOutbox().dismissedFailures.length, 0);
   resolveOld(result("old-message")); await tick();
   service.enqueueMessage(item("new-message")); await tick();
   assert.equal(calls[1].token, "new");

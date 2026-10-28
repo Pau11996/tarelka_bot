@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AccountMenu } from "../../components/AccountMenu";
 import { DiaryCalendar, DiaryChronicle, DiaryEnergy, DiaryNutrients, StreakBadge } from "../../components/DiaryDay";
 import { DiaryDetails } from "../../components/DiaryDetails";
+import { DailyNormShare } from "../../components/DailyNormShare";
 import { DiaryStatistics, type DiaryStatisticsHandle } from "../../components/DiaryStatistics";
 import { State } from "../../components/Screen";
 import { diaryDate } from "../../diary";
@@ -29,6 +30,7 @@ const DayContent = memo(function DayContent({ day, date, error, loading, load, o
       {date ? <Text style={s.selectedDate}>{formatDay(day.date)}</Text> : null}
       <DiaryEnergy day={day} />
       <DiaryNutrients day={day} />
+      <DailyNormShare key={day.date} day={day} />
       <DiaryDetails key={day.date} day={day} />
       <DiaryChronicle entries={day.entries} onFavoriteChange={onFavorite} />
     </> : null}

@@ -1,0 +1,37 @@
+ТАРЕЛКА — концепции карточек для соцсетей
+28 октября 2026
+
+11 макетов: Д1–Д6 — горизонтальная дневная норма; Б1–Б3 — блюда; Б4–Б5 — товары.
+Формат: Д1–Д6 — 1080 × 216; Б1–Б5 — 1080 × 1080, JPEG. Интерфейс приложения не изменён.
+Все значения демонстрационные и не являются оценкой изображённой еды.
+Дневная норма: 2100 ккал; Б120 / Ж60 / У270 г.
+Съедено сегодня: 1650 ккал; Б100 / Ж50 / У200 г.
+Норма — главный акцент. Д1/Д2: подпись о съеденных калориях; Д3/Д5: только норма; Д4: второстепенная строка съеденного по КБЖУ.
+Б1: паста с креветками, 320 г, 520 ккал, Б32 / Ж16 / У62 г.
+Б2: йогурт с ягодами и гранолой, 280 г, 365 ккал, Б18 / Ж13 / У44 г.
+Б3: оладьи с вишней, 250 г, 410 ккал, Б12 / Ж14 / У59 г.
+Б4–Б5: условный греческий йогурт 2%, 170 г, 124 ккал, Б17 / Ж3,4 / У6,3 г.
+
+Композиции, графика и типографика: отдельные HTML/CSS-макеты.
+Логотип: существующий BrandMark приложения. Шрифты: Liberation Sans / Serif.
+Фото блюд: существующие материалы проекта, файлы из mobile/assets и promo.
+Фото упаковки: новый вымышленный товар; встроенный инструмент imagegen, не CLI.
+Точный промпт генерации упаковки:
+
+Use case: product-mockup. Create a single premium photorealistic product photography asset for a food diary social share design concept. A small 170g cylindrical Greek yogurt cup, white paper/plastic cup with simple sage-green typography and an olive green foil lid, standing upright, slight 3/4 angle showing front. Generic fictional unbranded packaging. Exact clean Russian package text, centered: 'ГРЕЧЕСКИЙ' then 'ЙОГУРТ' then small 'БЕЗ ДОБАВОК' then '2%' and '170 г'. Tiny minimal leaf symbol only, no company names or logos. Entire cup visible with generous 15% margins, soft natural studio light, gently directional shadow. Isolated on a solid warm ivory background #f4f1e8. Square composition, crisp professional editorial still life, minimal, appetizing, realistic materials. No spoons, no berries, no hands, no other objects, no additional text outside packaging.
+
+
+Референсы, проверены 28 октября 2026:
+MyFitnessPal — Today, верхний блок калорий/БЖУ и переключение съедено/остаток:
+https://support.myfitnesspal.com/hc/en-us/articles/39985611667341-Your-Today-tab
+MacroFactor — Daily Nutrition, отдельно цели и потребление:
+https://help.macrofactorapp.com/dashboard/consistency/
+https://macrofactor.com/dashboard-customization/
+fatsecret — отчёты с сопоставлением целей и потребления:
+https://www.fatsecret.com/fatsecret-app-help/getting-started/how-to-use-reports
+Это примеры интерфейсов, не подтверждённые варианты экспорта в соцсети.
+Формат 5:1 и приоритет нормы — наше дизайн-решение по запросу пользователя.
+
+Версия 3: иллюстрированные значки КБЖУ (огонь, яйцо, авокадо, колос), цветные наклейки и небольшая иллюстрация тарелки. Векторная графика нарисована в SVG специально для макетов. Размер и приоритет дневной нормы сохранены.
+
+Версия 4: дополнительный мемный Д6 «Это на весь день?!». Кот — оригинальный сгенерированный персонаж. Цифры — пример дневной нормы.

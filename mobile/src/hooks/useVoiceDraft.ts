@@ -28,11 +28,28 @@ export function useVoiceDraft(
   const epoch = useRef(0);
   const recording = useRef(false);
   const starting = useRef(false);
+  const requestingPermission = useRef(false);
+  const resumeStart = useRef<(() => void) | null>(null);
+  const stopping = useRef<Promise<void>>(Promise.resolve());
   const stopped = useRef(false);
   const controller = useRef<AbortController | null>(null);
 
+  const releaseRecorder = useCallback(() => {
+    recording.current = false;
+    const cleanup = (async () => {
+      try {
+        await recorder.stop();
+      } finally {
+        await setAudioModeAsync({ allowsRecording: false });
+      }
+    })();
+    stopping.current = cleanup;
+    return cleanup;
+  }, [recorder]);
+
   const cancel = useCallback(() => {
     epoch.current += 1;
+    resumeStart.current?.();
     controller.current?.abort();
     setVisible(false);
     setMediaId(null);
@@ -41,27 +58,24 @@ export function useVoiceDraft(
     setTranscript("");
     setError(null);
     if (recording.current) {
-      recording.current = false;
-      void recorder
-        .stop()
-        .catch(() => undefined)
-        .finally(() => {
-          void setAudioModeAsync({ allowsRecording: false }).catch(
-            () => undefined,
-          );
-        });
+      void releaseRecorder().catch(() => undefined);
     }
-  }, [recorder]);
+  }, [releaseRecorder]);
   useEffect(
     () => () => {
       epoch.current += 1;
+      resumeStart.current?.();
       controller.current?.abort();
+      if (recording.current) void releaseRecorder().catch(() => undefined);
     },
-    [],
+    [releaseRecorder],
   );
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (next) => {
-      if (next !== "active") cancel();
+      if (next === "active") resumeStart.current?.();
+      // The system microphone permission dialog can temporarily background the app.
+      // Keep this start pending until the dialog closes and the app is active again.
+      else if (!requestingPermission.current) cancel();
     });
     return () => subscription.remove();
   }, [cancel]);
@@ -101,28 +115,46 @@ export function useVoiceDraft(
     if (starting.current || recording.current) return;
     starting.current = true;
     const id = ++epoch.current;
+    let needsCleanup = false;
+    setError(null);
     try {
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      // A previous cancel may still be releasing the native recorder/audio session.
+      await stopping.current.catch(() => undefined);
+      if (id !== epoch.current) return;
+      let permission = await AudioModule.getRecordingPermissionsAsync();
+      if (id !== epoch.current) return;
+      if (!permission.granted) {
+        requestingPermission.current = true;
+        permission = await AudioModule.requestRecordingPermissionsAsync();
+      }
       if (id !== epoch.current) return;
       if (!permission.granted)
         throw new Error(
           "Разреши доступ к микрофону в настройках устройства или напиши текстом.",
         );
-      setError(null);
+      while (AppState.currentState && AppState.currentState !== "active") {
+        await new Promise<void>((resolve) => { resumeStart.current = resolve; });
+        resumeStart.current = null;
+        if (id !== epoch.current) return;
+      }
+      requestingPermission.current = false;
       setDraft(null);
+      setMediaId(null);
       setTranscript("");
+      needsCleanup = true;
       await setAudioModeAsync({
         playsInSilentMode: true,
         allowsRecording: true,
       });
+      if (id !== epoch.current) return;
       await recorder.prepareToRecordAsync();
-      if (id !== epoch.current) {
-        await recorder.stop();
-        return;
-      }
+      if (id !== epoch.current) return;
+      recorder.record();
+      if (!recorder.getStatus().isRecording)
+        throw new Error("Не удалось начать запись. Попробуй ещё раз.");
       stopped.current = false;
       recording.current = true;
-      recorder.record();
+      needsCleanup = false;
       setVisible(true);
     } catch (caught) {
       if (id === epoch.current)
@@ -130,6 +162,9 @@ export function useVoiceDraft(
           caught instanceof Error ? caught.message : "Не удалось начать запись",
         );
     } finally {
+      requestingPermission.current = false;
+      resumeStart.current = null;
+      if (needsCleanup) await releaseRecorder().catch(() => undefined);
       starting.current = false;
     }
   }
@@ -140,8 +175,7 @@ export function useVoiceDraft(
     const id = epoch.current;
     const seconds = state.durationMillis / 1000;
     try {
-      await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
+      await releaseRecorder();
       if (id !== epoch.current) return;
       const uri = recorder.uri;
       if (!uri) throw new Error("Запись не сохранилась. Попробуй ещё раз.");

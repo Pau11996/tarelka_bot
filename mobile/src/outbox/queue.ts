@@ -23,6 +23,7 @@ export type OutboxData = {
   items: OutgoingMessage[];
   // Keep small ordering anchors after uploaded files have been released.
   anchors: Record<string, string>;
+  dismissedFailures?: string[];
 };
 export type OutboxSnapshot = OutboxData & { ready: boolean; error: string | null };
 export type OutboxStorage = {
@@ -64,7 +65,8 @@ export class OutboxQueue {
   }
 
   private persist() {
-    const data: OutboxData = { items: this.snapshot.items, anchors: this.snapshot.anchors };
+    const data: OutboxData = { items: this.snapshot.items, anchors: this.snapshot.anchors,
+      dismissedFailures: this.snapshot.dismissedFailures };
     const write = this.writes.catch(() => {}).then(() => {
       if (!this.closed) return this.storage.write(data);
     });
@@ -80,7 +82,7 @@ export class OutboxQueue {
         const data = await this.storage.read();
         if (this.closed) return;
         const items = (data?.items ?? []).map(item => item.state === "uploading" ? { ...item, state: "waiting" as const } : item);
-        this.update({ items, anchors: data?.anchors ?? {}, ready: true, error: null });
+        this.update({ items, anchors: data?.anchors ?? {}, dismissedFailures: data?.dismissedFailures ?? [], ready: true, error: null });
         for (const item of items) if (item.state === "preparing") this.prepare(item);
         void this.pump();
       } catch {
@@ -139,8 +141,15 @@ export class OutboxQueue {
     const item = this.snapshot.items.find(item => item.requestKey === key);
     if (!item || item.state !== "failed" || this.closed) return;
     if (item.entryId != null && this.isCorrecting(item.entryId)) return;
+    this.update({ dismissedFailures: this.snapshot.dismissedFailures?.filter(value => value !== key) });
     this.patch(key, { state: "preparing", error: undefined, limitReached: undefined });
     this.prepare({ ...item, state: "preparing" });
+  }
+
+  dismissFailure(key: string) {
+    if (this.closed || !this.snapshot.ready || this.snapshot.dismissedFailures?.includes(key)) return;
+    this.update({ dismissedFailures: [...(this.snapshot.dismissedFailures ?? []), key] });
+    void this.persist().catch(() => {});
   }
 
   private async pump() {

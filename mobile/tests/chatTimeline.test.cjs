@@ -48,6 +48,19 @@ test("accepted jobs replace the upload placeholder even before their terminal re
   assert.deepEqual(keys(buildChatTimeline([], [operation("other", "00")], pending)), ["operation:other", "pending:same"]);
 });
 
+test("dismissal hides only the matching failure across local/server history and keeps successful results", () => {
+  const pending = { text: "Обед", state: "failed", requestKey: "hidden", createdAt: "2026-10-23T12:10:00Z" };
+  const dismissed = ["hidden"];
+  assert.deepEqual(keys(buildChatTimeline([], [], pending, [], {}, dismissed)), []);
+  const failed = operation("hidden", "10", "failed", { request_key: "hidden" });
+  for (const anchors of [{}, { hidden: pending.createdAt }]) {
+    assert.deepEqual(keys(buildChatTimeline([], [failed, operation("other", "20")], pending, [], anchors, dismissed)), ["operation:other"]);
+  }
+  assert.deepEqual(keys(buildChatTimeline([], [{ ...failed, status: "done", result: { status: "unknown" } }], pending, [], {}, dismissed)), []);
+  assert.deepEqual(keys(buildChatTimeline([], [{ ...failed, status: "running" }], pending, [], {}, dismissed)), ["operation:hidden"]);
+  assert.deepEqual(keys(buildChatTimeline([entry(1, "10")], [{ ...failed, status: "done", entry_id: 1, result: { status: "saved" } }], pending, [], {}, dismissed)), ["entry:1"]);
+});
+
 test("overlapping history pages cannot duplicate entries or operation cards", () => {
   const old = operation("job", "10", "queued");
   const next = { ...old, status: "failed" };

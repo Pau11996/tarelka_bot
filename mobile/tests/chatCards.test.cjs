@@ -49,22 +49,22 @@ for (const entry_type of ["meal", "water", "activity"]) {
   });
 }
 
-test("the red failure card shows one error, contains all photos and keeps both recovery actions", () => {
-  let limits = 0, retries = 0;
+test("the dismissible failure card shows one error, contains all photos and keeps both recovery actions", () => {
+  let limits = 0, retries = 0, dismissals = 0;
   const message = "Не удалось обработать запись: достигнут дневной лимит.";
-  const root = AnalysisFailureCard({ message, photos, onLimit: () => limits++, onRetry: () => retries++ });
+  const root = AnalysisFailureCard({ message, photos, onLimit: () => limits++, onRetry: () => retries++, onDismiss: () => dismissals++ });
   const all = nodes(root);
   const alerts = all.filter(n => n.props?.accessibilityRole === "alert");
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0].props.children, message);
-  const redCard = all.find(n => Array.isArray(n.props?.style) && n.props.style.some(s => s.backgroundColor === "red-background"));
-  assert.ok(redCard);
-  assert.deepEqual(nodes(redCard).filter(n => n.type === "PhotoPreview").map(n => n.props.uri), photos.map(p => p.uri));
   assert.equal(all.filter(n => n.type === "PhotoPreview").length, photos.length);
+  assert.deepEqual(all.filter(n => n.type === "PhotoPreview").map(n => n.props.uri), photos.map(p => p.uri));
   const buttons = all.filter(n => n.type === "Pressable");
   for (const button of buttons) button.props.onPress();
   assert.equal(limits, 1);
   assert.equal(retries, 1);
+  assert.equal(dismissals, 1);
+  assert.ok(buttons.find(n => n.props.accessibilityLabel === "Скрыть сообщение об ошибке"));
   const disabled = nodes(AnalysisFailureCard({ message, onRetry() {}, disabled: true }));
   assert.equal(disabled.find(n => n.type === "Pressable").props.disabled, true);
 });

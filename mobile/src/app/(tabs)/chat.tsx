@@ -53,7 +53,7 @@ import type { LocalMedia } from "../../media";
 import { colors } from "../../theme";
 import type { DayView, Entry } from "../../types";
 import { healthUpdated } from "../../health/events";
-import { enqueueMessage, observeOutbox, reconcileOutbox, reopenOutbox, retryMessage, useChatOutbox } from "../../outbox/session";
+import { dismissChatFailure, enqueueMessage, observeOutbox, reconcileOutbox, reopenOutbox, retryMessage, useChatOutbox } from "../../outbox/session";
 import { ChatPoller } from "../../outbox/poller";
 import type { OutgoingMessage } from "../../outbox/queue";
 import { recoverOutboxHistory, type ChatHistory as History } from "../../outbox/history";
@@ -229,7 +229,7 @@ export default function ChatScreen() {
   const shouldScroll = useRef(true);
 
   const voice = useVoiceDraft(token, signOut);
-  const markLimitShown = useOperationLimitNotice(history?.operations, inputFocused || voice.visible);
+  const markLimitShown = useOperationLimitNotice(history?.operations, inputFocused || voice.visible || !outbox.ready, outbox.dismissedFailures);
   useEffect(() => { consumedDraft.current = false; }, [text, photos, correction, voice.transcript, voice.mediaId]);
   useEffect(() => {
     if (!error) return;
@@ -584,7 +584,7 @@ export default function ChatScreen() {
       && (!item.operation || ["queued", "running"].includes(item.operation.status)))
       || operations.some(op => op.kind === "correct" && op.entry_id === entryId && (["queued", "running"].includes(op.status) || retrying.current.has(op.id)));
   }
-  const timeline = buildChatTimeline(entries, operations, pending, history?.notices ?? [], outbox.anchors);
+  const timeline = buildChatTimeline(entries, operations, pending, history?.notices ?? [], outbox.anchors, outbox.dismissedFailures);
   const isEmpty = !loading && !loadError && timeline.length === 0;
 
   return (
@@ -731,6 +731,7 @@ export default function ChatScreen() {
                       time={clock(message.createdAt)}
                       disabled={message.entryId != null && isCorrecting(message.entryId)}
                       onRetry={() => retryMessage(message.requestKey)}
+                      onDismiss={() => dismissChatFailure(message.requestKey)}
                       onLimit={message.limitReached ? () => void openLimit(message.limitReached, message.limitReached?.kind ?? "photo") : undefined} />
                   ) : <ProcessingStatus status={message.state === "uploading" ? "uploading" : "waiting"}
                     hasPhotos={Boolean(message.photos?.length)} correcting={message.entryId != null} />}
@@ -780,6 +781,7 @@ export default function ChatScreen() {
                       } : undefined}
                       disabled={retryIds.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))}
                       onRetry={op.status === "failed" ? () => void retry(op) : undefined}
+                      onDismiss={() => dismissChatFailure(op.request_key)}
                     />
                   )}
                 </View>
@@ -894,6 +896,12 @@ export default function ChatScreen() {
             <View style={s.composerNotice}>
               <Text accessibilityRole="alert" style={s.composerNoticeText}>{error}</Text>
               <IconButton name="close" label="Скрыть сообщение" onPress={() => setError(null)} />
+            </View>
+          ) : null}
+          {!voice.visible && voice.error ? (
+            <View style={s.composerNotice}>
+              <Text accessibilityRole="alert" style={s.composerNoticeText}>{voice.error}</Text>
+              <IconButton name="close" label="Скрыть ошибку записи" onPress={voice.cancel} />
             </View>
           ) : null}
           {correction ? (

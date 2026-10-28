@@ -85,9 +85,9 @@ function app() {
     dispose() { cleanups.forEach(fn => fn?.()); },
   };
 }
-const historyFor = submission => ({ entries: [{ id: 1, entry_date: "2026-10-27", created_at: "2026-10-27T13:00:00Z", title: "Food" }],
-  operations: [{ id: "op-1", request_key: submission.requestKey, kind: "analyze", status: "done", entry_id: 1, created_at: submission.createdAt, text: submission.text, result: { status: "saved" } }], media: [], notices: [], next_before: null });
-test("chat accepts three consecutive sends during upload; grouped photos remain one job and double tap is ignored", async t => {
+const historyFor = (submission, entryId = 1) => ({ entries: [{ id: entryId, entry_date: "2026-10-27", created_at: "2026-10-27T13:00:00Z", title: "Food" }],
+  operations: [{ id: `op-${entryId}`, request_key: submission.requestKey, kind: "analyze", status: "done", entry_id: entryId, created_at: submission.createdAt, text: submission.text, result: { status: "saved" } }], media: [], notices: [], next_before: null });
+test("chat sends each selected photo separately during upload and ignores double taps", async t => {
   const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();
   for (const names of [["a", "b"], ["c"], ["d"]]) {
     await screen.pick(names);
@@ -97,9 +97,41 @@ test("chat accepts three consecutive sends during upload; grouped photos remain 
     assert.equal(screen.input().props.value, "");
     assert.notEqual(screen.find("IconButton", "Выбрать фото из галереи").props.disabled, true);
   }
-  assert.equal(screen.submissions.length, 3);
-  assert.deepEqual(screen.submissions.map(row => Array.from(row.photos, p => p.name)), [["a.jpg", "b.jpg"], ["c.jpg"], ["d.jpg"]]);
-  assert.equal(screen.rows().length, 3);
+  assert.equal(screen.submissions.length, 4);
+  assert.equal(new Set(screen.submissions.map(row => row.requestKey)).size, 4);
+  assert.deepEqual(screen.submissions.map(row => Array.from(row.photos, p => p.name)), [["a.jpg"], ["b.jpg"], ["c.jpg"], ["d.jpg"]]);
+  assert.ok(screen.submissions.every(row => row.text === ""));
+  assert.equal(screen.rows().length, 4);
+});
+test("two selected photos keep the caption on the first and produce separate analysis cards with their own photos", async t => {
+  const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();
+  await screen.pick(["a", "b"]);
+  screen.input().props.onChangeText("Без соуса"); screen.render(); screen.send().props.onPress(); screen.render();
+  assert.deepEqual(screen.submissions.map(row => row.text), ["Без соуса", ""]);
+  assert.equal(screen.input().props.value, "");
+  assert.equal(screen.nodes().filter(node => node.type === "Image").length, 0);
+  const results = screen.submissions.map((submission, index) => {
+    const chat = historyFor(submission, index + 1);
+    chat.media = [{ id: `photo-${index}`, operation_id: chat.operations[0].id, mime: "image/jpeg", url: `/media/${index}.jpg` }];
+    return chat;
+  });
+  // One result may arrive while the other photo is still uploading or being analyzed.
+  await screen.refresh(results[1]);
+  assert.equal(screen.rows().filter(row => row.kind === "entry").length, 1);
+  const pending = screen.rows().find(row => row.kind === "pending");
+  assert.equal(pending.message.requestKey, screen.submissions[0].requestKey);
+  assert.deepEqual(Array.from(pending.message.photos), ["file:///a.jpg"]);
+  await screen.refresh({ ...results[0], entries: results.flatMap(chat => chat.entries),
+    operations: results.flatMap(chat => chat.operations), media: results.flatMap(chat => chat.media) });
+  assert.equal(screen.rows().length, 2);
+  assert.ok(screen.rows().every(row => row.kind === "entry"));
+  const list = screen.find("FlatList");
+  for (const row of screen.rows()) {
+    const card = screen.nodes(list.props.renderItem({ item: row, index: screen.rows().indexOf(row) }))
+      .find(node => node.type === "EntryCard");
+    assert.equal(card.props.photos.length, 1);
+    assert.equal(card.props.photos[0].uri, `https://example.test/media/${row.entry.id - 1}.jpg`);
+  }
 });
 test("a completed result preserves the next text, selected photos and voice draft", async t => {
   const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();

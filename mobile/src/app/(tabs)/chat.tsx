@@ -526,10 +526,14 @@ export default function ChatScreen() {
       return;
     }
     try {
-      enqueueMessage({ requestKey: requestKey(), createdAt: new Date().toISOString(),
-        text: message, photos: attachments, voiceId: extra?.voiceId ?? undefined,
-        voiceMedia: extra?.voiceMedia, voiceSeconds: extra?.voiceSeconds,
-        entryId: correction?.id, previousCalories: correction?.calories });
+      // Each photo gets its own analysis and retry key; the caption belongs to the first.
+      const messages = attachments.length ? attachments.map(photo => [photo]) : [[]];
+      for (const [index, messagePhotos] of messages.entries()) {
+        enqueueMessage({ requestKey: requestKey(), createdAt: new Date().toISOString(),
+          text: index === 0 ? message : "", photos: messagePhotos, voiceId: extra?.voiceId ?? undefined,
+          voiceMedia: extra?.voiceMedia, voiceSeconds: extra?.voiceSeconds,
+          entryId: correction?.id, previousCalories: correction?.calories });
+      }
       consumedDraft.current = true;
       setText("");
       setPhotos([]);

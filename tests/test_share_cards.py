@@ -49,8 +49,9 @@ def test_png_is_compact_and_all_four_values_are_drawn_without_overflow(norm):
     assert len(content) < 1_000_000
     with Image.open(share_cards.ASSETS / "daily-norm-template.png") as template:
         difference = ImageChops.difference(image, template.convert("RGB"))
-        # Only the title and target fields change; the cat and footer stay intact.
+        # Only target fields change; the cat, empty heading and footer stay intact.
         assert difference.crop((0, 0, 355, 216)).getbbox() is None
+        assert difference.crop((355, 0, 1080, 100)).getbbox() is None
         assert difference.crop((355, 170, 1080, 216)).getbbox() is None
         for x, right in [(390, 572), (594, 724), (746, 876), (898, 1046)]:
             assert difference.crop((x, 100, right, 160)).getbbox() is not None
@@ -97,7 +98,7 @@ async def test_photo_is_persistent_and_has_a_download_for_its_exact_values(expor
     sent = ctx.message.answer_photo.await_args.kwargs
     norm = daily_norm_from_profile(ctx.person)
     assert sent["photo"].data == render_daily_norm_png(norm)
-    assert norm.title in sent["caption"]
+    assert sent.get("caption") is None
     assert sent["reply_markup"].inline_keyboard[0][0].callback_data == norm.download_callback()
     ctx.cleanup.schedule.assert_not_called()
     ctx.callback.answer.assert_awaited_once()
@@ -113,7 +114,7 @@ async def test_png_download_uses_snapshot_without_reading_current_profile(export
     assert sent["document"].filename.endswith(".png")
     assert sent["document"].data == render_daily_norm_png(norm)
     assert sent["disable_content_type_detection"] is True
-    assert sent["caption"] == "Стартовый ориентир"
+    assert sent.get("caption") is None
     ctx.cleanup.schedule.assert_not_called()
 
 

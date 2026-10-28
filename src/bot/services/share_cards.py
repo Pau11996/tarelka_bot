@@ -88,8 +88,6 @@ def render_daily_norm_png(norm: DailyNorm) -> bytes:
     with Image.open(ASSETS / "daily-norm-template.png") as template:
         image = template.convert("RGB")
     draw = ImageDraw.Draw(image)
-    heading = ImageFont.truetype(str(ASSETS / "LiberationSans-Bold.ttf"), 22)
-    draw.text((390, 46), norm.title, fill=INK, font=heading, anchor="ls")
     for index, (x, width, value) in enumerate(zip((390, 594, 746, 898), (182, 130, 130, 148), norm.values)):
         _draw_value(draw, x, value, "ккал" if index == 0 else "г", width, index)
     output = BytesIO()

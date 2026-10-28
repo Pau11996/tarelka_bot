@@ -49,15 +49,11 @@ async def _export_norm(
         if snapshot is not None:
             # Preserve the full PNG as a document. Export messages intentionally
             # bypass cleanup so the user can save or forward them later.
-            await message.answer_document(document=file, caption=norm.title, disable_content_type_detection=True)
+            await message.answer_document(document=file, disable_content_type_detection=True)
         else:
-            caption = f"<b>{norm.title}</b>\nМожно сохранить или переслать. Оригинал — по кнопке ниже."
-            if not norm.personalized:
-                caption += "\n\nЗаполните профиль для персональной нормы."
             await answer_photo_persistent(
                 message,
                 photo=file,
-                caption=caption,
                 reply_markup=daily_norm_download_keyboard(norm.download_callback()),
             )
     except Exception:

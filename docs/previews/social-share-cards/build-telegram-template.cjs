@@ -1,4 +1,4 @@
-// Freeze the approved D6 artwork from the mobile SVG, leaving data fields empty.
+// Freeze the D6 artwork for Telegram, omitting the heading and cat approval line.
 // Requires mobile dependencies and sharp (or SHARP_MODULE pointing to its path).
 const fs = require('node:fs');
 const path = require('node:path');
@@ -34,8 +34,8 @@ const norm = { calories: 2100, protein: 120, fat: 60, carbs: 270, personalized: 
 let markup = render(React.createElement(Card, { norm, cat, onCatLoad() {} }));
 markup = markup.replace('width="100%"', 'width="1080"').replace('height="100%"', 'height="216"');
 let removed = 0;
-markup = markup.replace(/<text\b[^>]*\by="(?:23|76)"[^>]*>[\s\S]*?<\/text>/g, () => { removed++; return ''; });
-if (removed !== 5) throw new Error('D6 data field positions changed; update the Telegram renderer too.');
+markup = markup.replace(/<text\b[^>]*\by="(?:23|76|98)"[^>]*>[\s\S]*?<\/text>/g, () => { removed++; return ''; });
+if (removed !== 6) throw new Error('D6 text positions changed; update the Telegram renderer too.');
 const sharp = require(process.env.SHARP_MODULE || 'sharp');
 sharp(Buffer.from(markup)).png().toFile(path.join(root, 'src/bot/assets/share/daily-norm-template.png')).catch(error => {
   console.error(error); process.exitCode = 1;

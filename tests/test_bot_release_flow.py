@@ -117,9 +117,9 @@ async def test_today_exports_a_shareable_photo_and_original_png_without_ai_usage
     assert button.text == "↗ Поделиться нормой"
     await actor.click(button.callback_data)
     card = actor.last()
-    assert "Стартовый ориентир" in card.text
     download = card.reply_markup.inline_keyboard[0][0]
     photo = next(call for call in reversed(actor.transport.calls) if call.__api_method__ == "sendPhoto")
+    assert photo.caption is None
     async with actor.factory() as session:
         repo = UserRepository(session)
         user = await repo.get_user_by_telegram_id(actor.uid)
@@ -128,6 +128,7 @@ async def test_today_exports_a_shareable_photo_and_original_png_without_ai_usage
         await session.commit()
     await actor.click(download.callback_data)
     document = next(call for call in reversed(actor.transport.calls) if call.__api_method__ == "sendDocument")
+    assert document.caption is None
     assert document.document.data == photo.photo.data
     assert document.document.filename == "tarelka-daily-norm.png"
     actor.ai.analyze_text.assert_not_awaited()

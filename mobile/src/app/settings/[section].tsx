@@ -13,7 +13,10 @@ import { colors } from "../../theme";
 import type { AccountSettings } from "../../types";
 import { SecondaryButton } from "../../ui";
 
+import { useWorkouts } from "../../workouts/context";
+
 export default function AccountSection() {
+  const { store: workoutStore } = useWorkouts();
   const { section } = useLocalSearchParams<{ section: string }>();
   const { token, signOut } = useAuth();
   const r = useResource<AccountSettings>("/v1/settings");
@@ -38,6 +41,7 @@ export default function AccountSection() {
     setDeleting(true);
     try {
       await api("/v1/account", { method: "DELETE", token });
+      await workoutStore.forget().catch(() => undefined);
       await signOut();
     } catch (e) {
       setError(
@@ -50,7 +54,7 @@ export default function AccountSection() {
   function confirmDelete() {
     Alert.alert(
       "Удалить все данные",
-      "Удалятся профиль, дневник, анализы, избранное, история веса и сведения об оплатах. Это нельзя отменить.",
+      "Удалятся профиль, дневник, анализы, избранное, история веса, тренировки и сведения об оплатах. Это нельзя отменить.",
       [
         { text: "Отмена", style: "cancel" },
         {

@@ -55,6 +55,7 @@ from src.mobile_api.request_limits import request_limit_info
 from src.mobile_api.tokens import issue_access_token
 from src.mobile_api.health import router as health_router, health_payload, health_weight
 from src.mobile_api.weight import router as weight_router, tracking_http_error
+from src.mobile_api.workouts import router as workout_router
 from src.shared.weight_tracking import (
     WeightTrackingError, active_goal, direction_for, goal_out,
     current_weight, record_weight, set_weight_goal,
@@ -63,6 +64,7 @@ from src.shared.weight_tracking import (
 router = APIRouter()
 router.include_router(health_router)
 router.include_router(weight_router)
+router.include_router(workout_router)
 
 CHECKOUT_MESSAGE = "Оплата картой появится позже"
 

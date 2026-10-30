@@ -67,6 +67,10 @@ export default function TabsLayout() {
         name="favorites"
         options={{ title: "Избранное", tabBarIcon: tabIcon("star") }}
       />
+      <Tabs.Screen
+        name="workouts"
+        options={{ title: "Тренировки", tabBarIcon: tabIcon("dumbbell") }}
+      />
     </Tabs>
   );
 }

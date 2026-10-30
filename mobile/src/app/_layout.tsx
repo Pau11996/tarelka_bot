@@ -9,19 +9,22 @@ import { RequestLimitProvider } from "../components/RequestLimitDialog";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "../theme";
 import { DeviceHealthSync } from "../components/DeviceHealthSync";
+import { WorkoutsProvider } from "../workouts/context";
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AssistantAccess>
-          <RequestLimitProvider>
-            <NotificationListener />
-            <DeviceHealthSync />
-            <StatusBar style="dark" />
-            <AuthenticatedStack />
-          </RequestLimitProvider>
-        </AssistantAccess>
+        <WorkoutsProvider>
+          <AssistantAccess>
+            <RequestLimitProvider>
+              <NotificationListener />
+              <DeviceHealthSync />
+              <StatusBar style="dark" />
+              <AuthenticatedStack />
+            </RequestLimitProvider>
+          </AssistantAccess>
+        </WorkoutsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
@@ -57,6 +60,10 @@ function AuthenticatedStack() {
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="weight" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="health" options={{ headerShown: false }} />
+        <Stack.Screen name="workout/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="workout/player" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="workout/settings" options={{ headerShown: false }} />
+        <Stack.Screen name="workout/result/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="settings/[section]" options={{ headerShown: false }} />
         <Stack.Screen name="pay" options={{ headerShown: false }} />
       </Stack.Protected>

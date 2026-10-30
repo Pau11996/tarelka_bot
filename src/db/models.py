@@ -161,6 +161,8 @@ class User(Base):
     health_days: Mapped[list[HealthDailySummary]] = relationship(cascade="all, delete-orphan")
     health_records: Mapped[list[HealthRecord]] = relationship(cascade="all, delete-orphan")
     health_receipts: Mapped[list[HealthSyncReceipt]] = relationship(cascade="all, delete-orphan")
+    workout_sessions: Mapped[list[WorkoutSession]] = relationship(cascade="all, delete-orphan")
+    workout_preference: Mapped[WorkoutPreference | None] = relationship(uselist=False, cascade="all, delete-orphan")
     payments: Mapped[list[Payment]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -184,6 +186,38 @@ class User(Base):
     coach_reviews: Mapped[list[CoachReview]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+
+
+class WorkoutPreference(Base):
+    __tablename__ = "workout_preferences"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    auto_log: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    sound: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class WorkoutSession(Base):
+    __tablename__ = "workout_sessions"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    workout_id: Mapped[str] = mapped_column(String(64))
+    catalogue_version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(16))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    local_date: Mapped[date] = mapped_column(Date, index=True)
+    timezone: Mapped[str] = mapped_column(String(64))
+    active_seconds: Mapped[float] = mapped_column(Float)
+    rest_seconds: Mapped[float] = mapped_column(Float)
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(json_column())
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    calories: Mapped[float | None] = mapped_column(Float, nullable=True)
+    auto_log: Mapped[bool] = mapped_column(Boolean)
+    diary_added: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    diary_entry_id: Mapped[int | None] = mapped_column(ForeignKey("day_entries.id", ondelete="SET NULL"), nullable=True)
 
 
 class AuthRateLimit(Base):

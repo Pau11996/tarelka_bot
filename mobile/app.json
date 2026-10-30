@@ -8,7 +8,7 @@
         "projectId": "857cec7e-bc63-4d60-a028-04648c5f9820"
       }
     },
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
       "bundleIdentifier": "by.tarelka.app"
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "package": "by.tarelka.app",
       "adaptiveIcon": {
         "backgroundColor": "#F4FBF6",

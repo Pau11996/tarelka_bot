@@ -55,6 +55,7 @@ export function buildChatTimeline(
   }
   for (const operation of jobs) {
     if (operation.kind === "review") continue;
+    if (operation.dismissed) continue;
     if (dismissed.has(operation.request_key) && (operation.status === "failed"
       || (operation.status === "done" && operation.result?.status === "unknown"))) continue;
     if (operation.status === "done" && !["unknown", "weight_saved"].includes(operation.result?.status)) continue;

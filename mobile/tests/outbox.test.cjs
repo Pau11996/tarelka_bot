@@ -191,3 +191,24 @@ test("an unavailable old job does not block fresh results or other restored jobs
   assert.equal(recovered.observed.length, 2);
   assert.ok(recovered.observed.every(op => op.status === "failed"));
 });
+
+for (const status of ["failed", "done"]) test(`a deleted ${status} failure cannot return through a restored outbox receipt`, async t => {
+  const { recoverOutboxHistory } = load("outbox/history.ts");
+  const { buildChatTimeline } = load("chatTimeline.ts");
+  const failed = operation("one", { status, entry_id: 7, result: status === "done" ? { status: "unknown" } : null });
+  const disk = storage({ items: [{ ...message("one"), state: "accepted", operation: failed }], anchors: {} });
+  const released = [];
+  disk.release = async item => released.push(item.requestKey);
+  const queue = await setup(t, async () => { throw Error("must not send"); }, disk);
+  const calls = [];
+  const recovered = await recoverOutboxHistory({ entries: [], operations: [], media: [] }, queue.getSnapshot().items, async url => {
+    calls.push(url);
+    return { ...failed, dismissed: true };
+  });
+  assert.deepEqual(calls, ["/v1/operations/op-one"]);
+  assert.equal(buildChatTimeline([], recovered.chat.operations).length, 0);
+  queue.reconcile(recovered.chat.operations, []);
+  await tick();
+  assert.equal(queue.getSnapshot().items.length, 0);
+  assert.deepEqual(released, ["one"]);
+});

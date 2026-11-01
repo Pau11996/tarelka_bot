@@ -1,4 +1,5 @@
-export type AnimationName = "march" | "side_step" | "shoulders" | "arm_raise" | "squat" | "wall_push" | "calf_raise" | "leg_side" | "chest" | "side_bend" | "calf_stretch";
+export type AnimationName = "march" | "side_step" | "shoulders" | "arm_raise" | "squat" | "wall_push" | "calf_raise" | "leg_side" | "chest" | "side_bend" | "calf_stretch"
+  | "standing_knee_elbow" | "sumo_squat" | "squat_kick" | "incline_pushup" | "chair_dip" | "prone_pull" | "plank_pike" | "seated_knee_tuck" | "crunch_reach" | "hands_behind" | "quad_stretch";
 export type Exercise = { id: string; title: string; cue: string; instruction: string; animation: AnimationName; mirror: boolean; met: number; equipment: string[] };
 export type WorkoutStep = { id: string; exercise_id: string; duration_seconds: number | null; repetitions: number | null; expected_seconds: number; rest_seconds: number };
 export type Workout = { id: string; title: string; subtitle: string; focus: string; level: string; equipment: string[]; space: string; preview_exercise_id: string; duration_seconds: number; steps: WorkoutStep[] };

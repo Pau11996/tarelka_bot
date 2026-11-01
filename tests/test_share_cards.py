@@ -45,17 +45,17 @@ def test_png_is_compact_and_all_four_values_are_drawn_without_overflow(norm):
     content = render_daily_norm_png(norm)
     image = Image.open(BytesIO(content))
     assert image.format == "PNG"
-    assert image.size == (1080, 216)
+    assert image.size == (1080, 144)
     assert len(content) < 1_000_000
     with Image.open(share_cards.ASSETS / "daily-norm-template.png") as template:
         difference = ImageChops.difference(image, template.convert("RGB"))
-        # Only target fields change; the cat, empty heading and footer stay intact.
-        assert difference.crop((0, 0, 355, 216)).getbbox() is None
-        assert difference.crop((355, 0, 1080, 100)).getbbox() is None
-        assert difference.crop((355, 170, 1080, 216)).getbbox() is None
+        # Only target fields change; the cat, labels and branding stay intact.
+        assert difference.crop((0, 0, 355, 144)).getbbox() is None
+        assert difference.crop((355, 0, 1080, 50)).getbbox() is None
+        assert difference.crop((355, 120, 1080, 144)).getbbox() is None
         for x, right in [(390, 572), (594, 724), (746, 876), (898, 1046)]:
-            assert difference.crop((x, 100, right, 160)).getbbox() is not None
-            assert difference.crop((right, 100, right + 20, 160)).getbbox() is None
+            assert difference.crop((x, 50, right, 110)).getbbox() is not None
+            assert difference.crop((right, 50, right + 20, 110)).getbbox() is None
 
 
 def test_download_snapshot_survives_profile_changes_and_stays_within_callback_limit():

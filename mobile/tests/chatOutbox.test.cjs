@@ -10,9 +10,10 @@ function moduleCode(file) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText;
 }
-function app() {
+function app({ remove = async () => {} } = {}) {
   const slots = [], pendingEffects = [], cleanups = [], submissions = [], pickResults = [], loops = [];
   const outbox = { ready: true, error: null, items: [], anchors: {} };
+  const deletions = [];
   let cursor = 0, key = 0, tree;
   let history = { entries: [], operations: [], media: [], next_before: null, notices: [] };
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
@@ -41,7 +42,10 @@ function app() {
     if (name === "expo-audio") return {};
     if (name === "@react-native-async-storage/async-storage") return { getItem: async () => null, setItem: async () => {} };
     if (name.endsWith("/auth")) return { useAuth: () => auth };
-    if (name.endsWith("/api")) return { api: async url => url === "/v1/chat" ? history : null, apiFailureMessage: async () => "error", ApiError: Error };
+    if (name.endsWith("/api")) return { api: async (url, options = {}) => {
+      if (options.method === "DELETE") { deletions.push({ url, ...options }); return remove(url, options); }
+      return url === "/v1/chat" ? history : null;
+    }, apiFailureMessage: async () => "error", ApiError: Error };
     if (name.endsWith("/config")) return { API_URL: "https://example.test" };
     if (name.endsWith("/operations")) return { requestKey: () => `key-${++key}` };
     if (name.endsWith("/chatTimeline")) return timeline.exports;
@@ -78,7 +82,7 @@ function app() {
   const find = (type, label) => nodes().find(node => node.type === type && (!label || node.props.label === label));
   const input = () => find("TextInput");
   const send = () => find("IconButton", "Отправить фото") ?? find("IconButton", "Отправить сообщение") ?? find("IconButton", "Сохранить исправление");
-  return { render, nodes, find, input, send, submissions, outbox, voice,
+  return { render, nodes, find, input, send, submissions, outbox, voice, deletions,
     rows: () => find("FlatList").props.data,
     async pick(names) { pickResults.push(names.map(name => ({ uri: `file:///${name}.jpg`, fileName: `${name}.jpg`, mimeType: "image/jpeg" }))); await find("IconButton", "Выбрать фото из галереи").props.onPress(); await tick(); render(); },
     async refresh(next) { history = next; await loops.at(-1).refresh(); render(); },
@@ -191,7 +195,53 @@ test("closing local and server error cards hides the matching exchange after his
   ] };
   await screen.refresh(history);
   assert.equal(screen.rows().length, 1);
-  card(screen.rows()[0]).props.onDismiss(); screen.render();
+  card(screen.rows()[0]).props.onDismiss(); await tick(); screen.render();
   await screen.refresh(structuredClone(history));
   assert.equal(screen.rows().length, 0);
+  assert.equal(screen.deletions.length, 1);
+  assert.equal(screen.deletions[0].url, "/v1/operations/op-other");
+});
+
+const failureHistory = (status = "failed") => ({ entries: [], media: [], notices: [], next_before: null, operations: [
+  { id: "failed-op", kind: "analyze", status, request_key: "failed-request", created_at: "2026-10-28T12:00:00Z",
+    result: status === "done" ? { status: "unknown" } : null },
+] });
+const failureCard = screen => {
+  const list = screen.find("FlatList");
+  return screen.nodes(list.props.renderItem({ item: screen.rows()[0], index: 0 }))
+    .find(node => node.type === "AnalysisFailureCard");
+};
+
+test("server failure deletion waits for confirmation, ignores double taps and survives a stale history read", async t => {
+  let finish;
+  const screen = app({ remove: () => new Promise(resolve => { finish = resolve; }) });
+  t.after(() => screen.dispose()); screen.render(); await tick();
+  const history = failureHistory("done");
+  await screen.refresh(history);
+  const card = failureCard(screen);
+  assert.equal(card.props.onRetry, undefined);
+  card.props.onDismiss(); card.props.onDismiss(); screen.render();
+  assert.equal(screen.deletions.length, 1);
+  assert.equal(screen.deletions[0].token, "token");
+  assert.equal(failureCard(screen).props.deleting, true);
+  assert.equal(screen.rows().length, 1);
+  await screen.refresh(history);
+  finish(); await tick(); screen.render();
+  assert.equal(screen.rows().length, 0);
+  await screen.refresh(history);
+  assert.equal(screen.rows().length, 0);
+});
+
+test("failed server deletion leaves the message visible and allows another attempt", async t => {
+  let attempts = 0;
+  const screen = app({ remove: async () => { if (++attempts === 1) throw Error("offline"); } });
+  t.after(() => screen.dispose()); screen.render(); await tick();
+  await screen.refresh(failureHistory());
+  failureCard(screen).props.onDismiss(); await tick(); screen.render();
+  assert.equal(screen.rows().length, 1);
+  assert.equal(failureCard(screen).props.deleting, false);
+  assert.ok(screen.nodes().some(node => node.props?.accessibilityRole === "alert" && node.props.children === "error"));
+  failureCard(screen).props.onDismiss(); await tick(); screen.render();
+  assert.equal(screen.rows().length, 0);
+  assert.equal(attempts, 2);
 });

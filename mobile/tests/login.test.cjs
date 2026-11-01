@@ -34,6 +34,7 @@ function setup({ api, pollLogin } = {}) {
     "../theme": { colors: {}, welcomeColors: {} }, "../components/Brand": { Icon: "Icon" },
     "../components/LoginWelcome": { LoginWelcome: props => element("Welcome", props) },
     "../components/PasswordRecoveryForm": { PasswordRecoveryForm: "PasswordRecoveryForm" },
+    "../components/EmailVerificationForm": { EmailVerificationForm: "EmailVerificationForm" },
     "../ui": { Field: "Field", Loading: "Loading", PrimaryButton: "PrimaryButton", SecondaryButton: "SecondaryButton", ErrorText: ({ message }) => message ? element("Text", { children: message }) : null },
   };
   const context = { exports: {}, require: name => modules[name], setTimeout };
@@ -77,9 +78,13 @@ test("the registration sheet validates, submits once, and blocks closing while t
   assert.equal(app.requests[0].options.json.email, "person@example.test");
   assert.equal(app.requests[0].options.json.password, "preview42");
   assert.equal(typeof app.requests[0].options.json.timezone, "string");
-  assert.equal(app.button("Создаём аккаунт…").props.disabled, true);
-  finish({ access_token: "registered-token" });
+  assert.equal(app.button("Отправляем код…").props.disabled, true);
+  finish({ status: "verification_required", registration_id: "registration-id", email: "person@example.test", resend_after: 60 });
   await flush();
+  assert.deepEqual(app.signedIn, []);
+  const verification = app.render().find(node => node.type === "EmailVerificationForm");
+  assert.equal(verification.props.registration.email, "person@example.test");
+  await verification.props.onVerified("registered-token");
   assert.deepEqual(app.signedIn, ["registered-token"]);
   assert.equal(app.render().find(node => node.type === "Redirect").props.href, "/");
 });
@@ -103,6 +108,17 @@ test("closing an email sheet clears passwords; login failure keeps the form avai
   assert.ok(app.render().some(node => node.props?.children === "Неверный пароль"));
   app.button("Войти").props.onPress(); await flush();
   assert.deepEqual(app.signedIn, ["login-token"]);
+});
+
+test("registration never accepts a direct token without the email verification step", async () => {
+  const app = setup({ api: async () => ({ access_token: "unverified-token" }) });
+  app.button("Создать аккаунт").props.onPress();
+  app.byLabel("Email").props.onChangeText("person@example.test");
+  app.byLabel("Пароль").props.onChangeText("preview42");
+  app.byLabel("Повторите пароль").props.onChangeText("preview42");
+  app.button("Зарегистрироваться").props.onPress(); await flush();
+  assert.deepEqual(app.signedIn, []);
+  assert.ok(app.render().some(node => node.props?.children === "Подтверждение почты временно недоступно. Попробуйте позже."));
 });
 
 test("Telegram entry still opens the bot and cancellation ignores a late confirmation", async () => {

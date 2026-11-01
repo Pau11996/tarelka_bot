@@ -16,7 +16,7 @@ import { useResource } from "../hooks/useResource";
 import { useTransientNotice } from "../hooks/useTransientNotice";
 import { colors } from "../theme";
 import { dismissProfileSetup } from "../profileSetup";
-import { calculateSetupTarget } from "../profileTarget";
+import { calculateSetupTarget, HEIGHT_ERROR, isValidHeightCm } from "../profileTarget";
 import { parseWeight, weightDirection, weightNumber } from "../weightTracking";
 import type { Profile } from "../types";
 
@@ -186,8 +186,14 @@ export default function ProfileScreen() {
       for (const [key, value] of Object.entries({ weight_kg: weight, height_cm: height, age })) {
         if (value.trim()) body[key] = Number(value.replace(",", "."));
       }
+      if (body.height_cm !== undefined && !isValidHeightCm(Number(body.height_cm))) {
+        throw new Error(HEIGHT_ERROR);
+      }
       if (Object.values(body).some(value => typeof value === "number" && (!Number.isFinite(value) || value <= 0))) {
         throw new Error("Укажите положительные числа в полях профиля.");
+      }
+      if (Number(body.weight_kg) > 1000) {
+        throw new Error("Введите положительный вес не больше 1000 кг.");
       }
       if (body.age !== undefined && (!Number.isInteger(body.age) || Number(body.age) > 120)) {
         throw new Error("Укажите возраст целым числом от 1 до 120.");
@@ -247,6 +253,10 @@ export default function ProfileScreen() {
     const value = metricDraft.trim();
     const numeric = /^\d+(?:[.,]\d+)?$/.test(value) ? Number(value.replace(",", ".")) : NaN;
     const parsed = metricSheet === "weight" || metricSheet === "desiredWeight" ? parseWeight(value) : Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+    if (metricSheet === "height" && (parsed === null || !isValidHeightCm(parsed))) {
+      setMetricError(HEIGHT_ERROR);
+      return;
+    }
     if (metricSheet === "age" && (parsed === null || !Number.isInteger(parsed) || parsed > 120)) {
       setMetricError("Укажите возраст целым числом от 1 до 120.");
       return;

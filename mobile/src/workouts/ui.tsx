@@ -1,4 +1,4 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { Icon } from "../components/Brand";
 import { colors as c } from "../theme";
@@ -10,10 +10,11 @@ export function WorkoutHeader({ title, back = true, right }: { title: string; ba
   return <View style={s.header}>{back ? <Pressable accessibilityRole="button" accessibilityLabel="Назад" onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/workouts")} style={s.iconButton}><Icon name="left" /></Pressable> : null}<Text accessibilityRole="header" style={s.heading}>{title}</Text>{right}</View>;
 }
 export function ExerciseInfo({ exercise, onClose }: { exercise: Exercise | null; onClose(): void }) {
+  const { width } = useWindowDimensions();
   return <Modal visible={!!exercise} transparent animationType="fade" onRequestClose={onClose}>
     <View style={s.overlay}><View style={s.sheet}>{exercise ? <ScrollView contentContainerStyle={{ gap: 16, padding: 24 }}>
       <View style={s.row}><Text accessibilityRole="header" style={[s.heading, { flex: 1 }]}>{exercise.title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Закрыть описание" style={s.iconButton} onPress={onClose}><Icon name="close" /></Pressable></View>
-      <View style={s.figure}><ExerciseFigure exercise={exercise} playing size={220} /></View>
+      <View style={s.figure}><ExerciseFigure exercise={exercise} playing showGuide size={Math.min(260, width - 96)} /></View>
       <Text style={s.body}>{exercise.instruction}</Text>
       {exercise.equipment.length ? <Text style={s.muted}>{exercise.equipment.join(" · ")}</Text> : null}
       <Text style={s.small}>Двигайтесь в удобной амплитуде. Если появляется боль, остановите упражнение.</Text>
@@ -49,7 +50,7 @@ export const s = StyleSheet.create({
   link: { color: c.accentDark, fontSize: 14, fontWeight: "600" },
   chip: { borderRadius: 12, backgroundColor: c.soft, paddingHorizontal: 10, paddingVertical: 6, alignSelf: "flex-start" },
   chipText: { fontSize: 12, fontWeight: "600", color: c.accentDark },
-  figure: { alignItems: "center", justifyContent: "center", backgroundColor: "#edf3e6", borderRadius: 24, paddingVertical: 10 },
+  figure: { alignItems: "center", justifyContent: "center", backgroundColor: "#f5f7f2", borderRadius: 24, paddingVertical: 10 },
   notice: { backgroundColor: c.soft, padding: 16, borderRadius: 18, gap: 8 },
   overlay: { flex: 1, backgroundColor: "#182c2377", alignItems: "center", justifyContent: "center", padding: 20 },
   sheet: { backgroundColor: c.bg, borderRadius: 28, maxHeight: "85%", width: "100%", maxWidth: 480, overflow: "hidden" },

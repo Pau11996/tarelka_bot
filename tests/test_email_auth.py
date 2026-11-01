@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import func, select, update
@@ -9,7 +9,7 @@ from src.ai_analyzer.broadcast import BroadcastAudience, list_broadcast_telegram
 from src.bot.config import settings
 from src.db.models import AuthRateLimit, EntryType, User
 from src.db.repository import UserRepository
-from src.mobile_api import experience, worker
+from src.mobile_api import experience, worker, email_registration
 from src.mobile_api.analysis import AnalysisService
 from src.mobile_api.passwords import hash_password, verify_password
 
@@ -18,9 +18,16 @@ PASSWORD = "Correct horse battery 42!"
 
 
 async def register(client, email="person@example.com", password=PASSWORD):
-    return await client.post("/v1/auth/email/register", json={
-        "email": email, "password": password, "timezone": "Europe/Minsk",
-    })
+    # Existing account tests complete the real two-step flow with offline email.
+    with patch.object(settings, "smtp_host", "smtp.example.test"), patch.object(settings, "smtp_from", "hello@example.test"), patch.object(email_registration, "send_registration_code", AsyncMock()) as mail:
+        response = await client.post("/v1/auth/email/register", json={
+            "email": email, "password": password, "timezone": "Europe/Minsk",
+        })
+        if response.status_code != 202:
+            return response
+        return await client.post("/v1/auth/email/register/verify", json={
+            "registration_id": response.json()["registration_id"], "code": mail.await_args.args[1],
+        })
 
 
 def headers(response):

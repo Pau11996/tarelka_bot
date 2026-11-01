@@ -57,6 +57,10 @@ test("dismissal hides only the matching failure across local/server history and 
     assert.deepEqual(keys(buildChatTimeline([], [failed, operation("other", "20")], pending, [], anchors, dismissed)), ["operation:other"]);
   }
   assert.deepEqual(keys(buildChatTimeline([], [{ ...failed, status: "done", result: { status: "unknown" } }], pending, [], {}, dismissed)), []);
+  for (const op of [failed, { ...failed, status: "done", result: { status: "unknown" } }]) {
+    // Server deletion also applies in a new session without local tombstones.
+    assert.deepEqual(keys(buildChatTimeline([], [{ ...op, dismissed: true }], pending)), []);
+  }
   assert.deepEqual(keys(buildChatTimeline([], [{ ...failed, status: "running" }], pending, [], {}, dismissed)), ["operation:hidden"]);
   assert.deepEqual(keys(buildChatTimeline([entry(1, "10")], [{ ...failed, status: "done", entry_id: 1, result: { status: "saved" } }], pending, [], {}, dismissed)), ["entry:1"]);
 });

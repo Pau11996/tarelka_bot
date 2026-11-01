@@ -56,6 +56,7 @@ from src.mobile_api.tokens import issue_access_token
 from src.mobile_api.health import router as health_router, health_payload, health_weight
 from src.mobile_api.weight import router as weight_router, tracking_http_error
 from src.mobile_api.workouts import router as workout_router
+from src.shared.profile_limits import MIN_HEIGHT_CM, MAX_HEIGHT_CM, HEIGHT_ERROR
 from src.shared.weight_tracking import (
     WeightTrackingError, active_goal, direction_for, goal_out,
     current_weight, record_weight, set_weight_goal,
@@ -71,7 +72,7 @@ CHECKOUT_MESSAGE = "Оплата картой появится позже"
 
 class ProfileUpdate(BaseModel):
     weight_kg: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
-    height_cm: float | None = None
+    height_cm: float | None = Field(default=None, ge=MIN_HEIGHT_CM, le=MAX_HEIGHT_CM, allow_inf_nan=False)
     age: int | None = Field(default=None, ge=1, le=120)
     sex: Sex | None = None
     goal: Goal | None = None
@@ -426,6 +427,8 @@ async def update_profile(
         for key in ("weight_kg", "height_cm", "age", "sex", "goal", "activity_level")
     )
     if "daily_calorie_target" not in payload and not was_complete and becoming_complete:
+        if not MIN_HEIGHT_CM <= data["height_cm"] <= MAX_HEIGHT_CM:
+            raise HTTPException(status_code=422, detail=HEIGHT_ERROR)
         data["daily_calorie_target"] = calculate_daily_target(
             weight_kg=data["weight_kg"],
             height_cm=data["height_cm"],
@@ -434,6 +437,8 @@ async def update_profile(
             goal=data["goal"],
             activity_level=data["activity_level"],
         )
+        if not 500 <= data["daily_calorie_target"] <= 10000:
+            raise HTTPException(status_code=422, detail="Проверьте данные профиля: рассчитанная норма должна быть от 500 до 10 000 ккал.")
     try:
         if target_weight is not None and not was_complete:
             if not becoming_complete:

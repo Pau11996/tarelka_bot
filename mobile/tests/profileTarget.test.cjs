@@ -24,7 +24,7 @@ test("partial and invalid answers hide the target; decimal commas remain valid",
   assert.equal(calculateSetupTarget(complete), 2312);
   assert.equal(calculateSetupTarget({ ...complete, weight: "73,5" }), 2335);
   for (const key of Object.keys(complete)) assert.equal(calculateSetupTarget({ ...complete, [key]: "" }), null, key);
-  for (const patch of [{ weight: "-1" }, { weight: "Infinity" }, { weight: "90000" }, { height: "0" }, { height: "abc" }, { age: "31,5" }, { age: "121" }, { age: "0" }]) {
+  for (const patch of [{ weight: "-1" }, { weight: "Infinity" }, { weight: "90000" }, { height: "0" }, { height: "abc" }, { height: "9999" }, { height: "49,9" }, { height: "300,1" }, { height: "NaN" }, { height: "Infinity" }, { age: "31,5" }, { age: "121" }, { age: "0" }]) {
     assert.equal(calculateSetupTarget({ ...complete, ...patch }), null, JSON.stringify(patch));
   }
 });

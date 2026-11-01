@@ -165,6 +165,111 @@ async def test_media_and_operations_are_private(setup):
     assert (await client.get(url)).status_code == 401
 
 
+@pytest.mark.parametrize("status,result,correcting", [
+    ("failed", None, False),
+    ("done", {"status": "unknown", "message": "Не удалось обработать запись."}, False),
+    ("failed", None, True),
+])
+async def test_delete_failure_persists_in_account_history_and_keeps_replay_safe(
+    setup, status, result, correcting,
+):
+    client, factory, headers, uid = setup
+    async with factory() as session:
+        entry = await UserRepository(session).create_entry(
+            user_id=uid, entry_date=date.today(), entry_type=EntryType.MEAL,
+            title="Обед", calories=500,
+        )
+        entry_id = entry.id
+    data = {"request_key": "delete-failure-request", "text": "Запись с ошибкой"}
+    if correcting:
+        data["entry_id"] = str(entry_id)
+    op = (await client.post(
+        "/v1/operations", headers=headers, data=data,
+        files={"image": ("food.jpg", b"fake-image", "image/jpeg")},
+    )).json()
+    async with factory() as session:
+        job = await session.get(MobileOperation, op["id"])
+        job.status = status
+        job.result = result
+        job.error = "Не удалось обработать запись." if status == "failed" else None
+        job.entry_id = entry_id if correcting else None
+        await session.commit()
+    before = (await client.get("/v1/chat", headers=headers)).json()
+    assert [item["id"] for item in before["operations"]] == [op["id"]]
+    assert len(before["media"]) == 1
+    for _ in range(2):
+        deleted = await client.delete(f"/v1/operations/{op['id']}", headers=headers)
+        assert deleted.status_code == 204
+        assert not deleted.content
+    # Another login has no phone-local list of dismissed messages.
+    token, _ = await _login(client, factory, 5011)
+    new_headers = {"Authorization": f"Bearer {token}"}
+    for suffix in ("", f"?before={entry_id + 1}&limit=1"):
+        history = (await client.get("/v1/chat" + suffix, headers=new_headers)).json()
+        assert history["operations"] == []
+        assert history["media"] == []
+        assert history["entries"][0]["id"] == entry_id
+        assert history["entries"][0]["calories"] == 500
+    receipt = (await client.get(f"/v1/operations/{op['id']}", headers=new_headers)).json()
+    assert receipt["dismissed"] is True
+    replay = await client.post("/v1/operations", headers=new_headers, data=data)
+    assert replay.status_code == 202
+    assert replay.json()["id"] == op["id"]
+    assert replay.json()["status"] == status
+    assert replay.json()["dismissed"] is True
+    assert not await worker.process_one()
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(MobileOperation)) == 1
+    if status == "failed":
+        retried = (await client.post(f"/v1/operations/{op['id']}/retry", headers=new_headers)).json()
+        assert retried["status"] == "queued"
+        assert retried["dismissed"] is False
+        history = (await client.get("/v1/chat", headers=new_headers)).json()
+        assert history["operations"][0]["id"] == op["id"]
+        assert len(history["media"]) == 1
+
+
+async def test_failure_deletion_is_private(setup):
+    client, factory, headers, uid = setup
+    async with factory() as session:
+        session.add(MobileOperation(
+            id="private-failure", user_id=uid, request_key="private-failure-key",
+            kind="analyze", status="failed", payload={"text": "Запись"},
+        ))
+        await session.commit()
+    token, _ = await _login(client, factory, 5012)
+    assert (await client.delete("/v1/operations/private-failure")).status_code == 401
+    assert (await client.delete(
+        "/v1/operations/private-failure", headers={"Authorization": f"Bearer {token}"},
+    )).status_code == 404
+    assert (await client.delete("/v1/operations/missing", headers=headers)).status_code == 404
+    history = (await client.get("/v1/chat", headers=headers)).json()
+    assert history["operations"][0]["dismissed"] is False
+
+
+@pytest.mark.parametrize("kind,status,result", [
+    ("analyze", "queued", None),
+    ("analyze", "running", None),
+    ("analyze", "done", {"status": "saved"}),
+    ("analyze", "done", {"status": "weight_saved"}),
+    ("review", "failed", None),
+    ("correct_favorite", "failed", None),
+])
+async def test_failure_delete_rejects_processing_success_and_other_job_kinds(setup, kind, status, result):
+    client, factory, headers, uid = setup
+    async with factory() as session:
+        session.add(MobileOperation(
+            id="keep-operation", user_id=uid, request_key="keep-operation-key",
+            kind=kind, status=status, result=result, payload={"text": "Запись"},
+        ))
+        await session.commit()
+    assert (await client.delete("/v1/operations/keep-operation", headers=headers)).status_code == 409
+    async with factory() as session:
+        op = await session.get(MobileOperation, "keep-operation")
+        assert op.status == status
+        assert not op.payload.get("chat_dismissed")
+
+
 async def test_uploaded_photo_stays_in_chat_after_analysis_and_reload(setup, monkeypatch):
     client, _, headers, _ = setup
     photo = b"uploaded-photo-bytes"

@@ -4,9 +4,10 @@ import type { LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutSession, Worko
 type Request = <T>(path: string, options: { method?: string; json?: unknown; signal: AbortSignal }) => Promise<T>;
 export type WorkoutDependencies = { read(): Promise<WorkoutData | null>; write(data: WorkoutData): Promise<void>; remove(): Promise<void>; request: Request; uuid(): string; now(): number; wall(): string; updated(): void };
 const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true }, settings_dirty: false, timezone: "UTC", draft: null, records: [] });
-const animationNames = new Set(["march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch"]);
+const animationNames = new Set(["march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch",
+  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch"]);
 export function supportedCatalogue(value: WorkoutCatalogue): boolean {
-  if (!value || value.version !== 1 || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
+  if (!value || ![1, 2].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
   const ids = new Set(value.exercises.map(ex => ex.id));
   return value.exercises.every(ex => animationNames.has(ex.animation)) && value.workouts.every(w => w.steps.length > 0 && w.steps.every(s => ids.has(s.exercise_id)));
 }
@@ -192,7 +193,7 @@ export class WorkoutStore {
       }
       const revision = this.settingsRevision;
       const [catalogue, settings, me, history] = await Promise.allSettled([
-        request<WorkoutCatalogue>("/v1/workouts/catalogue", { signal: controller.signal }),
+        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=2", { signal: controller.signal }),
         request<WorkoutSettings>("/v1/settings/workouts", { signal: controller.signal }),
         request<{ timezone: string }>("/v1/me", { signal: controller.signal }),
         request<{ items: WorkoutSession[]; next_offset: number | null }>("/v1/workouts/history", { signal: controller.signal }),

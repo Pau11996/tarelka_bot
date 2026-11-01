@@ -206,6 +206,7 @@ export function AnalysisFailureCard({
   onRetry,
   onDismiss,
   disabled,
+  deleting,
 }: {
   message: string;
   photos?: CardPhoto[];
@@ -214,6 +215,7 @@ export function AnalysisFailureCard({
   onRetry?: () => void;
   onDismiss?: () => void;
   disabled?: boolean;
+  deleting?: boolean;
 }) {
   return (
     <View style={s.response}>
@@ -223,25 +225,28 @@ export function AnalysisFailureCard({
           <View style={[s.overview, s.failureOverview]}>
             {photos[0] ? <PhotoPreview uri={photos[0].uri} previewUri={photos[0].previewUri} style={s.photo} /> : null}
             <Text accessibilityRole="alert" style={s.failureMessage}>{message}</Text>
-            {onDismiss ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Скрыть сообщение об ошибке"
-                onPress={onDismiss} style={({ pressed }) => [s.failureClose, pressed && { opacity: 0.5 }]}>
-                <Icon name="close" size={16} color="#82776c" />
-              </Pressable>
-            ) : null}
           </View>
           <AdditionalPhotos photos={photos} />
         </View>
-        {onLimit || onRetry ? (
+        {onLimit || onRetry || onDismiss ? (
           <View style={[s.actions, s.failureActions]}>
             {onLimit ? (
-              <Pressable accessibilityRole="button" onPress={onLimit} style={({ pressed }) => [s.details, pressed && { opacity: 0.6 }]}>
+              <Pressable accessibilityRole="button" onPress={onLimit} disabled={deleting} style={({ pressed }) => [s.details, (pressed || deleting) && { opacity: 0.6 }]}>
                 <Text style={[s.link, s.failureLink]}>Информация о лимите</Text>
               </Pressable>
             ) : null}
             {onRetry ? (
-              <Pressable accessibilityRole="button" onPress={onRetry} disabled={disabled} style={({ pressed }) => [s.details, (pressed || disabled) && { opacity: 0.5 }]}>
+              <Pressable accessibilityRole="button" onPress={onRetry} disabled={disabled || deleting} style={({ pressed }) => [s.details, (pressed || disabled || deleting) && { opacity: 0.5 }]}>
                 <Text style={[s.link, s.failureLink]}>Повторить</Text>
+              </Pressable>
+            ) : null}
+            {onDismiss ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Удалить сообщение об ошибке"
+                accessibilityState={{ disabled: deleting, busy: deleting }}
+                onPress={onDismiss} disabled={deleting}
+                style={({ pressed }) => [s.details, (pressed || deleting) && { opacity: 0.5 }]}>
+                <Icon name="trash" size={15} color="#82776c" />
+                <Text style={[s.link, s.failureLink]}>{deleting ? "Удаляем…" : "Удалить"}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -325,7 +330,6 @@ const s = StyleSheet.create({
   failureBody: { paddingTop: 12 },
   failureOverview: { alignItems: "flex-start" },
   failureMessage: { flex: 1, color: "#73665b", fontSize: 14, lineHeight: 21, fontWeight: "400" },
-  failureClose: { width: 44, height: 44, marginTop: -8, marginRight: -8, marginLeft: -4, alignItems: "center", justifyContent: "center", borderRadius: 22 },
   failureActions: { borderTopColor: "#e8e2d9", flexWrap: "wrap" },
   failureLink: { color: "#73665b", fontWeight: "500" },
   between: {

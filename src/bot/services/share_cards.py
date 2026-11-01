@@ -1,4 +1,4 @@
-"""Local PNG exports of the approved D6 daily norm card."""
+"""Local PNG exports of the compact Telegram daily norm card."""
 from __future__ import annotations
 
 import math
@@ -79,9 +79,9 @@ def _draw_value(draw: ImageDraw.ImageDraw, x: int, value: int, unit: str, column
         size -= 2
     cursor = float(x)
     for char in text:
-        draw.text((cursor, 152), char, font=font, fill=INK, anchor="ls")
+        draw.text((cursor, 102), char, font=font, fill=INK, anchor="ls")
         cursor += font.getlength(char) - 2
-    draw.text((cursor + 6, 152), unit, font=units, fill=INK, anchor="ls")
+    draw.text((cursor + 6, 102), unit, font=units, fill=INK, anchor="ls")
 
 
 def render_daily_norm_png(norm: DailyNorm) -> bytes:

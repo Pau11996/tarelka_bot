@@ -22,6 +22,7 @@ import { useAuth } from "../auth";
 import { Icon } from "../components/Brand";
 import { LoginWelcome } from "../components/LoginWelcome";
 import { PasswordRecoveryForm } from "../components/PasswordRecoveryForm";
+import { EmailVerificationForm, type PendingRegistration } from "../components/EmailVerificationForm";
 import { API_URL, SITE_URL } from "../config";
 import { authStorageKeys } from "../authStorage";
 import { colors, welcomeColors } from "../theme";
@@ -34,7 +35,8 @@ export default function LoginScreen() {
   const [waiting, setWaiting] = useState(false);
   const [botUrl, setBotUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"choose" | "register" | "login" | "recover">("choose");
+  const [mode, setMode] = useState<"choose" | "register" | "login" | "recover" | "verify">("choose");
+  const [registration, setRegistration] = useState<PendingRegistration | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -174,7 +176,7 @@ export default function LoginScreen() {
     setWaiting(false);
     try {
       await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
-      const result = await api<{ access_token: string }>(`/v1/auth/email/${mode}`, {
+      const result = await api<PendingRegistration | { access_token: string }>(`/v1/auth/email/${mode}`, {
         json: {
           email: email.trim(),
           password,
@@ -183,7 +185,14 @@ export default function LoginScreen() {
       });
       setPassword("");
       setConfirmation("");
-      await signIn(result.access_token);
+      if (mode === "register") {
+        if (!("registration_id" in result)) throw new Error("Подтверждение почты временно недоступно. Попробуйте позже.");
+        setRegistration(result);
+        setEmail(result.email);
+        setMode("verify");
+      } else if ("access_token" in result) {
+        await signIn(result.access_token);
+      }
     } catch (e) {
       setError(await apiFailureMessage(e, "Не удалось войти. Попробуйте ещё раз."));
     } finally {
@@ -231,13 +240,17 @@ export default function LoginScreen() {
           <View accessibilityViewIsModal onAccessibilityEscape={closeEmailForm} style={[s.sheet, { maxHeight: windowHeight - inset.top - 16, paddingBottom: Math.max(inset.bottom, 20) }]}>
             <View style={s.handle} />
             <View style={s.sheetHeading}>
-              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "recover" ? "Восстановление пароля" : mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
+              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "verify" ? "Подтвердите почту" : mode === "recover" ? "Восстановление пароля" : mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Закрыть форму" disabled={emailBusy} onPress={closeEmailForm} style={s.sheetClose}>
                 <Icon name="close" size={18} />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" bounces={false} contentContainerStyle={s.form}>
-              {mode === "recover" ? <PasswordRecoveryForm email={email} onEmailChange={setEmail} onBack={() => chooseMode("login")} onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} /> : <>
+              {mode === "verify" && registration ? <EmailVerificationForm key={registration.registration_id} registration={registration} onVerified={signIn}
+                onChangeEmail={() => { setRegistration(null); chooseMode("register"); }}
+                onLogin={() => { setRegistration(null); chooseMode("login"); }}
+                onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} />
+              : mode === "recover" ? <PasswordRecoveryForm email={email} onEmailChange={setEmail} onBack={() => chooseMode("login")} onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} /> : <>
               <Text style={s.formIntro}>{mode === "register" ? "Начните свой дневник с чистого листа." : "Войдите в дневник, который создали по email."}</Text>
               <View style={s.tabs}>
                 {(["login", "register"] as const).map(item => (
@@ -250,7 +263,7 @@ export default function LoginScreen() {
               <PasswordField accessibilityLabel="Пароль" placeholder={mode === "register" ? "Не меньше 8 символов" : "Ваш пароль"} value={password} onChangeText={setPassword} visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete={mode === "register" ? "new-password" : "current-password"} textContentType={mode === "register" ? "newPassword" : "password"} editable={!emailBusy} maxLength={128} onSubmitEditing={() => { if (mode === "login") void submitEmail(); }} />
               {mode === "register" ? <PasswordField accessibilityLabel="Повторите пароль" placeholder="Ещё раз тот же пароль" value={confirmation} onChangeText={setConfirmation} visible={showConfirmation} onToggle={() => setShowConfirmation(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete="new-password" textContentType="newPassword" editable={!emailBusy} maxLength={128} onSubmitEditing={() => void submitEmail()} /> : null}
               <View accessibilityLiveRegion="polite"><ErrorText message={error} /></View>
-              <PrimaryButton label={emailBusy ? (mode === "register" ? "Создаём аккаунт…" : "Входим…") : mode === "register" ? "Зарегистрироваться" : "Войти"} disabled={emailBusy} onPress={() => void submitEmail()} />
+              <PrimaryButton label={emailBusy ? (mode === "register" ? "Отправляем код…" : "Входим…") : mode === "register" ? "Зарегистрироваться" : "Войти"} disabled={emailBusy} onPress={() => void submitEmail()} />
               {mode === "login" ? <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("recover")} style={s.forgotButton}><Text style={s.forgotText}>Забыли пароль?</Text></Pressable> : null}
               <Text style={s.accountHint}>Аккаунт по email и аккаунт Telegram имеют отдельные дневники.</Text>
               <LegalLinks onError={setError} />

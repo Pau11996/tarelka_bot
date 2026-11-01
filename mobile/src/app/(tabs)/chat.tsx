@@ -224,6 +224,8 @@ export default function ChatScreen() {
   const scroll = useRef<FlatList<ChatTimelineItem>>(null);
   const retrying = useRef(new Set<string>());
   const [retryIds, setRetryIds] = useState<Set<string>>(new Set());
+  const deleting = useRef(new Set<string>());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const picking = useRef(false);
   const revision = useRef(0);
   const shouldScroll = useRef(true);
@@ -423,7 +425,7 @@ export default function ChatScreen() {
   }
 
   async function retry(op: Operation) {
-    if (retrying.current.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))) return;
+    if (retrying.current.has(op.id) || deleting.current.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))) return;
     retrying.current.add(op.id);
     setRetryIds(new Set(retrying.current));
     markLimitShown(op.id);
@@ -448,6 +450,24 @@ export default function ChatScreen() {
       retrying.current.delete(op.id);
       setRetryIds(new Set(retrying.current));
       poller.current?.wake();
+    }
+  }
+  async function deleteFailure(op: Operation) {
+    if (deleting.current.has(op.id) || retrying.current.has(op.id)) return;
+    deleting.current.add(op.id);
+    setDeletingIds(new Set(deleting.current));
+    setError(null);
+    try {
+      await api(`/v1/operations/${op.id}`, { token, method: "DELETE" });
+      const removed = { ...op, dismissed: true };
+      updateOperation(removed);
+      dismissChatFailure(op.request_key);
+      reconcileOutbox([removed], []);
+    } catch (caught) {
+      setError(await apiFailureMessage(caught, "Не удалось удалить сообщение. Попробуйте ещё раз.", signOut));
+    } finally {
+      deleting.current.delete(op.id);
+      setDeletingIds(new Set(deleting.current));
     }
   }
   async function pick(camera: boolean) {
@@ -784,8 +804,9 @@ export default function ChatScreen() {
                         void openLimit(op.limit_reached, operationLimitKind(op));
                       } : undefined}
                       disabled={retryIds.has(op.id) || (op.kind === "correct" && op.entry_id != null && isCorrecting(op.entry_id))}
+                      deleting={deletingIds.has(op.id)}
                       onRetry={op.status === "failed" ? () => void retry(op) : undefined}
-                      onDismiss={() => dismissChatFailure(op.request_key)}
+                      onDismiss={() => void deleteFailure(op)}
                     />
                   )}
                 </View>

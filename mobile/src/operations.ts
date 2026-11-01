@@ -11,6 +11,7 @@ export type Operation = {
   error: string | null;
   limit_reached?: RequestLimitInfo | null;
   request_key: string;
+  dismissed?: boolean;
 };
 export function requestKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;

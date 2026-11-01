@@ -18,6 +18,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Private Firebase service account keys (public google-services.json is tracked)
+*-firebase-adminsdk-*.json
+service-account*.json
+
 # Metro
 .metro-health-check*
 

@@ -3,6 +3,13 @@ import type { Profile } from "./types";
 const activityMultipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
 const goalAdjustments = { lose: -500, maintain: 0, gain: 300 };
 
+export const MIN_HEIGHT_CM = 50;
+export const MAX_HEIGHT_CM = 300;
+export const HEIGHT_ERROR = `Введите рост от ${MIN_HEIGHT_CM} до ${MAX_HEIGHT_CM} см.`;
+export function isValidHeightCm(value: number): boolean {
+  return Number.isFinite(value) && value >= MIN_HEIGHT_CM && value <= MAX_HEIGHT_CM;
+}
+
 type ProfileDraft = Pick<Profile, "sex" | "goal" | "activity_level"> & {
   weight: string;
   height: string;
@@ -15,7 +22,7 @@ export function calculateSetupTarget(draft: ProfileDraft): number | null {
   const weight = Number(draft.weight.replace(",", "."));
   const height = Number(draft.height.replace(",", "."));
   const age = Number(draft.age.replace(",", "."));
-  if (![weight, height, age].every(value => Number.isFinite(value) && value > 0) || !Number.isInteger(age) || age > 120) return null;
+  if (![weight, height, age].every(value => Number.isFinite(value) && value > 0) || weight > 1000 || !isValidHeightCm(height) || !Number.isInteger(age) || age > 120) return null;
 
   const bmr = 10 * weight + 6.25 * height - 5 * age + (draft.sex === "male" ? 5 : -161);
   const value = bmr * activityMultipliers[draft.activity_level] + goalAdjustments[draft.goal];

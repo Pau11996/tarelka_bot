@@ -8,7 +8,7 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -59,6 +59,7 @@ def operation_out(op):
         error=op.error,
         limit_reached=(op.result or {}).get("limit_reached") if op.status == "failed" else None,
         request_key=op.request_key,
+        dismissed=bool(op.payload.get("chat_dismissed")),
     )
 
 
@@ -299,8 +300,33 @@ async def retry_operation(
         op.error = None
         op.result = None
         op.started_at = None
+        op.payload = {key: value for key, value in op.payload.items() if key != "chat_dismissed"}
     await session.commit()
     return operation_out(op)
+
+
+@router.delete("/operations/{operation_id}", status_code=204)
+async def dismiss_operation(
+    operation_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    op = await session.scalar(
+        select(MobileOperation)
+        .where(MobileOperation.id == operation_id, MobileOperation.user_id == user.id)
+        .with_for_update()
+    )
+    if not op:
+        raise HTTPException(404, "Запрос не найден")
+    if op.kind not in ("analyze", "correct") or not (
+        op.status == "failed"
+        or (op.status == "done" and (op.result or {}).get("status") == "unknown")
+    ):
+        raise HTTPException(409, "Удалить можно только сообщение с ошибкой обработки")
+    # Retain the request key and result so a delayed POST cannot repeat analysis.
+    op.payload = {**op.payload, "chat_dismissed": True}
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.get("/chat")
@@ -329,6 +355,7 @@ async def chat(
                 .where(
                     MobileOperation.user_id == user.id,
                     MobileOperation.kind.in_(("analyze", "correct")),
+                    MobileOperation.payload["chat_dismissed"].as_boolean().is_not(True),
                     or_(
                         MobileOperation.entry_id.in_(ids),
                         MobileOperation.status.in_(["queued", "running", "failed"]),

@@ -13,7 +13,7 @@ from src.db.repository import UserRepository
 from src.db.session import get_session
 from src.mobile_api.main import app
 from src.mobile_api.tokens import issue_access_token
-from src.shared.workouts import EXERCISES, WORKOUTS, active_kcal
+from src.shared.workouts import EXERCISES, WORKOUTS, FULL_BODY_WORKOUT, catalogue, active_kcal
 
 
 @pytest.fixture
@@ -69,6 +69,44 @@ async def test_catalogue_and_defaults_available_without_subscription(workout_api
     assert (await client.get("/v1/settings/workouts")).json() == {"auto_log": False, "sound": True}
     response = await client.put("/v1/settings/workouts", json={"auto_log": True, "sound": False})
     assert response.json() == (await client.get("/v1/settings/workouts")).json()
+
+
+async def test_reference_catalogue_negotiation_and_v1_history_remain_compatible(workout_api):
+    client, *_ = workout_api
+    old = (await client.get("/v1/workouts/catalogue")).json()
+    new = (await client.get("/v1/workouts/catalogue?max_version=2")).json()
+    assert old == catalogue(1) and new == catalogue(2)
+    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == new
+    assert (await client.get("/v1/workouts/catalogue?max_version=0")).status_code == 422
+    reference = next(w for w in new["workouts"] if w["id"] == "body_short")
+    assert [s["exercise_id"] for s in reference["steps"]] == [
+        "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull",
+        "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_right", "quad_left",
+    ]
+    assert all(s["duration_seconds"] == 30 and s["repetitions"] is None for s in reference["steps"])
+    assert sum(s["expected_seconds"] for s in reference["steps"]) == 360
+    assert reference["duration_seconds"] == 690
+    # A queued v1 result still resolves the old routine, even after v2 was fetched.
+    assert (await save(client))["catalogue_version"] == 1
+
+
+async def test_reference_session_saved_once_with_correct_step_titles_and_calories(workout_api):
+    client, factory, *_ = workout_api
+    body = payload(True)
+    body.update(workout_id="body_short", catalogue_version=2,
+                ended_at=(datetime.fromisoformat(body["started_at"]) + timedelta(seconds=690)).isoformat(),
+                steps=[dict(step_id=s["id"], active_seconds=30, rest_seconds=s["rest_seconds"], completed=True)
+                       for s in FULL_BODY_WORKOUT["steps"]])
+    session_id = str(uuid4())
+    first = await save(client, body, session_id)
+    again = await save(client, body, session_id)
+    assert first["id"] == again["id"] and first["diary_entry_id"] == again["diary_entry_id"]
+    assert first["steps"] == again["steps"] and first["calories"] == again["calories"]
+    assert first["active_seconds"] == 360 and first["rest_seconds"] == 330 and first["completed_steps"] == 12
+    assert first["steps"][0]["exercise_title"] == "Колени к локтям стоя"
+    assert first["calories"] == active_kcal(2, [dict(exercise_id=s["exercise_id"], active_seconds=30) for s in FULL_BODY_WORKOUT["steps"]], 80)
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(DayEntry)) == 1
 
 
 async def test_history_without_diary_and_without_ai_usage(workout_api):

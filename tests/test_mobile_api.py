@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import json
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -51,6 +52,68 @@ def test_app_login_code_reads_start_payload() -> None:
     assert app_login_code("premium") is None
     assert app_login_code("app_") is None
     assert app_login_code(None) is None
+
+
+@pytest.mark.parametrize("height", [9999, 49.9, 300.1, 0, -1, "NaN", "Infinity", "-Infinity"])
+async def test_invalid_profile_height_does_not_change_saved_data(api, height):
+    client, factory = api
+    token, _ = await _login(client, factory, 90100)
+    headers = {"Authorization": f"Bearer {token}"}
+    before = (await client.get("/v1/profile", headers=headers)).json()
+    response = await client.put("/v1/profile", headers=headers, json={"height_cm": height, "age": 30})
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]
+    assert (await client.get("/v1/profile", headers=headers)).json() == before
+
+
+@pytest.mark.parametrize("height", [float("nan"), float("inf"), float("-inf")])
+async def test_nonfinite_numeric_height_returns_a_json_validation_error(api, height):
+    client, factory = api
+    token, _ = await _login(client, factory, 90101)
+    response = await client.put("/v1/profile", headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/json",
+    }, content=json.dumps({"height_cm": height}))
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]
+
+
+@pytest.mark.parametrize("height", [50, 300, 174.5])
+async def test_profile_accepts_height_boundaries_and_decimals(api, height):
+    client, factory = api
+    token, _ = await _login(client, factory, 90102)
+    headers = {"Authorization": f"Bearer {token}"}
+    response = await client.put("/v1/profile", headers=headers, json={"height_cm": height})
+    assert response.status_code == 200, response.text
+    assert response.json()["height_cm"] == height
+    assert (await client.get("/v1/profile", headers=headers)).json()["height_cm"] == height
+
+
+async def test_initial_profile_rejects_calculated_target_above_the_manual_limit(api):
+    client, factory = api
+    token, _ = await _login(client, factory, 90103)
+    headers = {"Authorization": f"Bearer {token}"}
+    before = (await client.get("/v1/profile", headers=headers)).json()
+    response = await client.put("/v1/profile", headers=headers, json={
+        "weight_kg": 1000, "height_cm": 180, "age": 30, "sex": "male",
+        "goal": "maintain", "activity_level": "sedentary",
+    })
+    assert response.status_code == 422, response.text
+    assert (await client.get("/v1/profile", headers=headers)).json() == before
+
+
+async def test_completing_an_old_profile_requires_correcting_its_invalid_height(api):
+    client, factory = api
+    token, user_id = await _login(client, factory, 90104)
+    async with factory() as session:
+        await UserRepository(session).upsert_profile(user_id, height_cm=9999)
+    headers = {"Authorization": f"Bearer {token}"}
+    before = (await client.get("/v1/profile", headers=headers)).json()
+    response = await client.put("/v1/profile", headers=headers, json={
+        "weight_kg": 80, "age": 30, "sex": "male",
+        "goal": "maintain", "activity_level": "sedentary",
+    })
+    assert response.status_code == 422, response.text
+    assert (await client.get("/v1/profile", headers=headers)).json() == before
 
 
 async def _login(client: AsyncClient, factory, telegram_id: int) -> tuple[str, int]:

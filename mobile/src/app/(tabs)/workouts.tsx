@@ -35,7 +35,7 @@ export default function WorkoutsScreen() {
           <View style={local.thumb}><ExerciseFigure exercise={catalogue.exercises.find(e => e.id === workout.preview_exercise_id)!} size={76} /></View>
           <View style={{ flex: 1, gap: 7 }}><Text style={s.title}>{workout.title}</Text><Text style={s.small}>{workout.subtitle}</Text><Text style={s.link}>{Math.round(workout.duration_seconds / 60)} мин · {workout.steps.length} упражнений</Text></View><Icon name="chevron" size={16} color={c.muted} />
         </Pressable>)}
-        <Text style={s.small}>Без спортивного инвентаря. Для некоторых движений нужна свободная стена. Выбирайте удобный темп и амплитуду.</Text>
+        <Text style={s.small}>Для некоторых занятий нужны коврик, свободная стена или устойчивый стул. Всё необходимое указано в карточке занятия.</Text>
       </> : <>
         <View style={s.notice}><Text style={s.title}>{total.length ? `Завершено занятий: ${total.length}` : "Первое занятие впереди"}</Text><Text style={s.muted}>{total.length ? `${Math.round(total.reduce((sum, r) => sum + statsFor(r).seconds, 0) / 60)} минут движения в загруженной истории` : "Здесь появятся ваши занятия и результаты."}</Text></View>
         {records.map(record => { const stats = statsFor(record); return <Pressable key={record.id} accessibilityRole="button" onPress={() => router.push({ pathname: "/workout/result/[id]", params: { id: record.id } })} style={s.card}>

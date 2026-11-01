@@ -64,9 +64,23 @@ test("the dismissible failure card shows one error, contains all photos and keep
   assert.equal(limits, 1);
   assert.equal(retries, 1);
   assert.equal(dismissals, 1);
-  assert.ok(buttons.find(n => n.props.accessibilityLabel === "Скрыть сообщение об ошибке"));
+  assert.ok(buttons.find(n => n.props.accessibilityLabel === "Удалить сообщение об ошибке"));
   const disabled = nodes(AnalysisFailureCard({ message, onRetry() {}, disabled: true }));
   assert.equal(disabled.find(n => n.type === "Pressable").props.disabled, true);
+  const deleting = nodes(AnalysisFailureCard({ message, onRetry() {}, onDismiss() {}, deleting: true }));
+  assert.ok(deleting.filter(n => n.type === "Pressable").every(n => n.props.disabled));
+  assert.ok(deleting.some(n => n.type === "Text" && n.props.children === "Удаляем…"));
+  const correcting = nodes(AnalysisFailureCard({ message, onRetry() {}, onDismiss() {}, disabled: true }));
+  assert.notEqual(correcting.find(n => n.props?.accessibilityLabel === "Удалить сообщение об ошибке").props.disabled, true);
+});
+
+test("an unknown analysis result can be deleted even when retry is unavailable", () => {
+  let deleted = 0;
+  const all = nodes(AnalysisFailureCard({ message: "Не удалось обработать запись.", onDismiss: () => deleted++ }));
+  const button = all.find(n => n.props?.accessibilityLabel === "Удалить сообщение об ошибке");
+  assert.ok(button);
+  button.props.onPress();
+  assert.equal(deleted, 1);
 });
 
 test("successful analysis keeps every photo inside its card with independent preview and detail actions", () => {

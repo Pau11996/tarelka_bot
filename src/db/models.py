@@ -228,6 +228,18 @@ class AuthRateLimit(Base):
     resets_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class EmailRegistration(Base):
+    __tablename__ = "email_registrations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    timezone: Mapped[str] = mapped_column(String(64))
+    code_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PasswordResetCode(Base):
     __tablename__ = "password_reset_codes"
 

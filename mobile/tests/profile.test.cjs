@@ -172,6 +172,38 @@ test("invalid numbers never reach the API and a failed save keeps the edits avai
   assert.equal(app.calls.length, 2);
 });
 
+test("editing height rejects out-of-range and non-finite values before saving", async () => {
+  const app = setup();
+  for (const value of ["9999", "49,9", "300,1", "0", "-1", "NaN", "Infinity"]) {
+    app.byLabel("Рост, см").props.onChangeText(value);
+    app.button("Сохранить изменения").props.onPress();
+    await flush();
+    assert.equal(app.calls.length, 0, value);
+    assert.equal(app.render().find(node => node.type === "State").props.error, "Введите рост от 50 до 300 см.");
+  }
+  app.byLabel("Рост, см").props.onChangeText("174,5");
+  app.button("Сохранить изменения").props.onPress();
+  await flush();
+  assert.equal(app.calls[0].options.json.height_cm, 174.5);
+});
+
+test("setup keeps an invalid height draft open and accepts both boundaries", () => {
+  const app = setup(undefined, { profile: emptyProfile, setupUserId: 44 });
+  app.byLabel("Введите ваш рост").props.onPress();
+  for (const value of ["9999", "49,9", "300,1", "NaN", "Infinity"]) {
+    app.byLabel("Рост, см").props.onChangeText(value);
+    app.button("Готово").props.onPress();
+    assert.ok(app.byLabel("Рост, см"), value);
+    assert.ok(app.render().some(node => node.props?.children === "Введите рост от 50 до 300 см."));
+  }
+  app.byLabel("Рост, см").props.onChangeText("50");
+  app.button("Готово").props.onPress();
+  assert.equal(app.byLabel("Рост, см"), undefined);
+  app.enterMetric("Введите ваш рост", "Рост, см", "300");
+  assert.equal(app.byLabel("Рост, см"), undefined);
+  assert.equal(app.calls.length, 0);
+});
+
 const emptyProfile = { weight_kg: null, height_cm: null, age: null, sex: null, goal: null, activity_level: null, daily_calorie_target: 2000, is_complete: false };
 
 test("leaving the profile returns to the account menu", () => {

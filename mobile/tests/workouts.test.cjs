@@ -91,7 +91,7 @@ test('offline result date uses the account timezone across midnight and DST', ()
 function fixture() {
   let ms = 0, serial = 0, saved = { catalogue, settings: { auto_log: false, sound: true }, settings_dirty: false, timezone: 'Europe/Minsk', draft: null, records: [] };
   const remote = new Map(), requests = [];
-  const config = { offline: false, loseAck: false, diskFull: false, serverSettings: { auto_log: false, sound: true } };
+  const config = { offline: false, loseAck: false, diskFull: false, serverCatalogue: catalogue, serverSettings: { auto_log: false, sound: true } };
   const deps = {
     read: async () => clone(saved),
     write: async value => { if (config.diskFull) throw Error('disk full'); saved = clone(value); },
@@ -99,7 +99,7 @@ function fixture() {
     async request(url, options) {
       requests.push([url, clone({ ...options, signal: undefined })]);
       if (config.offline) throw Object.assign(Error('offline'), { status: 0 });
-      if (url === '/v1/workouts/catalogue') return clone(catalogue);
+      if (url === '/v1/workouts/catalogue?max_version=2') return clone(config.serverCatalogue);
       if (url === '/v1/me') return { timezone: 'Europe/Minsk' };
       if (url === '/v1/settings/workouts') { if (options.method === 'PUT') config.serverSettings = options.json; return clone(config.serverSettings); }
       if (url.startsWith('/v1/workouts/history')) return { items: [...remote.values()], next_offset: null };
@@ -143,6 +143,30 @@ test('draft restores paused with settings frozen at its start; subsequent settin
   assert.equal(restored.getSnapshot().draft.paused, true); assert.equal(restored.getSnapshot().draft.results[0].active_seconds, 2);
   await restored.action('stop'); await restored.refresh();
   await restored.start('test'); assert.equal(restored.getSnapshot().draft.auto_log, true);
+  await restored.close();
+});
+
+test('catalogue update preserves an old draft and queued result; new sessions use cached v2 offline', async () => {
+  const f = fixture(), store = await initialize(f);
+  await store.start('test'); f.advance(2000); store.tick();
+  const original = clone(store.getSnapshot().draft);
+  f.config.serverCatalogue = clone(catalogue); f.config.serverCatalogue.version = 2;
+  f.config.serverCatalogue.exercises[0].animation = 'standing_knee_elbow';
+  f.config.serverCatalogue.workouts[0].steps[0].duration_seconds = 30;
+  await store.refresh();
+  assert.equal(store.getSnapshot().catalogue.version, 2);
+  assert.equal(store.getSnapshot().draft.catalogue_version, 1);
+  assert.deepEqual(store.getSnapshot().draft.workout, original.workout);
+  await store.close(); f.config.offline = true;
+  const restored = await initialize(f);
+  assert.equal(restored.getSnapshot().draft.catalogue_version, 1);
+  assert.equal(restored.getSnapshot().draft.paused, true);
+  await restored.action('stop');
+  assert.equal(restored.getSnapshot().records[0].payload.catalogue_version, 1);
+  await restored.start('test');
+  assert.equal(restored.getSnapshot().draft.catalogue_version, 2);
+  assert.equal(restored.getSnapshot().draft.exercises[0].animation, 'standing_knee_elbow');
+  assert.equal(restored.getSnapshot().draft.workout.steps[0].duration_seconds, 30);
   await restored.close();
 });
 
@@ -215,7 +239,8 @@ test('closing a session during an in-flight request prevents late responses from
 
 test('unsupported catalogue versions or missing animation assets are rejected before starting', () => {
   assert.equal(supportedCatalogue(catalogue), true);
-  assert.equal(supportedCatalogue({ ...catalogue, version: 2 }), false);
+  assert.equal(supportedCatalogue({ ...catalogue, version: 2 }), true);
+  assert.equal(supportedCatalogue({ ...catalogue, version: 3 }), false);
   assert.equal(supportedCatalogue({ ...catalogue, exercises: [{ id: 'march', animation: 'unknown' }] }), false);
 });
 

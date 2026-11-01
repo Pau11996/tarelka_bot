@@ -7,19 +7,16 @@ import re
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from sqlalchemy import case, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bot.config import settings
-from src.db.models import AuthRateLimit, NotificationPreference, PasswordResetCode, Profile, User
-from src.db.repository import DEFAULT_DAILY_CALORIE_TARGET
+from src.db.models import AuthRateLimit, PasswordResetCode, User
 from src.db.session import get_session
 from src.mobile_api.passwords import DUMMY_HASH, hash_password, verify_password
 from src.mobile_api.tokens import issue_access_token
@@ -143,40 +140,6 @@ async def reset_password(
     ))
     await session.commit()
     return {"message": "Пароль изменён. Войдите с новым паролем."}
-
-
-@router.post("/register", status_code=201)
-async def register(
-    body: Registration, request: Request, session: AsyncSession = Depends(get_session),
-):
-    password = body.password.get_secret_value()
-    if not 8 <= len(password) <= 128:
-        raise HTTPException(400, "Пароль должен содержать от 8 до 128 символов")
-    try:
-        ZoneInfo(body.timezone)
-    except (ZoneInfoNotFoundError, ValueError):
-        raise HTTPException(400, "Неизвестный часовой пояс") from None
-    await rate_limit(session, "register-ip", request.client.host if request.client else "unknown", 10, 3600)
-    if await session.scalar(select(User.id).where(User.email == body.email)):
-        raise HTTPException(409, "Этот email уже зарегистрирован. Войдите в аккаунт.")
-    user = User(
-        email=body.email, telegram_id=None,
-        password_hash=await asyncio.to_thread(hash_password, password),
-        timezone=body.timezone, legacy_photo_quota=False,
-    )
-    session.add(user)
-    try:
-        await session.flush()
-        session.add_all([
-            Profile(user_id=user.id, daily_calorie_target=DEFAULT_DAILY_CALORIE_TARGET),
-            NotificationPreference(user_id=user.id, channel="app"),
-        ])
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(409, "Этот email уже зарегистрирован. Войдите в аккаунт.") from None
-    await session.refresh(user)
-    return access_token(user)
 
 
 @router.post("/login")

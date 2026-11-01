@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.models import DayEntry, EntryType, Profile, User, WorkoutPreference, WorkoutSession
 from src.db.session import get_session
 from src.mobile_api.deps import get_current_user
-from src.shared.workouts import active_kcal, catalogue, workout_definition
+from src.shared.workouts import CATALOGS, active_kcal, catalogue, workout_definition
 
 router = APIRouter(tags=["Workouts"])
 
@@ -105,8 +105,10 @@ async def link_diary(session, row):
 
 
 @router.get("/workouts/catalogue")
-async def get_catalogue(user: User = Depends(get_current_user)):
-    return catalogue()
+async def get_catalogue(max_version: int = Query(default=1, ge=1), user: User = Depends(get_current_user)):
+    # Old APKs keep receiving the animations they can render, even when the
+    # API is released before the new APK. Histories resolve their own version.
+    return catalogue(max(version for version in CATALOGS if version <= max_version))
 
 
 @router.get("/settings/workouts")

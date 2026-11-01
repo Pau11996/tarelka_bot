@@ -20,7 +20,7 @@ export function useOperationLimitNotice(operations: Operation[] | undefined, bus
     if (busy) return;
     const latest = operations?.filter((op) => op.kind !== "review")
       .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).at(-1);
-    if (!latest || latest.status !== "failed" || shown.current.has(latest.id) || dismissedFailures.includes(latest.request_key)) return;
+    if (!latest || latest.dismissed || latest.status !== "failed" || shown.current.has(latest.id) || dismissedFailures.includes(latest.request_key)) return;
     if (!latest.limit_reached && !isLegacyLimitMessage(latest.error)) return;
     markLimitShown(latest.id);
     void openLimit(latest.limit_reached, operationLimitKind(latest));

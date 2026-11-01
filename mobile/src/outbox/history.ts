@@ -19,10 +19,10 @@ export async function recoverOutboxHistory(
   for (const item of items) {
     if (!item.operation || chat.operations.some(op => op.id === item.operation!.id)) continue;
     try {
-      const op = ["queued", "running"].includes(item.operation.status)
-        ? await fetch<Operation>(`/v1/operations/${item.operation.id}`) : item.operation;
+      // An absent terminal job may have been removed from chat on another device.
+      const op = await fetch<Operation>(`/v1/operations/${item.operation.id}`);
       observed.push(op);
-      if (op.status === "done" && op.entry_id != null && !chat.entries.some(entry => entry.id === op.entry_id)) {
+      if (!op.dismissed && op.status === "done" && op.entry_id != null && !chat.entries.some(entry => entry.id === op.entry_id)) {
         recovered.push(await fetch<ChatHistory>(`/v1/chat?before=${op.entry_id + 1}&limit=1`));
       }
     } catch (error) {
@@ -36,7 +36,7 @@ export async function recoverOutboxHistory(
   return { observed, recovered: recovered.length > 0, chat: {
     ...chat,
     entries: unique([...recovered.flatMap(page => page.entries), ...chat.entries]),
-    operations: unique([...recovered.flatMap(page => page.operations), ...chat.operations]),
+    operations: unique([...observed.filter(op => op.dismissed), ...recovered.flatMap(page => page.operations), ...chat.operations]),
     media: unique([...recovered.flatMap(page => page.media), ...chat.media]),
   } };
 }

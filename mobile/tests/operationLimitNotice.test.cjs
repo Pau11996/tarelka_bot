@@ -75,6 +75,8 @@ test("dismissed failures do not reopen the quota dialog or fall back to an older
   const older = operation({ id: "older", request_key: "older", created_at: "2026-10-22T18:00:00Z" });
   app.useOperationLimitNotice([older, latest], false, ["hidden"]);
   assert.equal(app.opened.length, 0);
+  app.useOperationLimitNotice([older, { ...latest, dismissed: true }], false);
+  assert.equal(app.opened.length, 0);
   app.useOperationLimitNotice([latest, operation({ id: "new", request_key: "new", created_at: "2026-10-22T20:00:00Z" })], false, ["hidden"]);
   assert.equal(app.opened.length, 1);
 });

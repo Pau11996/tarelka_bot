@@ -296,6 +296,19 @@ async def test_non_finite_profile_values_are_rejected(actor, state):
         assert "Введите" in actor.last().text
 
 
+async def test_profile_height_bounds_keep_the_form_open_until_corrected(actor):
+    await actor.state.set_state(ProfileStates.height)
+    await actor.state.update_data(weight_kg=80)
+    for value in ["9999", "49,9", "300,1", "0", "-1"]:
+        await actor.send(value)
+        assert await actor.state.get_state() == ProfileStates.height.state
+        assert "от 50 до 300 см" in actor.last().text
+        assert "height_cm" not in await actor.state.get_data()
+    await actor.send("174,5")
+    assert await actor.state.get_state() == ProfileStates.age.state
+    assert (await actor.state.get_data())["height_cm"] == 174.5
+
+
 async def test_notifications_survey_and_account_deletion(actor):
     await actor.send("/notifications_off")
     async with actor.factory() as session:

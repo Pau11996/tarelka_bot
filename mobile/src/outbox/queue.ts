@@ -197,7 +197,7 @@ export class OutboxQueue {
     const items = this.snapshot.items.flatMap(item => {
       const op = byKey.get(item.requestKey);
       if (!op) return [item];
-      const terminal = op.status === "failed" || (op.status === "done" && (op.entry_id == null || entryIds.includes(op.entry_id)));
+      const terminal = op.dismissed || op.status === "failed" || (op.status === "done" && (op.entry_id == null || entryIds.includes(op.entry_id)));
       if (terminal) { released.push(item); return []; }
       return [{ ...item, state: "accepted" as const, operation: op }];
     });

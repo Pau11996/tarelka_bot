@@ -26,6 +26,7 @@ from src.bot.services.nutrition import calculate_daily_target
 from src.bot.states import ProfileStates
 from src.db.models import ActivityLevel, Goal, Sex
 from src.db.repository import UserRepository
+from src.shared.profile_limits import MIN_HEIGHT_CM, MAX_HEIGHT_CM, HEIGHT_ERROR
 from src.shared.weight_tracking import (
     DIRECTION_LABELS, WeightTrackingError, active_goal, direction_for,
     record_weight, set_weight_goal, valid_weight,
@@ -218,10 +219,10 @@ async def profile_weight(message: Message, state: FSMContext, cleanup: MessageCl
 async def profile_height(message: Message, state: FSMContext, cleanup: MessageCleanupService) -> None:
     try:
         height = float((message.text or "").replace(",", "."))
-        if not math.isfinite(height) or height <= 0:
+        if not math.isfinite(height) or not MIN_HEIGHT_CM <= height <= MAX_HEIGHT_CM:
             raise ValueError
     except ValueError:
-        await answer_ephemeral(message, cleanup, "Введите корректный рост в см.", track_user=False)
+        await answer_ephemeral(message, cleanup, HEIGHT_ERROR, track_user=False)
         schedule_user_message(cleanup, message)
         return
     schedule_user_message(cleanup, message)

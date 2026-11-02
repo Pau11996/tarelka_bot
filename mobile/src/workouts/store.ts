@@ -1,13 +1,16 @@
 import { act, createDraft, restoreDraft, sessionInput, tick, type WorkoutAction } from "./engine";
-import type { LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
+import { courseState } from "./course";
+import type { CourseCompletion, LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
 
 type Request = <T>(path: string, options: { method?: string; json?: unknown; signal: AbortSignal }) => Promise<T>;
 export type WorkoutDependencies = { read(): Promise<WorkoutData | null>; write(data: WorkoutData): Promise<void>; remove(): Promise<void>; request: Request; uuid(): string; now(): number; wall(): string; updated(): void };
-const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true }, settings_dirty: false, timezone: "UTC", draft: null, records: [] });
+const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true, activity_level: "medium" }, settings_dirty: false, timezone: "UTC", draft: null, records: [], course_progress: [], course_queue: [] });
 const animationNames = new Set(["march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch",
-  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch"]);
+  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "glute_bridge", "bird_dog"]);
 export function supportedCatalogue(value: WorkoutCatalogue): boolean {
-  if (!value || ![1, 2].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
+  if (!value || ![1, 2, 3].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
+  if (value.version === 3 && (!value.course || value.course.id !== "full_body_28_v1" || value.course.days.length !== 28 || value.course.days.some((day, index) => day.day !== index + 1 ||
+    (["strength", "mobility"].includes(day.kind) && ["light", "medium", "intense"].some(level => !value.workouts.some(w => w.id === day.workout_ids[level as "light"] && w.course_day === day.day && w.activity_level === level && w.course_id === value.course!.id)))))) return false;
   const ids = new Set(value.exercises.map(ex => ex.id));
   return value.exercises.every(ex => animationNames.has(ex.animation)) && value.workouts.every(w => w.steps.length > 0 && w.steps.every(s => ids.has(s.exercise_id)));
 }
@@ -38,8 +41,8 @@ export class WorkoutStore {
     for (const listener of this.listeners) listener();
   }
   private persist() {
-    const { catalogue, settings, settings_dirty, timezone, draft, records } = this.state;
-    const data = { catalogue, settings, settings_dirty, timezone, draft, records };
+    const { catalogue, settings, settings_dirty, timezone, draft, records, course_progress, course_queue } = this.state;
+    const data = { catalogue, settings, settings_dirty, timezone, draft, records, course_progress, course_queue };
     const write = this.writes.catch(() => undefined).then(() => this.deps.write(data));
     this.writes = write;
     void write.then(() => {
@@ -72,6 +75,10 @@ export class WorkoutStore {
     const catalogue = this.state.catalogue;
     const workout = catalogue?.workouts.find(w => w.id === workoutId);
     if (!catalogue || !workout) throw Error("Подключитесь к интернету, чтобы загрузить каталог");
+    if (workout.course_id) {
+      const progress = courseState(this.state, this.deps.wall());
+      if (workout.course_day !== progress.day || !progress.available) throw Error("Начните с текущего дня курса. Между днями сохраняется время для восстановления.");
+    }
     const draft = createDraft(this.deps.uuid(), workout, catalogue, this.state.settings, this.state.timezone, this.deps.now(), this.deps.wall());
     // Starting is durable before the player opens. Disk failures leave a paused draft.
     this.patch({ draft, error: null });
@@ -116,6 +123,15 @@ export class WorkoutStore {
     await this.persist();
     void this.syncMutation();
   }
+  async completeCourseDay(day: number) {
+    if (this.closed || !this.state.ready || this.state.draft) throw Error("Сначала завершите текущее занятие");
+    const course = this.state.catalogue?.course, progress = courseState(this.state, this.deps.wall());
+    const definition = course?.days.find(item => item.day === day);
+    if (!course || !definition || !["walk", "rest"].includes(definition.kind) || progress.day !== day || !progress.available) throw Error("Этот день пока недоступен");
+    this.patch({ course_queue: [...(this.state.course_queue ?? []), { day, course_id: course.id, completed_at: this.deps.wall(), timezone: this.state.timezone }], error: null });
+    await this.persist();
+    void this.syncMutation();
+  }
   async addToDiary(id: string) {
     const record = this.state.records.find(r => r.id === id);
     if (!record || record.server?.diary_added || (record.server?.status ?? record.payload?.status) !== "completed") return;
@@ -128,7 +144,7 @@ export class WorkoutStore {
   }
   async retry() {
     await this.persist(); this.diskError = false;
-    this.patch({ error: null, records: this.state.records.map(r => ({ ...r, blocked: false, error: undefined })) });
+    this.patch({ error: null, records: this.state.records.map(r => ({ ...r, blocked: false, error: undefined })), course_queue: this.state.course_queue?.map(r => ({ ...r, blocked: false, error: undefined })) });
     await this.refresh();
   }
   async setActive(active: boolean) {
@@ -141,7 +157,7 @@ export class WorkoutStore {
       await this.refresh();
     }
   }
-  hasPending() { return this.state.settings_dirty || this.state.records.some(r => !r.blocked && (!r.server || r.diary_requested)); }
+  hasPending() { return this.state.settings_dirty || this.state.records.some(r => !r.blocked && (!r.server || r.diary_requested)) || !!this.state.course_queue?.some(r => !r.blocked); }
   private syncMutation() {
     // A mutation arriving during a request must get its own upload pass.
     // Plain refreshes and network failures never create an unbounded retry loop.
@@ -168,15 +184,38 @@ export class WorkoutStore {
     try {
       if (this.state.settings_dirty) {
         const revision = this.settingsRevision;
-        await request("/v1/settings/workouts", { method: "PUT", json: this.state.settings, signal: controller.signal });
+        const settings = this.state.catalogue?.course ? this.state.settings : { auto_log: this.state.settings.auto_log, sound: this.state.settings.sound };
+        await request("/v1/settings/workouts", { method: "PUT", json: settings, signal: controller.signal });
         if (revision === this.settingsRevision) this.patch({ settings_dirty: false });
         await this.persist(); guard();
       }
-      for (const item of this.state.records.filter(r => !r.blocked && (!r.server || r.diary_requested))) {
+      // Interleave offline workouts and walk/rest check-ins in their original order.
+      const jobs = [
+        ...this.state.records.filter(r => !r.blocked && (!r.server || r.diary_requested)).map(item => ({ kind: "record" as const, item, date: item.payload?.ended_at ?? item.server?.ended_at ?? "" })),
+        ...(this.state.course_queue ?? []).filter(r => !r.blocked).map(item => ({ kind: "day" as const, item, date: item.completed_at })),
+      ].sort((a, b) => a.date.localeCompare(b.date));
+      for (const job of jobs) {
+        if (job.kind === "day") {
+          const { day, course_id, completed_at, timezone } = job.item;
+          try {
+            const progress = await request<CourseCompletion[]>(`/v1/workouts/course/days/${day}`, { method: "PUT", json: { course_id, completed_at, timezone }, signal: controller.signal });
+            this.patch({ course_progress: progress, course_queue: this.state.course_queue?.filter(item => item.day !== day) });
+            await this.persist(); guard();
+          } catch (error) {
+            guard();
+            if ([409, 422].includes(status(error))) {
+              this.patch({ course_queue: this.state.course_queue?.map(item => item.day === day ? { ...item, blocked: true, error: message(error) } : item), error: message(error) });
+              await this.persist();
+            } else throw error;
+          }
+          continue;
+        }
+        const item = job.item;
         try {
           if (!item.server && item.payload) {
             const server = await request<WorkoutSession>(`/v1/workouts/sessions/${item.id}`, { method: "PUT", json: item.payload, signal: controller.signal });
             this.replaceRecord(item.id, { server, error: undefined });
+            if (server.course_progress) this.patch({ course_progress: server.course_progress });
             await this.persist(); guard(); this.deps.updated();
           }
           if (this.state.records.find(r => r.id === item.id)?.diary_requested) {
@@ -192,11 +231,12 @@ export class WorkoutStore {
         }
       }
       const revision = this.settingsRevision;
-      const [catalogue, settings, me, history] = await Promise.allSettled([
-        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=2", { signal: controller.signal }),
+      const [catalogue, settings, me, history, progress] = await Promise.allSettled([
+        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=3", { signal: controller.signal }),
         request<WorkoutSettings>("/v1/settings/workouts", { signal: controller.signal }),
         request<{ timezone: string }>("/v1/me", { signal: controller.signal }),
         request<{ items: WorkoutSession[]; next_offset: number | null }>("/v1/workouts/history", { signal: controller.signal }),
+        request<CourseCompletion[]>("/v1/workouts/course/progress", { signal: controller.signal }),
       ]);
       guard();
       if (catalogue.status === "fulfilled") {
@@ -206,7 +246,9 @@ export class WorkoutStore {
       if (settings.status === "fulfilled" && revision === this.settingsRevision && !this.state.settings_dirty) this.patch({ settings: settings.value });
       if (me.status === "fulfilled") this.patch({ timezone: me.value.timezone });
       if (history.status === "fulfilled") this.mergeHistory(history.value);
-      const failure = [catalogue, settings, me, history].find(r => r.status === "rejected");
+      if (progress.status === "fulfilled") this.patch({ course_progress: progress.value,
+        course_queue: this.state.course_queue?.filter(item => !progress.value.some(p => p.day === item.day)) });
+      const failure = [catalogue, settings, me, history, ...(this.state.catalogue?.course ? [progress] : [])].find(r => r.status === "rejected");
       if (failure?.status === "rejected") this.patch({ error: message(failure.reason) });
       await this.persist();
     } catch (error) {

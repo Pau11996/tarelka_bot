@@ -7,6 +7,8 @@ import { colors as c } from "../../theme";
 import { ErrorText, Loading, SecondaryButton } from "../../ui";
 import { useWorkouts } from "../../workouts/context";
 import { ExerciseFigure } from "../../workouts/ExerciseFigure";
+import { availableWorkouts } from "../../workouts/catalogue";
+import { CourseOverview } from "../../workouts/CourseOverview";
 import { dateLabel, s, statsFor, WorkoutHeader } from "../../workouts/ui";
 
 export default function WorkoutsScreen() {
@@ -17,6 +19,9 @@ export default function WorkoutsScreen() {
   useEffect(() => { if (params.view === "history") setView("history"); }, [params.view]);
   useFocusEffect(useCallback(() => { void store.refresh(); }, [store]));
   if (!ready) return <Loading />;
+  const workouts = availableWorkouts(catalogue);
+  const primaryWorkout = workouts[0];
+  const preview = catalogue?.exercises.find(exercise => exercise.id === primaryWorkout?.preview_exercise_id);
   const total = records.filter(r => statsFor(r).status === "completed");
   return <SafeAreaView edges={["top"]} style={s.page}>
     <WorkoutHeader title="Тренировки" back={false} right={<Pressable accessibilityRole="button" accessibilityLabel="Настройки тренировок" style={s.iconButton} onPress={() => router.push("/workout/settings")}><Icon name="settings" color={c.accentDark} /></Pressable>} />
@@ -25,17 +30,17 @@ export default function WorkoutsScreen() {
       <View style={local.tabs}>{(["catalogue", "history"] as const).map(key => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: view === key }} onPress={() => setView(key)} style={[local.tab, view === key && local.selected]}><Text style={[local.tabText, view === key && { color: c.accentDark }]}>{key === "catalogue" ? "Занятия" : "Моя история"}</Text></Pressable>)}</View>
       {error ? <View style={s.notice}><Text style={s.muted}>{catalogue ? "Сохранённые занятия доступны. Синхронизацию можно повторить." : "Для первой загрузки каталога нужен интернет."}</Text><ErrorText message={error} /><Pressable accessibilityRole="button" style={{ paddingVertical: 6 }} onPress={() => void store.retry().catch(e => setLocalError(e.message))}><Text style={s.link}>Повторить</Text></Pressable></View> : null}
       <ErrorText message={localError} />
-      {view === "catalogue" ? <>
-        {catalogue ? <View style={local.hero}>
-          <View style={{ flex: 1, gap: 10 }}><Text style={local.eyebrow}>В СВОЁМ ТЕМПЕ</Text><Text style={local.heroTitle}>Движение —{`\n`}тоже забота</Text><Text style={s.muted}>Короткие занятия дома.{`\n`}Начните с пяти минут.</Text></View>
-          <ExerciseFigure exercise={catalogue.exercises.find(e => e.id === "arm_raise")!} size={120} />
+      {view === "catalogue" ? catalogue?.course ? <CourseOverview /> : <>
+        {preview ? <View style={local.hero}>
+          <View style={{ flex: 1, gap: 10 }}><Text style={local.eyebrow}>В СВОЁМ ТЕМПЕ</Text><Text style={local.heroTitle}>Движение —{`\n`}тоже забота</Text><Text style={s.muted}>Комплекс для всего тела.{`\n`}В удобном темпе.</Text></View>
+          <ExerciseFigure exercise={preview} size={120} />
         </View> : null}
-        <View style={s.row}><Text style={[s.title, { flex: 1 }]}>Выберите занятие</Text><View style={s.chip}><Text style={s.chipText}>Все доступны</Text></View></View>
-        {catalogue?.workouts.map(workout => <Pressable key={workout.id} accessibilityRole="button" accessibilityLabel={`${workout.title}, около ${Math.round(workout.duration_seconds / 60)} минут`} onPress={() => router.push({ pathname: "/workout/[id]", params: { id: workout.id } })} style={({ pressed }) => [s.card, local.workoutCard, pressed && { opacity: .75 }]}>
-          <View style={local.thumb}><ExerciseFigure exercise={catalogue.exercises.find(e => e.id === workout.preview_exercise_id)!} size={76} /></View>
+        <View style={s.row}><Text style={[s.title, { flex: 1 }]}>Ваш комплекс</Text><View style={s.chip}><Text style={s.chipText}>Бесплатно</Text></View></View>
+        {workouts.map(workout => <Pressable key={workout.id} accessibilityRole="button" accessibilityLabel={`${workout.title}, около ${Math.round(workout.duration_seconds / 60)} минут`} onPress={() => router.push({ pathname: "/workout/[id]", params: { id: workout.id } })} style={({ pressed }) => [s.card, local.workoutCard, pressed && { opacity: .75 }]}>
+          <View style={local.thumb}><ExerciseFigure exercise={catalogue!.exercises.find(e => e.id === workout.preview_exercise_id)!} size={76} /></View>
           <View style={{ flex: 1, gap: 7 }}><Text style={s.title}>{workout.title}</Text><Text style={s.small}>{workout.subtitle}</Text><Text style={s.link}>{Math.round(workout.duration_seconds / 60)} мин · {workout.steps.length} упражнений</Text></View><Icon name="chevron" size={16} color={c.muted} />
         </Pressable>)}
-        <Text style={s.small}>Для некоторых занятий нужны коврик, свободная стена или устойчивый стул. Всё необходимое указано в карточке занятия.</Text>
+        {primaryWorkout ? <Text style={s.small}>Для комплекса нужны коврик, свободная стена и устойчивый стул. Подробности — в карточке занятия.</Text> : catalogue ? <View style={s.notice}><Text style={s.muted}>Обновите каталог, чтобы загрузить комплекс «Всё тело».</Text><SecondaryButton label="Обновить каталог" onPress={() => void store.refresh()} /></View> : null}
       </> : <>
         <View style={s.notice}><Text style={s.title}>{total.length ? `Завершено занятий: ${total.length}` : "Первое занятие впереди"}</Text><Text style={s.muted}>{total.length ? `${Math.round(total.reduce((sum, r) => sum + statsFor(r).seconds, 0) / 60)} минут движения в загруженной истории` : "Здесь появятся ваши занятия и результаты."}</Text></View>
         {records.map(record => { const stats = statsFor(record); return <Pressable key={record.id} accessibilityRole="button" onPress={() => router.push({ pathname: "/workout/result/[id]", params: { id: record.id } })} style={s.card}>

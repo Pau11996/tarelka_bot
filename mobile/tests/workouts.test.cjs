@@ -99,7 +99,8 @@ function fixture() {
     async request(url, options) {
       requests.push([url, clone({ ...options, signal: undefined })]);
       if (config.offline) throw Object.assign(Error('offline'), { status: 0 });
-      if (url === '/v1/workouts/catalogue?max_version=2') return clone(config.serverCatalogue);
+      if (url === '/v1/workouts/catalogue?max_version=3') return clone(config.serverCatalogue);
+      if (url === '/v1/workouts/course/progress') return [];
       if (url === '/v1/me') return { timezone: 'Europe/Minsk' };
       if (url === '/v1/settings/workouts') { if (options.method === 'PUT') config.serverSettings = options.json; return clone(config.serverSettings); }
       if (url.startsWith('/v1/workouts/history')) return { items: [...remote.values()], next_offset: null };

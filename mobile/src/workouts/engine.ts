@@ -14,7 +14,10 @@ export function remaining(draft: WorkoutDraft) {
   return Math.max(0, draft.phase === "rest" ? draft.rest_target - result.rest_seconds : (step.duration_seconds ?? step.expected_seconds * 4) - result.active_seconds);
 }
 export function finish(draft: WorkoutDraft, status: SessionInput["status"], wall: string): WorkoutDraft {
-  return { ...draft, paused: true, phase: "finished", status: draft.results.some(s => s.completed) ? status : "interrupted", ended_at: wall };
+  const complete = draft.workout.course_id
+    ? draft.workout.steps.every((step, i) => !["main", "mobility"].includes(step.section ?? "") || step.optional || draft.results[i].completed)
+    : draft.results.some(s => s.completed);
+  return { ...draft, paused: true, phase: "finished", status: complete ? status : "interrupted", ended_at: wall };
 }
 function afterRest(draft: WorkoutDraft, wall: string): WorkoutDraft {
   if (draft.index === draft.workout.steps.length - 1) return finish(draft, "completed", wall);

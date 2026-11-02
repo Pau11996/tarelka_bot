@@ -1,44 +1,13 @@
-import { useState } from "react";
 import { Text, View } from "react-native";
-import { Screen, Panel, State, Segments, design } from "../components/Screen";
+import { Screen, Panel, State, design } from "../components/Screen";
 import { useResource } from "../hooks/useResource";
-import { useAuth } from "../auth";
-import { api, apiFailureMessage } from "../api";
-import { PrimaryButton, SecondaryButton } from "../ui";
+import { SubscriptionAvailability } from "../billing/SubscriptionAvailability";
 import { colors } from "../theme";
 import type { Subscription } from "../types";
 import { formatDay } from "../format";
-const demo = process.env.EXPO_PUBLIC_DEMO_BILLING === "1";
 export default function Pay() {
-  const { token, signOut } = useAuth();
   const { data, error, loading, load } =
     useResource<Subscription>("/v1/subscription");
-  const [stage, setStage] = useState<
-    "offer" | "card" | "processing" | "success" | "declined"
-  >("offer");
-  const [outcome, setOutcome] = useState<"success" | "declined">("success");
-  const [failure, setFailure] = useState<string | null>(null);
-  async function checkout() {
-    if (stage === "processing") return;
-    setStage("processing");
-    setFailure(null);
-    try {
-      const result = await api<{ status: "success" | "declined" }>(
-        "/v1/billing/demo",
-        { token, method: "POST", json: { outcome } },
-      );
-      setStage(result.status);
-    } catch (e) {
-      setFailure(
-        await apiFailureMessage(
-          e,
-          "Не удалось выполнить демонстрацию",
-          signOut,
-        ),
-      );
-      setStage("card");
-    }
-  }
   return (
     <Screen
       back
@@ -52,9 +21,10 @@ export default function Pay() {
     >
       <State
         loading={loading && !data}
-        error={failure ?? error}
+        error={error}
         onRetry={() => void load()}
       />
+      <SubscriptionAvailability />
       {data ? <Panel title="Ваши запросы сегодня" subtitle="Использовано / доступно за день">
         {data.limit_mode === "split" ? data.used && data.limits ? (
           ([['photo', 'Фото'], ['voice', 'Голос'], ['text', 'Текст']] as const).map(([key, label]) => (
@@ -83,89 +53,6 @@ export default function Pay() {
           </Text>
         ))}
       </Panel>
-      {demo ? (
-        <>
-          <View
-            style={[
-              design.card,
-              { backgroundColor: "#fff4d9", borderColor: "#f1deb1" },
-            ]}
-          >
-            <Text style={{ fontWeight: "700", color: "#725514" }}>
-              Демонстрационная оплата
-            </Text>
-            <Text style={{ color: "#725514", lineHeight: 21 }}>
-              Деньги не списываются. Реальная подписка аккаунта не изменится.
-            </Text>
-          </View>
-          {stage === "offer" ? (
-            <PrimaryButton
-              label="Попробовать оплату картой"
-              onPress={() => setStage("card")}
-            />
-          ) : null}
-          {stage === "card" || stage === "processing" ? (
-            <Panel
-              title="Тестовая карта"
-              subtitle="Используем готовые тестовые данные. Настоящие реквизиты не нужны."
-            >
-              <View
-                style={[design.card, { backgroundColor: colors.accentDark }]}
-              >
-                <Text
-                  style={{ color: "white", fontSize: 22, letterSpacing: 2 }}
-                >
-                  4242 4242 4242 4242
-                </Text>
-                <Text style={{ color: "#d6e7d1" }}>12 / 30 TEST CARD</Text>
-              </View>
-              <Text style={design.subtitle}>Сценарий для проверки</Text>
-              <Segments
-                value={outcome}
-                onChange={setOutcome}
-                items={[
-                  { value: "success", label: "Успех" },
-                  { value: "declined", label: "Отказ" },
-                ]}
-              />
-              <PrimaryButton
-                disabled={stage === "processing"}
-                label={
-                  stage === "processing" ? "Обработка…" : "Проверить оплату"
-                }
-                onPress={() => void checkout()}
-              />
-            </Panel>
-          ) : null}
-          {stage === "success" ? (
-            <Panel
-              title="Демонстрация прошла успешно"
-              subtitle="Деньги не списаны. Настоящая подписка не активирована."
-            >
-              <SecondaryButton
-                label="Повторить демонстрацию"
-                onPress={() => setStage("card")}
-              />
-            </Panel>
-          ) : null}
-          {stage === "declined" ? (
-            <Panel
-              title="Тестовый отказ банка"
-              subtitle="В этом сценарии оплата отклонена. Попробуйте успешный сценарий."
-            >
-              <SecondaryButton
-                label="Попробовать снова"
-                onPress={() => setStage("card")}
-              />
-            </Panel>
-          ) : null}
-        </>
-      ) : (
-        <Panel
-          title="Оплата в приложении пока недоступна"
-          subtitle="Если подписка уже оформлена в Telegram, она действует и здесь."
-        />
-      )}
     </Screen>
   );
 }

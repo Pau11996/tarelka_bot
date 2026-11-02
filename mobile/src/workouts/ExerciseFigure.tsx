@@ -8,6 +8,8 @@ import { useExerciseMotion } from "./character/useExerciseMotion";
 import { FullBodyCharacter } from "./character/FullBodyCharacter";
 import { fullBodyFrame, fullBodyTiming, isFullBodyMovement, type FullBodyMovement } from "./character/fullBodyMotion";
 import type { Exercise } from "./types";
+import { CourseFloorCharacter } from "./character/CourseFloorCharacter";
+import { floorFrame, floorTiming, type FloorMovement } from "./character/courseFloorMotion";
 
 type Props = { exercise: Exercise; playing?: boolean; size?: number; showGuide?: boolean };
 function MorningFigure({ exercise, movement, playing = false, size = 240, showGuide = false }: Props & { movement: MorningMovement }) {
@@ -26,12 +28,19 @@ function MorningFigure({ exercise, movement, playing = false, size = 240, showGu
   </View>;
 }
 export const ExerciseFigure = memo(function ExerciseFigure(props: Props) {
-  return isFullBodyMovement(props.exercise.animation)
+  return props.exercise.animation === "glute_bridge" || props.exercise.animation === "bird_dog"
+    ? <CourseFloorFigure {...props} movement={props.exercise.animation} />
+    : isFullBodyMovement(props.exercise.animation)
     ? <FullBodyFigure {...props} movement={props.exercise.animation} />
     : isMorningMovement(props.exercise.animation)
     ? <MorningFigure {...props} movement={props.exercise.animation} />
     : <LegacyExerciseFigure {...props} />;
 });
+function CourseFloorFigure({ exercise, movement, playing = false, size = 240, showGuide = false }: Props & { movement: FloorMovement }) {
+  const { cycle, reduced } = useExerciseMotion(movement, exercise.id, playing, floorTiming[movement]);
+  const frame = floorFrame(movement, cycle);
+  return <View style={s.wrapper}><View accessible accessibilityRole="image" accessibilityLabel={`${exercise.title}. ${exercise.cue}`}><CourseFloorCharacter frame={frame} size={size} /></View>{showGuide ? <View style={s.guide}><Text style={s.label}>{reduced ? "Ключевая поза" : frame.label}</Text><Text style={s.cue}>{exercise.cue}</Text></View> : null}</View>;
+}
 function FullBodyFigure({ exercise, movement, playing = false, size = 240, showGuide = false }: Props & { movement: FullBodyMovement }) {
   const { cycle, reduced } = useExerciseMotion(movement, `${exercise.id}:${movement}:${!!exercise.mirror}`, playing, fullBodyTiming[movement]);
   const frame = fullBodyFrame(movement, cycle, exercise.mirror);

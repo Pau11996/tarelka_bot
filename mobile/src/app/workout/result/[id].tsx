@@ -8,10 +8,12 @@ import { ErrorText, Loading, PrimaryButton, SecondaryButton } from "../../../ui"
 import { useWorkouts } from "../../../workouts/context";
 import { clock } from "../../../workouts/engine";
 import { dateLabel, s, statsFor, WorkoutHeader } from "../../../workouts/ui";
+import { courseCompletions } from "../../../workouts/course";
 
 export default function WorkoutResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { store, ready, records, syncing, catalogue, error: syncError, storage_error } = useWorkouts();
+  const data = useWorkouts();
+  const { store, ready, records, syncing, catalogue, error: syncError, storage_error } = data;
   const record = records.find(r => r.id === id);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   async function add() { setBusy(true); setError(null); try { await store.addToDiary(id); } catch (e) { setError(e instanceof Error ? e.message : "Не удалось добавить в дневник"); } finally { setBusy(false); } }
@@ -27,6 +29,7 @@ export default function WorkoutResultScreen() {
       <View style={local.hero}><View style={local.medal}><Icon name={stats.status === "completed" ? "check" : "pause"} size={36} color={c.accentDark} /></View><Text style={local.heroTitle}>{stats.status === "completed" ? "Вы уделили себе время" : "Каждое движение считается"}</Text><Text style={[s.muted, { textAlign: "center" }]}>{record.title} · {dateLabel(stats.date)}</Text><Text style={s.small}>{stats.status === "completed" ? "Занятие завершено" : "Завершено досрочно"}</Text></View>
       <View style={local.metrics}><View style={local.metric}><Text style={local.value}>{clock(stats.seconds)}</Text><Text style={s.small}>Движение</Text></View><View style={local.metric}><Text style={local.value}>{stats.completed}</Text><Text style={s.small}>Упражнений</Text></View><View style={local.metric}><Text style={local.value}>{record.server?.calories != null ? `≈${Math.round(record.server.calories)}` : "—"}</Text><Text style={s.small}>Активных ккал</Text></View></View>
       <Text style={s.small}>Время отдыха: {clock(stats.rest)}. Паузы и отдых не входят в расход калорий. Значение приблизительное.</Text>
+      {definition?.course_day ? <View style={s.notice}><Text style={s.title}>День {definition.course_day} курса</Text><Text style={s.muted}>{stats.status !== "completed" ? "Основная часть не завершена. День остаётся текущим — его можно пройти ещё раз. Дополнительные подходы необязательны." : courseCompletions(data).some(item => item.day === definition.course_day) ? "День засчитан. Следующий шаг курса будет доступен со следующей даты." : "Результат сохранён отдельно. Откройте курс, чтобы посмотреть текущий день и статус синхронизации."}</Text></View> : null}
       <View style={s.notice}><View style={s.row}><Icon name={record.server ? "check" : "clock"} color={c.accentDark} /><Text style={[s.body, { flex: 1 }]}>{record.server ? "Результат сохранён в аккаунте" : storage_error ? "Результат ещё не сохранён" : "Результат сохранён на устройстве"}</Text></View>{!record.server ? <Text style={s.muted}>{storage_error ? "Освободите место и повторите сохранение перед закрытием приложения." : syncing ? "Отправляем результат…" : "Отправим при подключении к интернету. Можно закрыть этот экран."}</Text> : null}</View>
       {record.error || error || syncError ? <View style={{ gap: 10 }}><ErrorText message={error ?? record.error ?? syncError ?? null} /><SecondaryButton label="Повторить синхронизацию" onPress={() => void store.retry().catch(e => setError(e.message))} /></View> : null}
       {stats.status === "completed" ? <View style={s.card}>

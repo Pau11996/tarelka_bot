@@ -14,10 +14,11 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import DayEntry, EntryType, Profile, User, WorkoutPreference, WorkoutSession
+from src.db.models import DayEntry, EntryType, Profile, User, WorkoutPreference, WorkoutSession, WorkoutCourseDay
 from src.db.session import get_session
 from src.mobile_api.deps import get_current_user
-from src.shared.workouts import CATALOGS, active_kcal, catalogue, workout_definition
+from src.shared.workouts import CATALOGS, COURSE, active_kcal, catalogue, workout_definition
+from src.shared.workout_course import COURSE_ID, required_course_steps
 
 router = APIRouter(tags=["Workouts"])
 
@@ -26,6 +27,24 @@ class WorkoutSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     auto_log: bool = False
     sound: bool = True
+    activity_level: Literal["light", "medium", "intense"] | None = None
+
+
+class CourseCheckIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    course_id: Literal["full_body_28_v1"]
+    completed_at: AwareDatetime
+    timezone: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def check_date(self):
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Неизвестный часовой пояс")
+        if self.completed_at > datetime.now(timezone.utc) + timedelta(minutes=5):
+            raise ValueError("Проверьте время на устройстве")
+        return self
 
 
 class StepResult(BaseModel):
@@ -68,6 +87,28 @@ async def lock_account(session, user_id):
     await session.scalar(select(User).where(User.id == user_id).with_for_update())
 
 
+async def course_progress(session, user_id):
+    rows = (await session.scalars(select(WorkoutCourseDay).where(
+        WorkoutCourseDay.user_id == user_id, WorkoutCourseDay.course_id == COURSE_ID
+    ).order_by(WorkoutCourseDay.day))).all()
+    return [dict(day=r.day, completed_at=r.completed_at.isoformat(), local_date=r.local_date.isoformat(),
+                 session_id=r.session_id) for r in rows]
+
+
+async def credit_course_day(session, user_id, day, completed_at, tz, session_id=None, started_at=None):
+    previous = await course_progress(session, user_id)
+    if any(item["day"] == day for item in previous):
+        return True  # Retries and another device cannot advance a day twice.
+    date = completed_at.astimezone(ZoneInfo(tz)).date()
+    start_date = (started_at or completed_at).astimezone(ZoneInfo(tz)).date()
+    if day != len(previous) + 1 or (previous and start_date.isoformat() <= previous[-1]["local_date"]):
+        return False
+    session.add(WorkoutCourseDay(user_id=user_id, course_id=COURSE_ID, day=day,
+        completed_at=completed_at, local_date=date, session_id=session_id))
+    await session.flush()
+    return True
+
+
 def session_out(row):
     return dict(id=row.id, workout_id=row.workout_id, catalogue_version=row.catalogue_version,
                 title=row.title, status=row.status, started_at=row.started_at.isoformat(),
@@ -78,6 +119,13 @@ def session_out(row):
                 steps=row.steps, calories=row.calories, weight_kg=row.weight_kg,
                 auto_log=row.auto_log, diary_entry_id=row.diary_entry_id,
                 diary_added=row.diary_added, needs_weight=row.weight_kg is None)
+
+
+async def saved_session_out(session, row):
+    result = session_out(row)
+    if workout_definition(row.catalogue_version, row.workout_id).get("course_id"):
+        result["course_progress"] = await course_progress(session, row.user_id)
+    return result
 
 
 async def estimate(session, row):
@@ -114,7 +162,8 @@ async def get_catalogue(max_version: int = Query(default=1, ge=1), user: User = 
 @router.get("/settings/workouts")
 async def get_settings(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     row = await session.get(WorkoutPreference, user.id)
-    return dict(auto_log=row.auto_log if row else False, sound=row.sound if row else True)
+    return dict(auto_log=row.auto_log if row else False, sound=row.sound if row else True,
+                activity_level=row.activity_level if row else "medium")
 
 
 @router.put("/settings/workouts")
@@ -125,8 +174,27 @@ async def put_settings(body: WorkoutSettings, user: User = Depends(get_current_u
         row = WorkoutPreference(user_id=user.id)
         session.add(row)
     row.auto_log, row.sound = body.auto_log, body.sound
+    if body.activity_level is not None:
+        row.activity_level = body.activity_level
     await session.commit()
-    return body
+    return dict(auto_log=row.auto_log, sound=row.sound, activity_level=row.activity_level)
+
+
+@router.get("/workouts/course/progress")
+async def get_course_progress(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    return await course_progress(session, user.id)
+
+
+@router.put("/workouts/course/days/{day}")
+async def complete_course_day(day: int, body: CourseCheckIn, user: User = Depends(get_current_user),
+                              session: AsyncSession = Depends(get_session)):
+    if not 1 <= day <= 28 or COURSE["days"][day - 1]["kind"] not in ("walk", "rest"):
+        raise HTTPException(422, "Этот день завершается после прохождения занятия")
+    await lock_account(session, user.id)
+    if not await credit_course_day(session, user.id, day, body.completed_at, body.timezone):
+        raise HTTPException(409, "Сначала завершите предыдущий день курса. Следующий день доступен со следующей даты.")
+    await session.commit()
+    return await course_progress(session, user.id)
 
 
 @router.get("/workouts/history")
@@ -159,13 +227,17 @@ async def save_session(session_id: UUID, body: SessionInput, user: User = Depend
                                exercise_title=exercises[step["exercise_id"]]["title"]))
     if body.status == "completed" and (len(body.steps) != len(definition["steps"]) or not any(s.completed for s in body.steps)):
         raise HTTPException(422, "Занятие ещё не завершено")
+    if body.status == "completed" and definition.get("course_id"):
+        completed = {s.step_id for s in body.steps if s.completed}
+        if any(s["id"] not in completed for s in required_course_steps(definition)):
+            raise HTTPException(422, "Основная часть дня курса ещё не завершена")
     digest = hashlib.sha256(json.dumps(body.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()
     await lock_account(session, user.id)
     row = await session.get(WorkoutSession, (user.id, str(session_id)))
     if row is not None:
         if row.payload_hash != digest:
             raise HTTPException(409, "Этот результат уже сохранён с другими данными")
-        return session_out(row)
+        return await saved_session_out(session, row)
     row = WorkoutSession(user_id=user.id, id=str(session_id), payload_hash=digest,
         workout_id=body.workout_id, catalogue_version=body.catalogue_version, title=definition["title"],
         status=body.status, started_at=body.started_at, ended_at=body.ended_at,
@@ -173,11 +245,14 @@ async def save_session(session_id: UUID, body: SessionInput, user: User = Depend
         active_seconds=sum(s.active_seconds for s in body.steps), rest_seconds=sum(s.rest_seconds for s in body.steps),
         steps=normalized, auto_log=body.auto_log, diary_added=False)
     session.add(row)
+    if body.status == "completed" and definition.get("course_id") == COURSE_ID:
+        await credit_course_day(session, user.id, definition["course_day"], body.ended_at, body.timezone,
+                                str(session_id), body.started_at)
     await estimate(session, row)
     if body.auto_log:
         await link_diary(session, row)
     await session.commit()
-    return session_out(row)
+    return await saved_session_out(session, row)
 
 
 @router.post("/workouts/sessions/{session_id}/diary")

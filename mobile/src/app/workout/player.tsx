@@ -14,6 +14,7 @@ import { clock, remaining, type WorkoutAction } from "../../workouts/engine";
 import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { ExerciseInfo, s } from "../../workouts/ui";
 import type { Exercise } from "../../workouts/types";
+import { sectionLabels } from "../../workouts/course";
 
 function Awake({ id }: { id: string }) {
   useEffect(() => {
@@ -86,6 +87,7 @@ export default function WorkoutPlayer() {
     </View>
     <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: draft.workout.steps.length, now: draft.index }} style={local.track}><View style={[local.progress, { width: `${draft.index / draft.workout.steps.length * 100}%` }]} /></View>
     <ScrollView contentContainerStyle={[s.content, { paddingTop: 16, alignItems: "stretch" }]} showsVerticalScrollIndicator={false}>
+      {step.section ? <Text style={[s.link, { textAlign: "center" }]}>{sectionLabels[step.section]}{step.optional ? " · дополнительный подход, можно пропустить" : ""}</Text> : null}
       <View style={{ alignItems: "center", gap: 6 }}><Text style={local.eyebrow}>{draft.paused ? "НА ПАУЗЕ" : rest ? "ВРЕМЯ ОТДОХНУТЬ" : "ДВИГАЕМСЯ"}</Text><Text accessibilityRole="header" style={local.exerciseTitle}>{rest ? "Спокойно подышите" : exercise.title}</Text></View>
       <View style={s.figure}>{figure ? <ExerciseFigure key={`${draft.id}:${draft.index}:${rest ? "rest" : "exercise"}`} exercise={figure} playing={!draft.paused && !rest && !info} showGuide={!rest} size={Math.min(300, width - 60)} /> : null}{rest && nextExercise ? <Text style={[s.small, { paddingBottom: 10 }]}>Далее: {nextExercise.title}</Text> : null}</View>
       <View style={{ alignItems: "center", gap: 4 }}>

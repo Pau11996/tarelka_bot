@@ -4,7 +4,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_DEMO_BILLING": "1" }
+      "env": { "EXPO_PUBLIC_DEMO_BILLING": "0" }
     },
     "preview": {
       "distribution": "internal",
@@ -12,9 +12,18 @@
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://tarelkaa.by/api",
-        "EXPO_PUBLIC_DEMO_BILLING": "1"
+        "EXPO_PUBLIC_DEMO_BILLING": "0"
       }
     },
-    "production": { "env": { "EXPO_PUBLIC_DEMO_BILLING": "1" } }
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "android": { "buildType": "app-bundle" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://tarelkaa.by/api",
+        "EXPO_PUBLIC_SITE_URL": "https://tarelkaa.by",
+        "EXPO_PUBLIC_DEMO_BILLING": "0"
+      }
+    }
   }
 }

@@ -37,15 +37,15 @@ export function LoginWelcome({ children }: { children: ReactNode }) {
             <View style={[s.dashedRing, { borderRadius: plateSize / 2 }]} />
           </View>
           <View style={[s.photoFrame, { width: photoSize, height: photoSize, borderRadius: photoSize / 2 }]}>
-            <Image accessibilityLabel="Тарелка пасты с креветками" source={hero} resizeMode="cover" style={[s.photo, { borderRadius: photoSize / 2 }]} />
+            <Image accessibilityLabel="Женщина на утренней прогулке в зелёном парке" source={hero} resizeMode="cover" style={[s.photo, { borderRadius: photoSize / 2 }]} />
           </View>
           <View style={[s.chip, s.photoChip]}>
-            <Icon name="camera" size={16} color={welcomeColors.chipText} />
-            <Text style={s.chipText}>Просто фото</Text>
+            <Icon name="leaf" size={16} color={welcomeColors.chipText} />
+            <Text style={s.chipText}>В своём темпе</Text>
           </View>
           <View style={[s.chip, s.savedChip]}>
             <View style={s.dot} />
-            <Text style={s.chipText}>Сохранено в дневник</Text>
+            <Text style={s.chipText}>Забота каждый день</Text>
           </View>
         </View>
         <Text style={s.footnote}>Еда, вода и движение — в одном месте</Text>

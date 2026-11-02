@@ -66,7 +66,7 @@ async def test_catalogue_and_defaults_available_without_subscription(workout_api
     for workout in result["workouts"]:
         assert all(s["exercise_id"] in ids for s in workout["steps"])
         assert workout["duration_seconds"] == sum(s["expected_seconds"] + s["rest_seconds"] for s in workout["steps"])
-    assert (await client.get("/v1/settings/workouts")).json() == {"auto_log": False, "sound": True}
+    assert (await client.get("/v1/settings/workouts")).json() == {"auto_log": False, "sound": True, "activity_level": "medium"}
     response = await client.put("/v1/settings/workouts", json={"auto_log": True, "sound": False})
     assert response.json() == (await client.get("/v1/settings/workouts")).json()
 
@@ -76,7 +76,7 @@ async def test_reference_catalogue_negotiation_and_v1_history_remain_compatible(
     old = (await client.get("/v1/workouts/catalogue")).json()
     new = (await client.get("/v1/workouts/catalogue?max_version=2")).json()
     assert old == catalogue(1) and new == catalogue(2)
-    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == new
+    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == catalogue(3)
     assert (await client.get("/v1/workouts/catalogue?max_version=0")).status_code == 422
     reference = next(w for w in new["workouts"] if w["id"] == "body_short")
     assert [s["exercise_id"] for s in reference["steps"]] == [
@@ -210,7 +210,7 @@ async def test_settings_changes_do_not_rewrite_started_session_choice(workout_ap
     client, *_ = workout_api
     await client.put("/v1/settings/workouts", json={"auto_log": True, "sound": True})
     assert not (await save(client, payload(False)))["diary_added"]
-    await client.put("/v1/settings/workouts", json={"auto_log": False, "sound": True})
+    await client.put("/v1/settings/workouts", json={"auto_log": False, "sound": True, "activity_level": "medium"})
     assert (await save(client, payload(True)))["diary_added"]
 
 
@@ -228,6 +228,105 @@ def test_energy_excludes_rest_and_uses_seconds_not_total_wall_duration():
     assert active_kcal(1, [{"exercise_id": "squat", "active_seconds": 60, "rest_seconds": 900}], 80) == 2.8
     assert active_kcal(1, [{"exercise_id": "squat", "active_seconds": 0}], 80) == 0
     assert {e["animation"] for e in EXERCISES} == {"march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch"}
+
+
+def course_workout(day, level="medium"):
+    return next(w for w in catalogue(3)["workouts"] if w["id"] == f"fb28_d{day:02}_{level}")
+
+
+def course_payload(day, level="medium", start=None):
+    definition = course_workout(day, level)
+    start = start or datetime.now(timezone.utc) - timedelta(days=40-day)
+    return dict(workout_id=definition["id"], catalogue_version=3, status="completed",
+        started_at=start.isoformat(), ended_at=(start + timedelta(seconds=definition["duration_seconds"])).isoformat(),
+        timezone="UTC", auto_log=False, steps=[dict(step_id=s["id"], active_seconds=s["duration_seconds"],
+            rest_seconds=s["rest_seconds"], completed=True) for s in definition["steps"]])
+
+
+def test_course_calendar_levels_and_benchmark():
+    data = catalogue(3)
+    assert len(data["course"]["days"]) == 28
+    assert len([w for w in data["workouts"] if w.get("course_id")]) == 48
+    for week in range(4):
+        days = data["course"]["days"][week*7:(week+1)*7]
+        assert [d["kind"] for d in days] == ["strength", "walk", "strength", "mobility", "strength", "walk", "rest"]
+    for day in data["course"]["days"]:
+        if not day["workout_ids"]:
+            continue
+        versions = [course_workout(day["day"], level) for level in ("light", "medium", "intense")]
+        for w in versions:
+            assert w["duration_seconds"] == sum(s["duration_seconds"] + s["rest_seconds"] for s in w["steps"])
+            assert len(w["steps"]) < 100
+        baseline = [(s["exercise_id"], s["section"], s["rest_seconds"], s["optional"]) for s in versions[0]["steps"]]
+        for w in versions[1:]:
+            assert [(s["exercise_id"], s["section"], s["rest_seconds"], s["optional"]) for s in w["steps"]] == baseline
+        for steps in zip(*(w["steps"] for w in versions)):
+            times = [s["duration_seconds"] for s in steps]
+            assert times[1]-times[0] == (10 if steps[0]["section"] == "main" else 0)
+            assert times[2]-times[1] == (10 if steps[0]["section"] == "main" else 0)
+    for level in ("light", "medium", "intense"):
+        one, final = course_workout(1, level), course_workout(26, level)
+        assert [dict(s, id="") for s in one["steps"]] == [dict(s, id="") for s in final["steps"]]
+        assert any(s["exercise_id"] == "chair_dip" for s in one["steps"])
+    assert not any(s["exercise_id"] in ("glute_bridge", "bird_dog") for s in course_workout(5)["steps"])
+    assert any(s["exercise_id"] == "glute_bridge" for s in course_workout(8)["steps"])
+    assert any(s["exercise_id"] == "bird_dog" for s in course_workout(15)["steps"])
+
+
+async def test_course_all_28_days_idempotent_progress_and_account_isolation(workout_api):
+    client, factory, owner, other = workout_api
+    for day in catalogue(3)["course"]["days"]:
+        number = day["day"]
+        if day["workout_ids"]:
+            body, id = course_payload(number, "light" if number < 15 else "intense"), str(uuid4())
+            await save(client, body, id)
+            await save(client, body, id)
+        else:
+            body = dict(course_id="full_body_28_v1", completed_at=(datetime.now(timezone.utc)-timedelta(days=40-number)).isoformat(), timezone="UTC")
+            for _ in range(2):
+                response = await client.put(f"/v1/workouts/course/days/{number}", json=body)
+                assert response.status_code == 200, response.text
+        progress = (await client.get("/v1/workouts/course/progress")).json()
+        assert [p["day"] for p in progress] == list(range(1, number+1))
+    headers = {"Authorization": f"Bearer {issue_access_token(other)}"}
+    assert (await client.get("/v1/workouts/course/progress", headers=headers)).json() == []
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(DayEntry)) == 0
+    assert (await client.delete("/v1/account")).status_code == 204
+    from src.db.models import WorkoutCourseDay
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(WorkoutCourseDay)) == 0
+
+
+async def test_course_rest_gates_and_partial_sessions(workout_api):
+    client, *_ = workout_api
+    check = dict(course_id="full_body_28_v1", completed_at=datetime.now(timezone.utc).isoformat(), timezone="UTC")
+    assert (await client.put("/v1/workouts/course/days/2", json=check)).status_code == 409
+    assert (await client.put("/v1/workouts/course/days/1", json=check)).status_code == 422
+    body = course_payload(1, start=datetime.now(timezone.utc)-timedelta(hours=1))
+    main = next(i for i,s in enumerate(course_workout(1)["steps"]) if s["section"] == "main")
+    body["steps"][main].update(completed=False, active_seconds=0)
+    await save(client, body, expected=422)
+    body["status"] = "interrupted"
+    await save(client, body)
+    assert (await client.get("/v1/workouts/course/progress")).json() == []
+    await save(client, course_payload(1, start=datetime.now(timezone.utc)-timedelta(hours=1)))
+    assert (await client.put("/v1/workouts/course/days/2", json=check)).status_code == 409
+    # A completed session remains in history even if another device has an incompatible course date.
+    await save(client, course_payload(3, start=datetime.now(timezone.utc)-timedelta(hours=1)))
+    assert len((await client.get("/v1/workouts/course/progress")).json()) == 1
+
+
+async def test_course_duration_validation_and_legacy_settings_client(workout_api):
+    client, *_ = workout_api
+    body = course_payload(1, "intense")
+    main = next(i for i,s in enumerate(course_workout(1, "intense")["steps"]) if s["section"] == "main")
+    body["steps"][main]["active_seconds"] = 20
+    await save(client, body, expected=422)
+    assert (await client.put("/v1/settings/workouts", json={"auto_log": False, "sound": True, "activity_level": "intense"})).status_code == 200
+    await client.put("/v1/settings/workouts", json={"auto_log": True, "sound": False})
+    assert (await client.get("/v1/settings/workouts")).json()["activity_level"] == "intense"
+    assert (await client.put("/v1/settings/workouts", json={"activity_level": "extreme"})).status_code == 422
 
 
 def test_migration_upgrade_and_downgrade_preserve_diary_tombstone():
@@ -263,4 +362,33 @@ def test_migration_upgrade_and_downgrade_preserve_diary_tombstone():
         migration.downgrade()
         assert "workout_sessions" not in inspect(conn).get_table_names()
         assert "workout_preferences" not in inspect(conn).get_table_names()
+    engine.dispose()
+
+
+def test_course_migration_preserves_preferences_and_cascades_account_deletion():
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import create_engine, inspect, text
+
+    spec = importlib.util.spec_from_file_location("course_migration", Path(__file__).parents[1] / "migrations/versions/026_workout_course.py")
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+        conn.execute(text("CREATE TABLE workout_preferences (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, auto_log BOOLEAN NOT NULL, sound BOOLEAN NOT NULL)"))
+        conn.execute(text("INSERT INTO users VALUES (1), (2)"))
+        conn.execute(text("INSERT INTO workout_preferences VALUES (1, 1, 0), (2, 0, 1)"))
+        migration.op = Operations(MigrationContext.configure(conn))
+        migration.upgrade()
+        assert conn.execute(text("SELECT user_id, auto_log, sound, activity_level FROM workout_preferences ORDER BY user_id")).all() == [(1, 1, 0, "medium"), (2, 0, 1, "medium")]
+        conn.execute(text("INSERT INTO workout_course_days (user_id, course_id, day, completed_at, local_date) VALUES (1, 'full_body_28_v1', 1, '2026-11-01', '2026-11-01')"))
+        conn.execute(text("DELETE FROM users WHERE id=1"))
+        assert conn.execute(text("SELECT count(*) FROM workout_course_days")).scalar() == 0
+        migration.downgrade()
+        assert "workout_course_days" not in inspect(conn).get_table_names()
+        assert conn.execute(text("SELECT * FROM workout_preferences")).all() == [(2, 0, 1)]
     engine.dispose()

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "private": true,
+  "expo": {
+    "autolinking": { "nativeModulesDir": "./modules" }
+  },
   "scripts": {
     "start": "expo start --go",
     "start:dev": "expo start --dev-client",

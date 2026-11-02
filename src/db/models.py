@@ -163,6 +163,7 @@ class User(Base):
     health_receipts: Mapped[list[HealthSyncReceipt]] = relationship(cascade="all, delete-orphan")
     workout_sessions: Mapped[list[WorkoutSession]] = relationship(cascade="all, delete-orphan")
     workout_preference: Mapped[WorkoutPreference | None] = relationship(uselist=False, cascade="all, delete-orphan")
+    workout_course_days: Mapped[list[WorkoutCourseDay]] = relationship(cascade="all, delete-orphan")
     payments: Mapped[list[Payment]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -194,6 +195,17 @@ class WorkoutPreference(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     auto_log: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     sound: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    activity_level: Mapped[str] = mapped_column(String(16), default="medium", server_default="medium")
+
+
+class WorkoutCourseDay(Base):
+    __tablename__ = "workout_course_days"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    course_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    day: Mapped[int] = mapped_column(Integer, primary_key=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    local_date: Mapped[date] = mapped_column(Date)
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class WorkoutSession(Base):

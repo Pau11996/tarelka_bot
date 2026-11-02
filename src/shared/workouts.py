@@ -130,6 +130,19 @@ FULL_BODY_WORKOUT = dict(
 CATALOGS[2] = dict(version=2, exercises=deepcopy(EXERCISES) + FULL_BODY_EXERCISES,
                    workouts=[deepcopy(FULL_BODY_WORKOUT) if w["id"] == "body_short" else deepcopy(w) for w in WORKOUTS])
 
+# Preserve v1/v2 byte-for-byte for queued results and older APKs.
+from src.shared.workout_course import build_course
+
+COURSE_EXERCISES = deepcopy(CATALOGS[2]["exercises"]) + [
+    exercise("glute_bridge", "Ягодичный мост", "Поднимите таз. Не прогибайте поясницу.",
+             "Лягте на спину, согните колени, стопы на ширине таза. На выдохе плавно поднимите таз до линии плечи–таз–колени. Задержитесь и медленно опуститесь. Стопы и плечи остаются на коврике.", "glute_bridge", 3.0, equipment=["Коврик"]),
+    exercise("bird_dog", "Рука–нога на четвереньках", "Противоположные рука и нога. Таз неподвижен.",
+             "Встаньте на четвереньки: ладони под плечами, колени под тазом. Плавно вытяните одну руку и противоположную ногу до линии корпуса. Вернитесь и смените сторону. Не прогибайте поясницу и не разворачивайте таз. Если сложно, поднимайте только руку или только ногу.", "bird_dog", 3.0, equipment=["Коврик"]),
+]
+COURSE, COURSE_WORKOUTS = build_course(COURSE_EXERCISES)
+CATALOGS[3] = dict(version=3, exercises=COURSE_EXERCISES,
+                   workouts=deepcopy(CATALOGS[2]["workouts"]) + COURSE_WORKOUTS, course=COURSE)
+
 
 def catalogue(version: int = 1):
     return deepcopy(CATALOGS[version])

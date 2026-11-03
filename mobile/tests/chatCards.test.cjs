@@ -83,6 +83,14 @@ test("an unknown analysis result can be deleted even when retry is unavailable",
   assert.equal(deleted, 1);
 });
 
+test("unrecognized input displays zero calories without a diary entry", () => {
+  const all = nodes(AnalysisFailureCard({ message: "Не удалось распознать речь.", zeroCalories: true }));
+  assert.ok(all.some(n => n.type === "Text" && n.props.children === "0 ккал · В дневник ничего не добавлено"));
+  assert.ok(all.some(n => n.props?.accessibilityRole === "alert" && n.props.children === "Не удалось распознать речь."));
+  const limit = nodes(AnalysisFailureCard({ message: "Лимит достигнут" }));
+  assert.equal(limit.some(n => n.type === "Text" && String(n.props.children).includes("0 ккал")), false);
+});
+
 test("successful analysis keeps every photo inside its card with independent preview and detail actions", () => {
   const root = EntryCard({ entry: { id: 1, title: "Обед", entry_type: "meal", calories: 400 }, photos, onCorrect() {}, onDeleted() {}, onFavoriteChange() {} });
   const all = nodes(root);

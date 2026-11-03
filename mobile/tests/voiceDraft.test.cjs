@@ -12,7 +12,7 @@ function deferred() {
 }
 
 function setup(t) {
-  const slots = [], effects = [], cleanups = [], calls = [], listeners = new Set();
+  const slots = [], effects = [], cleanups = [], calls = [], sent = [], listeners = new Set();
   let cursor = 0, prepared = false, isRecording = false;
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const react = {
@@ -104,10 +104,10 @@ function setup(t) {
   const unmount = () => { cleanups.splice(0).forEach(fn => fn?.()); };
   t.after(unmount);
   return {
-    behavior, calls, recorder, unmount,
+    behavior, calls, sent, recorder, unmount,
     render() {
       cursor = 0;
-      const voice = context.exports.useVoiceDraft("token", async () => {});
+      const voice = context.exports.useVoiceDraft(draft => sent.push(draft));
       effects.splice(0).forEach(fn => fn());
       return voice;
     },
@@ -261,20 +261,44 @@ test("unmounting during recording releases the microphone", async t => {
   assert.equal(app.calls.at(-1), "mode:off");
 });
 
-test("stopping creates a voice draft and transcribes it once", async t => {
+test("sending immediately enqueues raw audio once without waiting for transcription", async t => {
   const app = setup(t);
   await app.render().start();
   const pending = app.render().stop();
   await app.render().stop();
   await pending;
   const voice = app.render();
-  assert.equal(voice.visible, true);
+  assert.equal(voice.visible, false);
   assert.equal(voice.recording, false);
-  assert.equal(voice.draft.media.uri, "file:///voice.m4a");
-  assert.equal(voice.draft.seconds, 2.4);
-  assert.equal(voice.transcript, "Овсянка");
-  assert.equal(voice.mediaId, "voice-1");
-  assert.equal(app.calls.filter(call => call === "/v1/voice/transcribe").length, 1);
+  assert.equal(voice.finishing, false);
+  assert.equal(app.sent.length, 1);
+  assert.equal(app.sent[0].media.uri, "file:///voice.m4a");
+  assert.equal(app.sent[0].media.type, "audio/mp4");
+  assert.equal(app.sent[0].seconds, 2.4);
+  assert.equal(app.calls.some(call => call.startsWith("/v1/")), false);
+});
+
+test("cancelling while the recorder finalizes does not send a late message", async t => {
+  const app = setup(t);
+  await app.render().start();
+  const gate = deferred();
+  app.behavior.stop = () => gate.promise;
+  const pending = app.render().stop();
+  assert.equal(app.render().finishing, true);
+  app.render().cancel();
+  gate.resolve();
+  await pending;
+  assert.equal(app.sent.length, 0);
+  assert.equal(app.render().visible, false);
+});
+
+test("successive recordings each send one separate audio message", async t => {
+  const app = setup(t);
+  for (let i = 0; i < 2; i++) {
+    await app.render().start();
+    await app.render().stop();
+  }
+  assert.equal(app.sent.length, 2);
 });
 
 test("failed stop still resets the audio mode and permits another recording", async t => {

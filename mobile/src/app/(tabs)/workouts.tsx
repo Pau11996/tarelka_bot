@@ -8,11 +8,12 @@ import { ErrorText, Loading, SecondaryButton } from "../../ui";
 import { useWorkouts } from "../../workouts/context";
 import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { availableWorkouts } from "../../workouts/catalogue";
-import { CourseOverview } from "../../workouts/CourseOverview";
+import { CourseCard } from "../../workouts/CourseCard";
 import { dateLabel, s, statsFor, WorkoutHeader } from "../../workouts/ui";
 
 export default function WorkoutsScreen() {
-  const { store, ready, catalogue, draft, records, error, syncing, next_offset } = useWorkouts();
+  const data = useWorkouts();
+  const { store, ready, catalogue, draft, records, error, syncing, next_offset } = data;
   const params = useLocalSearchParams<{ view?: string }>();
   const [view, setView] = useState<"catalogue" | "history">(params.view === "history" ? "history" : "catalogue");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -27,10 +28,10 @@ export default function WorkoutsScreen() {
     <WorkoutHeader title="Тренировки" back={false} right={<Pressable accessibilityRole="button" accessibilityLabel="Настройки тренировок" style={s.iconButton} onPress={() => router.push("/workout/settings")}><Icon name="settings" color={c.accentDark} /></Pressable>} />
     <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={syncing} onRefresh={() => void store.refresh()} tintColor={c.accent} />}>
       {draft ? <Pressable accessibilityRole="button" onPress={() => router.push("/workout/player")} style={s.notice}><View style={s.row}><Icon name="play" color={c.accentDark} /><View style={{ flex: 1 }}><Text style={s.title}>Продолжить занятие</Text><Text style={s.muted}>{draft.workout.title} · упражнение {draft.index + 1} из {draft.workout.steps.length}</Text></View><Icon name="chevron" color={c.accentDark} /></View></Pressable> : null}
-      <View style={local.tabs}>{(["catalogue", "history"] as const).map(key => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: view === key }} onPress={() => setView(key)} style={[local.tab, view === key && local.selected]}><Text style={[local.tabText, view === key && { color: c.accentDark }]}>{key === "catalogue" ? "Занятия" : "Моя история"}</Text></Pressable>)}</View>
+      <View style={local.tabs}>{(["catalogue", "history"] as const).map(key => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: view === key }} onPress={() => setView(key)} style={[local.tab, view === key && local.selected]}><Text style={[local.tabText, view === key && { color: c.accentDark }]}>{key === "catalogue" ? "Курсы" : "Моя история"}</Text></Pressable>)}</View>
       {error ? <View style={s.notice}><Text style={s.muted}>{catalogue ? "Сохранённые занятия доступны. Синхронизацию можно повторить." : "Для первой загрузки каталога нужен интернет."}</Text><ErrorText message={error} /><Pressable accessibilityRole="button" style={{ paddingVertical: 6 }} onPress={() => void store.retry().catch(e => setLocalError(e.message))}><Text style={s.link}>Повторить</Text></Pressable></View> : null}
       <ErrorText message={localError} />
-      {view === "catalogue" ? catalogue?.course ? <CourseOverview /> : <>
+      {view === "catalogue" ? catalogue?.course ? <CourseCard data={data} /> : <>
         {preview ? <View style={local.hero}>
           <View style={{ flex: 1, gap: 10 }}><Text style={local.eyebrow}>В СВОЁМ ТЕМПЕ</Text><Text style={local.heroTitle}>Движение —{`\n`}тоже забота</Text><Text style={s.muted}>Комплекс для всего тела.{`\n`}В удобном темпе.</Text></View>
           <ExerciseFigure exercise={preview} size={120} />

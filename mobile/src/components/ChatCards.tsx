@@ -200,6 +200,7 @@ export function EntryCard({
 
 export function AnalysisFailureCard({
   message,
+  zeroCalories = false,
   photos = [],
   time,
   onLimit,
@@ -209,6 +210,7 @@ export function AnalysisFailureCard({
   deleting,
 }: {
   message: string;
+  zeroCalories?: boolean;
   photos?: CardPhoto[];
   time?: string;
   onLimit?: () => void;
@@ -227,6 +229,7 @@ export function AnalysisFailureCard({
             <Text accessibilityRole="alert" style={s.failureMessage}>{message}</Text>
           </View>
           <AdditionalPhotos photos={photos} />
+          {zeroCalories ? <Text style={s.failureCalories}>0 ккал · В дневник ничего не добавлено</Text> : null}
         </View>
         {onLimit || onRetry || onDismiss ? (
           <View style={[s.actions, s.failureActions]}>
@@ -330,6 +333,7 @@ const s = StyleSheet.create({
   failureBody: { paddingTop: 12 },
   failureOverview: { alignItems: "flex-start" },
   failureMessage: { flex: 1, color: "#73665b", fontSize: 14, lineHeight: 21, fontWeight: "400" },
+  failureCalories: { color: "#73665b", fontSize: 13, lineHeight: 20, marginTop: 10 },
   failureActions: { borderTopColor: "#e8e2d9", flexWrap: "wrap" },
   failureLink: { color: "#73665b", fontWeight: "500" },
   between: {

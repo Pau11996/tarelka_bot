@@ -32,3 +32,23 @@ export function courseWorkout(data: WorkoutData, day: number, level = data.setti
   const id = data.catalogue?.course?.days.find(d => d.day === day)?.workout_ids[level];
   return data.catalogue?.workouts.find(w => w.id === id);
 }
+
+export function courseSummary(data: WorkoutData) {
+  const course = data.catalogue?.course;
+  if (!course) return null;
+  const workouts = course.days.flatMap(day => {
+    const workout = courseWorkout(data, day.day);
+    return workout ? [workout] : [];
+  });
+  const range = (values: number[]) => {
+    if (!values.length) return "—";
+    const min = Math.min(...values), max = Math.max(...values);
+    return min === max ? String(min) : `${min}–${max}`;
+  };
+  return {
+    title: course.title.replace(/\s*[—–]\s*\d+\s*д(?:ень|ня|ней)$/u, ""),
+    days: course.days.length,
+    minutes: range(workouts.map(workout => Math.round(workout.duration_seconds / 60))),
+    exercises: range(workouts.map(workout => workout.steps.length)),
+  };
+}

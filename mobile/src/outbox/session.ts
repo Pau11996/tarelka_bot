@@ -34,6 +34,7 @@ export function setChatOutboxSession(token: string | null) {
       if (item.text) form.append("text", item.text);
       if (item.entryId != null) form.append("entry_id", String(item.entryId));
       if (item.voiceId) form.append("voice_id", item.voiceId);
+      else if (item.voiceMedia) await appendMedia(form, "audio", item.voiceMedia, signal);
       for (const photo of item.photos) await appendMedia(form, "image", photo, signal);
       if (signal.aborted) throw new Error("Upload paused");
       return api<Operation>("/v1/operations", { token, body: form, signal });

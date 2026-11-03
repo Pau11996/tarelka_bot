@@ -186,18 +186,26 @@ class AnalysisService:
                     )
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code if exc.response is not None else 0
-                    detail = (
-                        VOICE_NOT_RECOGNIZED if status == 400 else VOICE_UNAVAILABLE
-                    )
-                    raise HTTPException(
-                        status_code=400 if status == 400 else 503, detail=detail
-                    ) from exc
+                    if status != 400:
+                        raise HTTPException(status_code=503, detail=VOICE_UNAVAILABLE) from exc
                 except httpx.HTTPError as exc:
                     raise HTTPException(
                         status_code=503, detail=VOICE_UNAVAILABLE
                     ) from exc
+                transcript = transcript.strip()
                 if not transcript:
-                    raise HTTPException(status_code=400, detail=VOICE_NOT_RECOGNIZED)
+                    result = AnalysisResult(type="unknown", unknown_reason=VOICE_NOT_RECOGNIZED)
+                    await self.entries.log_unknown_analysis(
+                        user=user, analysis_type=AnalysisType.FOOD_TEXT,
+                        input_text=caption or None, image_path=None,
+                        raw_response="{}", result=result,
+                    )
+                    if grant is not None:
+                        await refund_request(self.repo, user, grant)
+                    return {
+                        "status": "unknown", "message": VOICE_NOT_RECOGNIZED,
+                        "result": result.model_dump(), "transcript": None,
+                    }
 
             parts = [part for part in (caption, transcript) if part]
             combined = "\n".join(parts)
@@ -247,6 +255,7 @@ class AnalysisService:
                 "status": "unknown",
                 "message": unknown_message(result),
                 "result": result.model_dump(),
+                "transcript": transcript or None,
             }
 
         try:

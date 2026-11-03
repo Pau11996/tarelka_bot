@@ -61,6 +61,8 @@ function AuthenticatedStack() {
         <Stack.Screen name="weight" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="health" options={{ headerShown: false }} />
         <Stack.Screen name="workout/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="workout/course/index" options={{ headerShown: false }} />
+        <Stack.Screen name="workout/course/[day]" options={{ headerShown: false }} />
         <Stack.Screen name="workout/player" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="workout/settings" options={{ headerShown: false }} />
         <Stack.Screen name="workout/result/[id]" options={{ headerShown: false }} />

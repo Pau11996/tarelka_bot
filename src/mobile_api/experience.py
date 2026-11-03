@@ -173,6 +173,7 @@ async def enqueue(
     request_key: str = Form(..., min_length=8, max_length=100),
     text: str = Form("", max_length=2000),
     image: list[UploadFile] | None = File(None),
+    audio: UploadFile | None = File(None),
     voice_id: str | None = Form(None),
     entry_id: int | None = Form(None),
     user: User = Depends(get_current_user),
@@ -191,16 +192,20 @@ async def enqueue(
         return operation_out(existing)
     if len(image or []) > 10:
         raise HTTPException(422, "Можно приложить до 10 фото")
-    if not text.strip() and not image and not voice_id:
-        raise HTTPException(422, "Добавьте сообщение или фото")
+    if not text.strip() and not image and not voice_id and audio is None:
+        raise HTTPException(422, "Добавьте сообщение, фото или голосовую запись")
     if entry_id is not None and not await UserRepository(session).get_entry(
         entry_id, user.id
     ):
         raise HTTPException(404, "Запись не найдена")
-    if voice_id and (image or entry_id is not None):
+    if (voice_id or audio is not None) and (image or entry_id is not None):
         raise HTTPException(
             422, "Отправьте голосовую запись отдельно от фото и исправлений"
         )
+    if audio is not None and voice_id:
+        raise HTTPException(422, "Отправьте только одну голосовую запись")
+    if audio is not None and not (audio.content_type or "").startswith("audio/"):
+        raise HTTPException(415, "Нужна аудиозапись")
     media = None
     if voice_id:
         media = await session.scalar(
@@ -240,6 +245,10 @@ async def enqueue(
         for upload in image or []:
             saved, _ = await save_media(session, user, upload, op.id)
             files.append(saved.id)
+        if audio is not None:
+            saved, _ = await save_media(session, user, audio, op.id)
+            files.append(saved.id)
+            op.payload = {**op.payload, "audio_id": saved.id}
         await session.commit()
         await session.refresh(op)
     except IntegrityError:

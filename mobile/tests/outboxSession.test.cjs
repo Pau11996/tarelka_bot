@@ -24,6 +24,32 @@ function setup(send) {
 }
 const item = key => ({ requestKey: key, text: key, createdAt: new Date().toISOString(), photos: [{ uri: `${key}-a.jpg` }, { uri: `${key}-b.jpg` }] });
 const result = key => ({ id: `op-${key}`, request_key: key, status: "queued", kind: "analyze" });
+test("raw voice appears in the queue immediately and uploads through the analysis operation", async t => {
+  const calls = [];
+  const service = setup(async (url, options) => { calls.push({ url, ...options }); return result("voice-message"); });
+  t.after(() => service.setChatOutboxSession(null));
+  await service.setChatOutboxSession("token");
+  service.enqueueMessage({ requestKey: "voice-message", createdAt: new Date().toISOString(), text: "", photos: [],
+    voiceMedia: { uri: "file:///voice.m4a", name: "voice.m4a", type: "audio/mp4" }, voiceSeconds: 3 });
+  assert.equal(service.useChatOutbox().items.length, 1);
+  assert.equal(service.useChatOutbox().items[0].voiceMedia.uri, "file:///voice.m4a");
+  assert.equal(calls.length, 0);
+  await tick();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/v1/operations");
+  assert.deepEqual(calls[0].body.fields, [["request_key", "voice-message"], ["audio", "file:///voice.m4a"]]);
+});
+
+test("restored legacy voice drafts still use their prepaid media id", async t => {
+  const calls = [];
+  const service = setup(async (url, options) => { calls.push({ url, ...options }); return result("legacy-voice"); });
+  t.after(() => service.setChatOutboxSession(null));
+  await service.setChatOutboxSession("token");
+  service.enqueueMessage({ requestKey: "legacy-voice", createdAt: new Date().toISOString(), text: "Суп", photos: [],
+    voiceId: "prepaid-voice", voiceMedia: { uri: "file:///voice.m4a" } });
+  await tick();
+  assert.deepEqual(calls[0].body.fields, [["request_key", "legacy-voice"], ["text", "Суп"], ["voice_id", "prepaid-voice"]]);
+});
 test("session uploads without a mounted chat, pauses new uploads in background and serializes grouped files", async t => {
   const calls = [];
   const service = setup(async (url, options) => { calls.push({ url, ...options }); return result(options.body.fields[0][1]); });

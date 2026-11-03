@@ -134,17 +134,40 @@ async def process_one():
                         ),
                         None,
                     )
+                    # Older clients submit a prepaid transcript. New clients queue
+                    # the original recording and perform both steps in this job.
+                    audio_media = next(
+                        (m for m in media if m.id == job.payload.get("audio_id")
+                         and m.mime.startswith("audio/")),
+                        None,
+                    )
+                    if job.payload.get("audio_id") and audio_media is None:
+                        raise HTTPException(422, "Голосовая запись недоступна")
+                    audio = None
+                    if audio_media is not None:
+                        audio = UploadFile(
+                            io.BytesIO(await asyncio.to_thread(
+                                media_path(uid, audio_media.id).read_bytes
+                            )),
+                            filename=audio_media.id + "." + audio_media.mime.split("/")[-1],
+                            headers=Headers({"content-type": audio_media.mime}),
+                        )
                     result = await service.analyze(
                         user,
                         text=job.payload["text"],
                         image=images,
-                        audio=None,
+                        audio=audio,
                         prepaid_voice=voice is not None,
                         defer_reward=True,
                         entry_date=date.fromisoformat(job.payload["entry_date"])
                         if job.payload.get("entry_date")
                         else None,
                     )
+                    if audio_media is not None and result.get("transcript"):
+                        audio_media.transcript = result["transcript"]
+                        job.payload = {**job.payload, "text": "\n".join(
+                            part for part in (job.payload["text"], result["transcript"]) if part
+                        )}
                 if result.get("entry"):
                     job.entry_id = result["entry"]["id"]
             job.result = result

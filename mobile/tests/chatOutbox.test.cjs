@@ -14,7 +14,7 @@ function app({ remove = async () => {} } = {}) {
   const slots = [], pendingEffects = [], cleanups = [], submissions = [], pickResults = [], loops = [];
   const outbox = { ready: true, error: null, items: [], anchors: {} };
   const deletions = [];
-  let cursor = 0, key = 0, tree;
+  let cursor = 0, key = 0, tree, onRecorded;
   let history = { entries: [], operations: [], media: [], next_before: null, notices: [] };
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const hooks = {
@@ -23,9 +23,15 @@ function app({ remove = async () => {} } = {}) {
     useCallback(fn, deps) { const i = cursor++; if (!same(slots[i]?.deps, deps)) slots[i] = { deps, fn }; return slots[i].fn; },
     useEffect(effect, deps) { const i = cursor++; if (!same(slots[i], deps)) { slots[i] = deps; pendingEffects.push(() => { cleanups[i]?.(); cleanups[i] = effect(); }); } },
   };
-  const voice = { visible: false, recording: false, transcribing: false, transcript: "", mediaId: null, draft: null,
-    cancel() { this.visible = false; this.transcript = ""; this.mediaId = null; this.draft = null; },
-    start() {}, stop() {}, retry() {}, setTranscript(value) { voice.transcript = value; } };
+  const voice = { visible: false, recording: false, finishing: false, seconds: 0,
+    cancel() { this.visible = false; this.recording = false; },
+    start() { this.visible = true; this.recording = true; },
+    stop() {
+      if (!this.recording) return;
+      this.recording = false;
+      onRecorded({ media: { uri: "file:///voice.m4a", name: "voice.m4a", type: "audio/mp4" }, seconds: this.seconds });
+      this.visible = false;
+    } };
   voice.cancel = voice.cancel.bind(voice);
   const auth = { token: "token", signOut: async () => {} };
   const element = (type, props) => ({ type, props });
@@ -62,7 +68,7 @@ function app({ remove = async () => {} } = {}) {
       setActive(value) { this.active = value; if (value) void this.refresh(); }
       wake() { if (this.active) void this.refresh(); }
     } };
-    if (name.endsWith("/hooks/useVoiceDraft")) return { useVoiceDraft: () => voice };
+    if (name.endsWith("/hooks/useVoiceDraft")) return { useVoiceDraft: callback => { onRecorded = callback; return voice; } };
     if (name.endsWith("/hooks/useOperationLimitNotice")) return { useOperationLimitNotice: () => () => {}, operationLimitKind: () => "photo" };
     if (name.endsWith("/components/AssistantAccess")) return { useAssistantHidden() {} };
     if (name.endsWith("/components/RequestLimitDialog")) return { useRequestLimit: () => ({ handleLimit: async () => false, openLimit() {} }) };
@@ -137,18 +143,49 @@ test("two selected photos keep the caption on the first and produce separate ana
     assert.equal(card.props.photos[0].uri, `https://example.test/media/${row.entry.id - 1}.jpg`);
   }
 });
-test("a completed result preserves the next text, selected photos and voice draft", async t => {
+test("a completed result preserves the next text, selected photos and active recording", async t => {
   const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();
   screen.input().props.onChangeText("first"); screen.render(); screen.send().props.onPress(); screen.render();
   screen.input().props.onChangeText("new unsent draft"); screen.render(); await screen.pick(["new-photo"]);
   await screen.refresh(historyFor(screen.submissions[0]));
   assert.equal(screen.input().props.value, "new unsent draft");
   assert.equal(screen.nodes().find(node => node.type === "Image").props.source.uri, "file:///new-photo.jpg");
-  screen.voice.visible = true; screen.voice.transcript = "new voice"; screen.voice.mediaId = "voice-new";
-  screen.voice.draft = { media: { uri: "file:///voice-new.m4a" }, seconds: 9 }; screen.render();
+  screen.voice.start(); screen.voice.seconds = 9; screen.render();
   await screen.refresh(historyFor(screen.submissions[0]));
-  const sheet = screen.find("VoiceSheet"); assert.equal(sheet.props.transcript, "new voice");
-  assert.equal(sheet.props.draft.media.uri, "file:///voice-new.m4a");
+  const sheet = screen.find("VoiceSheet"); assert.equal(sheet.props.seconds, 9);
+  assert.equal(screen.voice.recording, true);
+});
+
+test("voice is sent directly into the chat, processed there and gets a zero-calorie unknown card", async t => {
+  const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();
+  screen.input().props.onChangeText("unsent text"); screen.render();
+  await screen.pick(["unsent-photo"]);
+  screen.voice.start(); screen.voice.seconds = 4; screen.render();
+  screen.find("VoiceSheet").props.onSend(); screen.render();
+  assert.equal(screen.find("VoiceSheet"), undefined);
+  assert.equal(screen.submissions.length, 1);
+  const submission = screen.submissions[0];
+  assert.equal(submission.text, "");
+  assert.equal(submission.photos.length, 0);
+  assert.equal(submission.voiceId, undefined);
+  assert.equal(submission.voiceMedia.uri, "file:///voice.m4a");
+  assert.equal(screen.input().props.value, "unsent text");
+  assert.equal(screen.rows()[0].kind, "pending");
+  assert.equal(screen.rows()[0].message.voiceUri, "file:///voice.m4a");
+  const operation = { id: "voice-op", kind: "analyze", status: "running", request_key: submission.requestKey,
+    text: "", created_at: submission.createdAt, entry_id: null, result: null };
+  const history = { entries: [], operations: [operation], notices: [], next_before: null,
+    media: [{ id: "voice-file", operation_id: operation.id, mime: "audio/mp4", url: "/v1/media/voice-file" }] };
+  await screen.refresh(history);
+  const renderRow = () => screen.nodes(screen.find("FlatList").props.renderItem({ item: screen.rows()[0], index: 0 }));
+  const status = renderRow().find(node => node.type.name === "ProcessingStatus");
+  assert.equal(status.props.hasVoice, true);
+  assert.ok(screen.nodes(status.type(status.props)).some(node => node.props.children === "Распознаю и анализирую…"));
+  await screen.refresh({ ...history, operations: [{ ...operation, status: "done", result: { status: "unknown", message: "Не удалось распознать речь." } }] });
+  const card = renderRow().find(node => node.type === "AnalysisFailureCard");
+  assert.equal(card.props.message, "Не удалось распознать речь.");
+  assert.equal(card.props.zeroCalories, true);
+  assert.equal(screen.rows()[0].kind, "operation");
 });
 test("a queued correction disables only its entry; the composer and another entry stay available", async t => {
   const screen = app(); t.after(() => screen.dispose()); screen.render(); await tick(); screen.render();

@@ -7,23 +7,15 @@ import {
 } from "expo-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
-import { api, apiFailureMessage } from "../api";
-import { appendMedia } from "../media";
-import type { VoiceDraft } from "../components/VoiceSheet";
-import { useRequestLimit } from "../components/RequestLimitDialog";
+import type { LocalMedia } from "../media";
 
-export function useVoiceDraft(
-  token: string | null,
-  signOut: () => Promise<void>,
-) {
-  const { handleLimit } = useRequestLimit();
+export type VoiceDraft = { media: LocalMedia; seconds: number };
+
+export function useVoiceDraft(onRecorded: (draft: VoiceDraft) => void) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const state = useAudioRecorderState(recorder, 250);
   const [visible, setVisible] = useState(false);
-  const [draft, setDraft] = useState<VoiceDraft | null>(null);
-  const [mediaId, setMediaId] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState("");
-  const [transcribing, setTranscribing] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const epoch = useRef(0);
   const recording = useRef(false);
@@ -32,7 +24,8 @@ export function useVoiceDraft(
   const resumeStart = useRef<(() => void) | null>(null);
   const stopping = useRef<Promise<void>>(Promise.resolve());
   const stopped = useRef(false);
-  const controller = useRef<AbortController | null>(null);
+  const onRecordedRef = useRef(onRecorded);
+  onRecordedRef.current = onRecorded;
 
   const releaseRecorder = useCallback(() => {
     recording.current = false;
@@ -50,12 +43,8 @@ export function useVoiceDraft(
   const cancel = useCallback(() => {
     epoch.current += 1;
     resumeStart.current?.();
-    controller.current?.abort();
     setVisible(false);
-    setMediaId(null);
-    setTranscribing(false);
-    setDraft(null);
-    setTranscript("");
+    setFinishing(false);
     setError(null);
     if (recording.current) {
       void releaseRecorder().catch(() => undefined);
@@ -65,7 +54,6 @@ export function useVoiceDraft(
     () => () => {
       epoch.current += 1;
       resumeStart.current?.();
-      controller.current?.abort();
       if (recording.current) void releaseRecorder().catch(() => undefined);
     },
     [releaseRecorder],
@@ -80,37 +68,6 @@ export function useVoiceDraft(
     return () => subscription.remove();
   }, [cancel]);
 
-  async function transcribe(next: VoiceDraft) {
-    const id = ++epoch.current;
-    controller.current?.abort();
-    const abort = new AbortController();
-    controller.current = abort;
-    setTranscribing(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      await appendMedia(form, "audio", next.media);
-      if (id !== epoch.current) return;
-      const result = await api<{ transcript: string; media_id: string }>(
-        "/v1/voice/transcribe",
-        { token, body: form, signal: abort.signal },
-      );
-      if (id === epoch.current) {
-        setTranscript(result.transcript);
-        setMediaId(result.media_id);
-      }
-    } catch (caught) {
-      if (id === epoch.current) {
-        const limited = await handleLimit(caught, "voice");
-        if (id !== epoch.current) return;
-        setError(limited ? "Дневной лимит голосовых запросов достигнут." : await apiFailureMessage(
-          caught, "Не удалось распознать речь", signOut,
-        ));
-      }
-    } finally {
-      if (id === epoch.current) setTranscribing(false);
-    }
-  }
   async function start() {
     if (starting.current || recording.current) return;
     starting.current = true;
@@ -138,9 +95,7 @@ export function useVoiceDraft(
         if (id !== epoch.current) return;
       }
       requestingPermission.current = false;
-      setDraft(null);
-      setMediaId(null);
-      setTranscript("");
+      setFinishing(false);
       needsCleanup = true;
       await setAudioModeAsync({
         playsInSilentMode: true,
@@ -172,6 +127,7 @@ export function useVoiceDraft(
     if (!recording.current || stopped.current) return;
     stopped.current = true;
     recording.current = false;
+    setFinishing(true);
     const id = epoch.current;
     const seconds = state.durationMillis / 1000;
     try {
@@ -187,13 +143,16 @@ export function useVoiceDraft(
           type: Platform.OS === "web" ? "audio/webm" : "audio/mp4",
         },
       };
-      setDraft(next);
-      await transcribe(next);
+      // Enqueue the audio immediately. Recognition belongs to the chat job.
+      onRecordedRef.current(next);
+      setVisible(false);
     } catch {
       if (id === epoch.current) {
         setError("Не удалось сохранить запись. Попробуй ещё раз.");
         setVisible(false);
       }
+    } finally {
+      if (id === epoch.current) setFinishing(false);
     }
   }
   const stopRef = useRef(stop);
@@ -207,19 +166,12 @@ export function useVoiceDraft(
     return () => clearTimeout(timer);
   }, [state.isRecording, state.durationMillis]);
   return {
-    mediaId,
     visible,
-    draft,
-    transcript,
-    setTranscript,
-    transcribing,
+    finishing,
     error,
     start,
     stop,
     cancel,
-    retry: () => {
-      if (draft) void transcribe(draft);
-    },
     recording: state.isRecording,
     seconds: state.durationMillis / 1000,
   };

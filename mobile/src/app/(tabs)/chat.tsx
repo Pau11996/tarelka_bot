@@ -48,7 +48,7 @@ import {
 import { AccountMenu } from "../../components/AccountMenu";
 import { VoiceSheet } from "../../components/VoiceSheet";
 import { MediaPermissionDialog, type MediaPermissionKind } from "../../components/MediaPermissionDialog";
-import { useVoiceDraft } from "../../hooks/useVoiceDraft";
+import { useVoiceDraft, type VoiceDraft } from "../../hooks/useVoiceDraft";
 import type { LocalMedia } from "../../media";
 import { colors } from "../../theme";
 import type { DayView, Entry } from "../../types";
@@ -164,16 +164,18 @@ function ActionRow({
 function ProcessingStatus({
   status,
   hasPhotos,
+  hasVoice = false,
   correcting,
 }: {
   status: "waiting" | "uploading" | "queued" | "running";
   hasPhotos: boolean;
+  hasVoice?: boolean;
   correcting: boolean;
 }) {
   const title = status === "waiting" ? "Ожидает загрузки…"
     : status === "uploading" ? hasPhotos ? "Загружаю фото…" : "Отправляю запись…"
     : status === "queued" ? "В очереди…"
-    : correcting ? "Уточняю запись…" : "Анализирую…";
+    : correcting ? "Уточняю запись…" : hasVoice ? "Распознаю и анализирую…" : "Анализирую…";
   return (
     <View style={s.processing} accessibilityRole="progressbar" accessibilityLabel={title} accessibilityLiveRegion="polite">
       <ActivityIndicator color={colors.accent} size="small" />
@@ -230,9 +232,9 @@ export default function ChatScreen() {
   const revision = useRef(0);
   const shouldScroll = useRef(true);
 
-  const voice = useVoiceDraft(token, signOut);
+  const voice = useVoiceDraft(sendVoice);
   const markLimitShown = useOperationLimitNotice(history?.operations, inputFocused || voice.visible || !outbox.ready, outbox.dismissedFailures);
-  useEffect(() => { consumedDraft.current = false; }, [text, photos, correction, voice.transcript, voice.mediaId]);
+  useEffect(() => { consumedDraft.current = false; }, [text, photos, correction]);
   useEffect(() => {
     if (!error) return;
     const timer = setTimeout(() => setError(null), 8000);
@@ -537,9 +539,9 @@ export default function ChatScreen() {
     }
   }
 
-  function submit(override?: string, extra?: { voiceSeconds?: number; voiceMedia?: LocalMedia; voiceId?: string | null }) {
-    const message = (override ?? text).trim();
-    const attachments = extra?.voiceId ? [] : photos;
+  function submit() {
+    const message = text.trim();
+    const attachments = photos;
     if (consumedDraft.current || (!message && !attachments.length) || (correction && !message)) return;
     if (correction && isCorrecting(correction.id)) {
       setError("Эта запись уже уточняется. Дождитесь результата.");
@@ -550,8 +552,7 @@ export default function ChatScreen() {
       const messages = attachments.length ? attachments.map(photo => [photo]) : [[]];
       for (const [index, messagePhotos] of messages.entries()) {
         enqueueMessage({ requestKey: requestKey(), createdAt: new Date().toISOString(),
-          text: index === 0 ? message : "", photos: messagePhotos, voiceId: extra?.voiceId ?? undefined,
-          voiceMedia: extra?.voiceMedia, voiceSeconds: extra?.voiceSeconds,
+          text: index === 0 ? message : "", photos: messagePhotos,
           entryId: correction?.id, previousCalories: correction?.calories });
       }
       consumedDraft.current = true;
@@ -566,18 +567,13 @@ export default function ChatScreen() {
     }
   }
 
-  function sendVoice() {
-    if (voice.recording) {
-      void voice.stop();
-      return;
-    }
-    if (!voice.transcript.trim() || voice.transcribing || !voice.mediaId)
-      return;
-    void submit(voice.transcript, {
-      voiceSeconds: voice.draft?.seconds,
-      voiceMedia: voice.draft?.media,
-      voiceId: voice.mediaId,
+  function sendVoice(draft: VoiceDraft) {
+    enqueueMessage({
+      requestKey: requestKey(), createdAt: new Date().toISOString(),
+      text: "", photos: [], voiceMedia: draft.media, voiceSeconds: draft.seconds,
     });
+    setError(null);
+    shouldScroll.current = true;
   }
 
   function correct(entry: Entry) {
@@ -755,7 +751,7 @@ export default function ChatScreen() {
                       onDismiss={() => dismissChatFailure(message.requestKey)}
                       onLimit={message.limitReached ? () => void openLimit(message.limitReached, message.limitReached?.kind ?? "photo") : undefined} />
                   ) : <ProcessingStatus status={message.state === "uploading" ? "uploading" : "waiting"}
-                    hasPhotos={Boolean(message.photos?.length)} correcting={message.entryId != null} />}
+                    hasPhotos={Boolean(message.photos?.length)} hasVoice={Boolean(message.voiceUri)} correcting={message.entryId != null} />}
                 </View>
               );
             }
@@ -788,11 +784,12 @@ export default function ChatScreen() {
                     </View>
                   ) : null}
                   {processing ? (
-                    <ProcessingStatus status={op.status as "queued" | "running"} hasPhotos={cardPhotos.length > 0} correcting={op.kind === "correct"} />
+                    <ProcessingStatus status={op.status as "queued" | "running"} hasPhotos={cardPhotos.length > 0} hasVoice={Boolean(voiceUri)} correcting={op.kind === "correct"} />
                   ) : op.status === "done" && op.result?.status === "weight_saved" ? (
                     <WeightChatCard weight={op.result.weight.weight_kg} time={clock(op.created_at)} photos={cardPhotos} />
                   ) : (
                     <AnalysisFailureCard
+                      zeroCalories={op.result?.status === "unknown" || (Boolean(voiceUri) && !limited)}
                       message={limited ? "Не удалось обработать запись: достигнут дневной лимит." : op.error ?? op.result?.message ?? "Не удалось обработать запись."}
                       photos={cardPhotos}
                       time={clock(op.created_at)}
@@ -968,16 +965,10 @@ export default function ChatScreen() {
           ) : null}
           {voice.visible ? (
             <VoiceSheet
-              recording={voice.recording}
               seconds={voice.seconds}
-              draft={voice.draft}
-              transcribing={voice.transcribing}
-              transcript={voice.transcript}
-              error={voice.error}
-              onChange={voice.setTranscript}
+              finishing={voice.finishing}
               onClose={voice.cancel}
-              onRetry={voice.retry}
-              onSend={sendVoice}
+              onSend={() => void voice.stop()}
             />
           ) : (
             <View style={s.composerRow}>

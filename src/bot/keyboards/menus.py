@@ -212,7 +212,11 @@ def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
         else f"Оформить за {settings.subscription_price_stars}⭐"
     )
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=button_text, callback_data="sub:buy")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text=button_text, callback_data="sub:buy")],
+            # DisabledButton is not modeled by the pinned aiogram version yet.
+            [InlineKeyboardButton(text="399 ₽", disabled={})],
+        ]
     )
 
 

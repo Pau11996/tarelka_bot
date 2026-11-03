@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from email import policy
+from email.parser import BytesParser
 import importlib
 import smtplib
 from unittest.mock import AsyncMock, MagicMock
@@ -195,13 +197,37 @@ async def test_existing_email_account_still_logs_in_and_cannot_be_overwritten(ap
     mail.assert_not_awaited()
 
 
-async def test_registration_email_uses_the_existing_verified_tls_transport(monkeypatch):
-    sender = MagicMock()
-    monkeypatch.setattr(email_delivery, "_send_message", sender)
-    await email_delivery.send_registration_code("person@example.com", "012345")
-    email, subject, content = sender.call_args.args
-    assert email == "person@example.com" and "Подтвердите почту" in subject
-    assert "012345" in content and "10 минут" in content
+@pytest.mark.parametrize("security", ["starttls", "ssl"])
+@pytest.mark.parametrize("send, subject, instruction", [
+    (email_delivery.send_registration_code, "Подтвердите почту", "завершить регистрацию"),
+    (email_delivery.send_reset_code, "Код восстановления пароля", "задайте новый пароль"),
+])
+async def test_code_email_has_matching_html_and_plain_text_over_tls(monkeypatch, security, send, subject, instruction):
+    transport = MagicMock()
+    smtp = transport.return_value.__enter__.return_value
+    monkeypatch.setattr(email_delivery.smtplib, "SMTP", transport)
+    monkeypatch.setattr(email_delivery.smtplib, "SMTP_SSL", transport)
+    monkeypatch.setattr(settings, "smtp_host", "smtp.example.test")
+    monkeypatch.setattr(settings, "smtp_from", "hello@example.test")
+    monkeypatch.setattr(settings, "smtp_username", "")
+    monkeypatch.setattr(settings, "smtp_security", security)
+
+    await send("person@example.com", "012345")
+
+    smtp.send_message.assert_called_once()
+    message = BytesParser(policy=policy.default).parsebytes(smtp.send_message.call_args.args[0].as_bytes())
+    assert message["To"] == "person@example.com" and subject in message["Subject"]
+    assert message.get_content_type() == "multipart/alternative"
+    assert [part.get_content_type() for part in message.iter_parts()] == ["text/plain", "text/html"]
+    for subtype in ("plain", "html"):
+        content = message.get_body(preferencelist=(subtype,)).get_content()
+        assert "012345" in content and "10 минут" in content and instruction in content
+    if security == "starttls":
+        smtp.starttls.assert_called_once()
+        assert smtp.starttls.call_args.kwargs["context"].check_hostname
+    else:
+        smtp.starttls.assert_not_called()
+        assert transport.call_args.kwargs["context"].check_hostname
 
 
 def test_migration_preserves_existing_users_and_round_trips(monkeypatch):

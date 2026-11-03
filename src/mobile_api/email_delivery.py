@@ -5,18 +5,21 @@ import ssl
 from email.message import EmailMessage
 
 from src.bot.config import settings
+from src.mobile_api.email_templates import code_email_html
 
 
 def recovery_email_configured() -> bool:
     return bool(settings.smtp_host and settings.smtp_from)
 
 
-def _send_message(email: str, subject: str, content: str) -> None:
+def _send_message(email: str, subject: str, content: str, *, html: str | None = None) -> None:
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = settings.smtp_from
     message["To"] = email
     message.set_content(content)
+    if html is not None:
+        message.add_alternative(html, subtype="html")
     context = ssl.create_default_context()
     smtp_class = smtplib.SMTP_SSL if settings.smtp_security == "ssl" else smtplib.SMTP
     kwargs = {"context": context} if settings.smtp_security == "ssl" else {}
@@ -34,7 +37,10 @@ def _send_reset_code(email: str, code: str) -> None:
         "Введите его в приложении ТАРЕЛКА и задайте новый пароль. "
         "Код действует 10 минут и подходит только для одного восстановления.\n\n"
         "Если вы не запрашивали смену пароля, просто проигнорируйте это письмо. "
-        "Ваш пароль останется прежним. Никому не сообщайте код.\n"
+        "Ваш пароль останется прежним. Никому не сообщайте код.\n",
+        html=code_email_html(code, title="Восстановите пароль",
+            instruction="Введите этот код в приложении ТАРЕЛКА и задайте новый пароль.",
+            notice="Если вы не запрашивали смену пароля, просто проигнорируйте это письмо. Ваш пароль останется прежним."),
     )
 
 
@@ -48,4 +54,7 @@ async def send_registration_code(email: str, code: str) -> None:
         "Введите его в приложении ТАРЕЛКА, чтобы завершить регистрацию. "
         "Код действует 10 минут и подходит только для одной регистрации.\n\n"
         "Если вы не регистрировались в ТАРЕЛКЕ, проигнорируйте это письмо. "
-        "Аккаунт без подтверждения не будет создан. Никому не сообщайте код.\n")
+        "Аккаунт без подтверждения не будет создан. Никому не сообщайте код.\n",
+        html=code_email_html(code, title="Подтвердите почту",
+            instruction="Введите этот код в приложении ТАРЕЛКА, чтобы завершить регистрацию.",
+            notice="Если вы не регистрировались в ТАРЕЛКЕ, просто проигнорируйте это письмо. Аккаунт без подтверждения не будет создан."))

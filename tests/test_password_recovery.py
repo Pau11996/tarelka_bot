@@ -158,8 +158,12 @@ def test_mail_transport_uses_tls_and_delivers_the_code_to_the_requested_address(
         assert smtp_class.call_args.kwargs["context"].check_hostname is True
     message = connection.send_message.call_args.args[0]
     assert message["To"] == "person@example.com"
-    assert "012345" in message.get_content()
-    assert "10 минут" in message.get_content()
+    assert message.get_content_type() == "multipart/alternative"
+    for kind in ("plain", "html"):
+        body = message.get_body(preferencelist=(kind,))
+        assert body is not None
+        assert "012345" in body.get_content()
+        assert "10 минут" in body.get_content()
 
 
 def test_migration_preserves_existing_users_and_adds_recovery_storage(monkeypatch):

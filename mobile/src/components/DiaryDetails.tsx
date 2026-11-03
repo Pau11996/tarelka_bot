@@ -12,7 +12,6 @@ export function DiaryDetails({ day }: { day: DayView }) {
     <Pressable accessibilityRole="button" accessibilityLabel="Подробнее о дне" accessibilityState={{ expanded }} onPress={() => setExpanded(value => !value)} style={s.heading}>
       <View style={s.labels}>
         <Text style={s.title}>Подробнее о дне</Text>
-        <Text style={s.hint}>Вода, клетчатка, сахар и активность</Text>
       </View>
       <View style={expanded ? s.up : undefined}><Icon name="down" size={18} color={colors.muted} /></View>
     </Pressable>

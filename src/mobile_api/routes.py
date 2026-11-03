@@ -175,7 +175,7 @@ async def me(
         "id": user.id,
         "telegram_id": user.telegram_id,
         "email": user.email,
-        "auth_method": "telegram" if user.telegram_id is not None else "email",
+        "auth_method": "telegram" if user.telegram_id is not None else "google" if user.google_subject else "email",
         "timezone": user.timezone,
         "timezone": user.timezone,
         "profile_complete": profile.is_complete(),
@@ -629,7 +629,7 @@ async def account_settings(
     progress, rewarded = await repo.referral_month_status(user)
     pref = await session.get(NotificationPreference, user.id)
     return {
-        "auth_method": "telegram" if user.telegram_id is not None else "email",
+        "auth_method": "telegram" if user.telegram_id is not None else "google" if user.google_subject else "email",
         "email": user.email,
         "telegram_connected": user.telegram_id is not None,
         "notification_channel": (pref.channel if pref else ("telegram" if user.telegram_id is not None else "app"))

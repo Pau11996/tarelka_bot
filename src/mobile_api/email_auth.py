@@ -96,7 +96,7 @@ async def forgot_password(
     if not recovery_email_configured():
         raise HTTPException(503, "Отправка писем временно недоступна. Попробуйте позже.")
     user = await session.scalar(select(User).where(User.email == body.email).with_for_update())
-    if user and user.password_hash:
+    if user:
         code = f"{secrets.randbelow(1_000_000):06d}"
         insert = sqlite_insert if session.get_bind().dialect.name == "sqlite" else pg_insert
         values = dict(code_hash=reset_code_hash(body.email, code), expires_at=datetime.now(timezone.utc) + timedelta(minutes=10))
@@ -124,7 +124,7 @@ async def reset_password(
     # Lock the user in the same order as sending; DELETE ... RETURNING consumes once.
     user = await session.scalar(select(User).where(User.email == body.email).with_for_update())
     consumed = None
-    if user and user.password_hash:
+    if user:
         consumed = await session.scalar(delete(PasswordResetCode).where(
             PasswordResetCode.user_id == user.id,
             PasswordResetCode.code_hash == reset_code_hash(body.email, body.code),

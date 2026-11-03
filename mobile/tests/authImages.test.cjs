@@ -36,6 +36,7 @@ function auth(platform) {
     if (name === "./outbox/session") return { setChatOutboxSession: async (token) => outboxSessions.push(token) };
     if (name === "./health/service") return { pauseHealthSync: async () => {} };
     if (name === "./notifications") return { unregisterPush: async () => {} };
+    if (name === "./googleSignIn") return { clearGoogleSignIn: async () => {} };
     throw new Error(name);
   }};
   vm.runInNewContext(code, context);

@@ -165,7 +165,7 @@ export type Achievements = {
 };
 
 export type AccountSettings = {
-  auth_method: "telegram" | "email";
+  auth_method: "telegram" | "email" | "google";
   email: string | null;
   telegram_connected: boolean;
   notification_channel: "telegram"|"app"|"off";

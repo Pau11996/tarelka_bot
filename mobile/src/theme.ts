@@ -37,6 +37,7 @@ export const achievementColors = {
 };
 
 export const welcomeColors = {
+  inputPlaceholder: `${colors.muted}99`,
   halo: "#e3edde",
   haloBorder: "#d4e3cd",
   dashedRing: "#bbcfb1",

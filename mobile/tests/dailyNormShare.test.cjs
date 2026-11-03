@@ -8,7 +8,7 @@ const { test } = require("node:test");
 function load(file, dependencies = {}, globals = {}) {
   const source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8");
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  const context = { exports: {}, setTimeout, clearTimeout, Error, Uint8Array, File, atob, ...globals,
+  const context = { exports: {}, setTimeout, clearTimeout, Error, Uint8Array, File, atob, AbortController, ...globals,
     require(name) { if (name in dependencies) return dependencies[name]; throw Error(`Unexpected import: ${name}`); },
   };
   vm.runInNewContext(code, context);
@@ -31,19 +31,22 @@ test("shared targets come from the server, excluding consumption and activity bo
 });
 
 function sharing(platform, extra = {}, globals = {}) {
-  return load("sharing/shareImage.ts", { "react-native": { Platform: { OS: platform } }, "expo-asset": {}, ...extra }, globals);
+  return load("sharing/shareImage.ts", { "react-native": { Platform: { OS: platform } }, "../api": {}, ...extra }, globals);
 }
 
-test("capture requests the exact strip size and rejects empty exports and timeouts", async () => {
-  let dimensions;
-  const api = sharing("web");
-  assert.equal(await api.captureNorm({ toDataURL(callback, options) { dimensions = options; callback(png); } }), png);
-  assert.equal(dimensions.width, 1080);
-  assert.equal(dimensions.height, 216);
-  await assert.rejects(api.captureNorm({ toDataURL: callback => callback("") }), /Invalid PNG/);
-  await assert.rejects(api.captureNorm({ toDataURL() { throw Error("No view"); } }), /No view/);
-  const timed = sharing("web", {}, { setTimeout: callback => setTimeout(callback, 1) });
-  await assert.rejects(timed.captureNorm({ toDataURL() {} }), /timed out/);
+test("render sends the displayed norm with authentication and cancellation, and rejects invalid images", async () => {
+  const calls = [];
+  let response = { image_base64: png };
+  const api = sharing("web", { "../api": { api: async (path, options) => { calls.push({ path, options }); return response; } } });
+  const norm = normModule.dailyNorm(day), controller = new AbortController();
+  assert.equal(await api.renderNorm(norm, "session-token", controller.signal), png);
+  assert.equal(calls[0].path, "/v1/share/daily-norm");
+  assert.equal(calls[0].options.json, norm);
+  assert.equal(calls[0].options.token, "session-token");
+  assert.equal(calls[0].options.signal, controller.signal);
+  for (response of [{}, { image_base64: "" }, { image_base64: "not-a-png" }]) {
+    await assert.rejects(api.renderNorm(norm, "session-token", controller.signal), /Invalid PNG/);
+  }
 });
 
 test("web share receives a PNG file synchronously in the click and cancellation is recognized", async () => {
@@ -107,10 +110,12 @@ test("native sharing awaits the write, keeps fresh files and cleans only expired
   assert.deepEqual(deleted, [old.uri]);
 });
 
-function uiSetup(platform = "web") {
+function uiSetup(platform = "web", options = {}) {
   let current, cursor = 0, root, preview;
   const tasks = [];
   let prepareResolve, shareResolve, shareReject, shares = 0;
+  let displayedDay = day;
+  const renders = [];
   const react = {
     useRef(value) { const index = cursor++; return current.hooks[index] ??= { current: value }; },
     useState(value) { const scope = current, index = cursor++; if (!(index in scope.hooks)) scope.hooks[index] = value; return [scope.hooks[index], next => { scope.hooks[index] = typeof next === "function" ? next(scope.hooks[index]) : next; }]; },
@@ -122,30 +127,33 @@ function uiSetup(platform = "web") {
     react, "react/jsx-runtime": { jsx: element, jsxs: element },
     "react-native": { ActivityIndicator: "Spinner", Image: "NativeImage", Platform: { OS: platform }, Modal: "Modal", Pressable: "Button", ScrollView: "Scroll", Text: "Text", View: "View", StyleSheet: { create: v => v } },
     "../sharing/dailyNorm": normModule,
-    "../sharing/shareImage": { loadShareCat: async () => "data:cat", captureNorm: async () => png, shareCancelled: e => e.name === "AbortError", prepareShareImage: () => new Promise(resolve => { prepareResolve = resolve; }) },
-    "../theme": { colors: {} }, "./Brand": { Icon: "Icon" }, "./DailyNormCard": { DailyNormCard: "Card" },
-  }, { requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {} });
+    "../sharing/shareImage": { renderNorm: async (norm, token, signal) => {
+      renders.push({ norm, token, signal });
+      return options.renderNorm ? options.renderNorm() : png;
+    }, shareCancelled: e => e.name === "AbortError", prepareShareImage: value => {
+      assert.equal(value, png);
+      return new Promise(resolve => { prepareResolve = resolve; });
+    } },
+    "../auth": { useAuth: () => ({ token: "session-token" }) },
+    "../theme": { colors: {} }, "./Brand": { Icon: "Icon" },
+  }, options.globals);
   function nodes(node) { return !node || typeof node !== "object" ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)]; }
   function clean(scope) { if (scope) scope.effects.forEach(effect => effect?.cleanup?.()); }
   function renderScope(scope, component, props) { current = scope; cursor = 0; return component(props); }
   root = { hooks: [], effects: [] };
   function render() {
-    const parent = renderScope(root, module.DailyNormShare, { day });
+    const parent = renderScope(root, module.DailyNormShare, { day: displayedDay });
     const child = nodes(parent).find(n => typeof n.type === "function");
     if (!child) { clean(preview); preview = null; return nodes(parent); }
     if (!preview || preview.key !== child.key) { clean(preview); preview = { hooks: [], effects: [], key: child.key }; }
     const result = [...nodes(parent), ...nodes(renderScope(preview, child.type, child.props))];
-    result.find(n => n.type === "Card")?.props.ref && (result.find(n => n.type === "Card").props.ref.current = {});
     while (tasks.length) tasks.shift()();
     return result;
   }
   const button = label => render().find(n => n.type === "Button" && (n.props.accessibilityLabel === label || nodes(n).some(c => c.type === "Text" && c.props.children === label)));
-  return { render, button,
+  return { render, button, renders, setDay: value => { displayedDay = value; },
     async ready() {
       button("Поделиться нормой").props.onPress(); render(); await flush();
-      const view = render(); view.find(n => n.props.onLayout).props.onLayout({ nativeEvent: { layout: { width: 320 } } });
-      if (platform === "android") view.find(n => n.type === "NativeImage").props.onLoad();
-      else view.find(n => n.type === "Card").props.onCatLoad();
       render(); await flush();
     },
     finishPrepare() { prepareResolve({ label: "Поделиться", share() { shares++; return new Promise((resolve, reject) => { shareResolve = resolve; shareReject = reject; }); } }); },
@@ -175,13 +183,55 @@ test("closing during preparation cannot reopen a stale preview", async () => {
   const app = uiSetup();
   await app.ready(); app.close(); app.finishPrepare(); await flush();
   assert.equal(app.render().find(n => n.type === "Modal"), undefined);
+  assert.equal(app.renders[0].signal.aborted, true);
 });
 
-test("Android can reopen with a cached cat when SVG does not emit onLoad", async () => {
+test("Android prepares and reopens a complete PNG without waiting for layout or image callbacks", async () => {
   const app = uiSetup("android");
   for (let i = 0; i < 2; i++) {
     await app.ready(); app.finishPrepare(); await flush();
     assert.equal(app.button("Поделиться").props.disabled, false);
+    assert.equal(app.render().find(n => n.type === "NativeImage").props.source.uri, `data:image/png;base64,${png}`);
+    assert.equal(app.render().find(n => n.props.onLayout || n.props.onLoad), undefined);
     app.close();
   }
+});
+
+test("an open preview keeps its snapshot when current day data changes", async () => {
+  const app = uiSetup();
+  await app.ready();
+  app.setDay({ ...day, balance: { ...day.balance, target: 1800 } });
+  app.render();
+  assert.equal(app.renders.length, 1);
+  assert.equal(app.renders[0].norm.calories, 2100);
+  app.finishPrepare(); await flush(); app.close();
+  await app.ready();
+  assert.equal(app.renders[1].norm.calories, 1800);
+  app.finishPrepare(); await flush(); app.close();
+});
+
+test("render failures can be retried and a closed request is aborted", async () => {
+  let calls = 0;
+  const app = uiSetup("android", { renderNorm: async () => { if (++calls === 1) throw Error("offline"); return png; } });
+  await app.ready();
+  assert.ok(app.render().find(n => n.props.accessibilityRole === "alert"));
+  app.button("Попробовать ещё раз").props.onPress(); app.render(); await flush();
+  app.finishPrepare(); await flush();
+  assert.equal(app.button("Поделиться").props.disabled, false);
+  app.close();
+  assert.equal(app.renders.every(call => call.signal.aborted), true);
+});
+
+test("a hung render times out, aborts and never replaces the error with a late image", async () => {
+  let timeout, finish;
+  const app = uiSetup("android", {
+    renderNorm: () => new Promise(resolve => { finish = resolve; }),
+    globals: { setTimeout: callback => { timeout = callback; return 1; }, clearTimeout() {} },
+  });
+  await app.ready(); timeout();
+  assert.equal(app.renders[0].signal.aborted, true);
+  assert.ok(app.button("Попробовать ещё раз"));
+  finish(png); await flush();
+  assert.equal(app.render().find(n => n.type === "NativeImage"), undefined);
+  app.close();
 });

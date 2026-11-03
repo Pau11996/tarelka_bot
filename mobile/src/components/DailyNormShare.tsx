@@ -1,54 +1,42 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type Svg from "react-native-svg";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { dailyNorm, normDescription, normTitle, type DailyNorm } from "../sharing/dailyNorm";
-import { captureNorm, loadShareCat, prepareShareImage, shareCancelled, type ShareImage } from "../sharing/shareImage";
+import { renderNorm, prepareShareImage, shareCancelled, type ShareImage } from "../sharing/shareImage";
+import { useAuth } from "../auth";
 import { colors } from "../theme";
 import type { DayView } from "../types";
 import { Icon } from "./Brand";
-import { DailyNormCard } from "./DailyNormCard";
 
-function SharePreview({ norm, onClose, onRetry }: { norm: DailyNorm; onClose: () => void; onRetry: () => void }) {
-  const svg = useRef<Svg>(null);
+function SharePreview({ norm, token, onClose, onRetry }: { norm: DailyNorm; token: string; onClose: () => void; onRetry: () => void }) {
   const mounted = useRef(true);
   const sharing = useRef(false);
-  const [cat, setCat] = useState<string | null>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [laidOut, setLaidOut] = useState(false);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [image, setImage] = useState<ShareImage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const catLoaded = useCallback(() => setImageLoaded(true), []);
 
   useEffect(() => {
     mounted.current = true;
     let active = true;
-    loadShareCat().then(value => { if (active) setCat(value); }).catch(() => {
-      if (active) setError("Не удалось подготовить картинку. Попробуйте ещё раз.");
-    });
-    return () => { active = false; mounted.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!imageLoaded || !laidOut || !svg.current) return;
-    let active = true;
-    const source = svg.current;
-    // Wait for the loaded image to be painted by the native SVG view.
-    const frame = requestAnimationFrame(() => {
-      captureNorm(source).then(prepareShareImage).then(value => {
-        if (active) { setImage(value); setError(null); }
-      }).catch(() => {
-        if (active) setError("Не удалось подготовить картинку. Попробуйте ещё раз.");
-      });
-    });
-    return () => { active = false; cancelAnimationFrame(frame); };
-  }, [imageLoaded, laidOut]);
-
-  useEffect(() => {
-    if (image || error) return;
-    const timer = setTimeout(() => setError("Картинка загружается дольше обычного. Попробуйте ещё раз."), 20000);
-    return () => clearTimeout(timer);
-  }, [image, error]);
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      active = false;
+      controller.abort();
+      setError("Картинка загружается дольше обычного. Попробуйте ещё раз.");
+    }, 20000);
+    (async () => {
+      try {
+        const base64 = await renderNorm(norm, token, controller.signal);
+        if (!active) return;
+        setPreviewUri(`data:image/png;base64,${base64}`);
+        const prepared = await prepareShareImage(base64);
+        if (active) { setImage(prepared); setError(null); }
+      } catch {
+        if (active) setError("Не удалось подготовить картинку. Проверьте интернет и попробуйте ещё раз.");
+      } finally { clearTimeout(timer); }
+    })();
+    return () => { active = false; mounted.current = false; controller.abort(); clearTimeout(timer); };
+  }, [norm, token]);
 
   async function share() {
     if (!image || sharing.current) return;
@@ -77,13 +65,8 @@ function SharePreview({ norm, onClose, onRetry }: { norm: DailyNorm; onClose: ()
             </Pressable>
           </View>
           <Text style={s.description}>{norm.personalized ? "Поделитесь своей нормой — кот уже оценил." : "Это стартовые значения. Заполните профиль, чтобы получить персональную норму."}</Text>
-          <View style={s.card} accessible accessibilityRole="image" accessibilityLabel={normDescription(norm)} onLayout={event => {
-            if (event.nativeEvent.layout.width > 0) setLaidOut(true);
-          }}>
-            {cat ? <DailyNormCard ref={svg} norm={norm} cat={cat} onCatLoad={catLoaded} /> : <ActivityIndicator color={colors.accent} />}
-            {/* Android SVG skips onLoad for cached bitmaps. RN Image shares
-                Fresco's cache and reports readiness on every preview opening. */}
-            {cat && Platform.OS === "android" ? <Image source={{ uri: cat }} style={s.cacheProbe} accessible={false} onLoad={catLoaded} onError={() => setError("Не удалось загрузить картинку. Попробуйте ещё раз.")} /> : null}
+          <View style={s.card} accessible accessibilityRole="image" accessibilityLabel={normDescription(norm)}>
+            {previewUri ? <Image source={{ uri: previewUri }} style={s.previewImage} resizeMode="contain" accessible={false} /> : <ActivityIndicator color={colors.accent} />}
           </View>
           <Text style={s.values}>{normDescription(norm)}</Text>
           {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
@@ -99,16 +82,17 @@ function SharePreview({ norm, onClose, onRetry }: { norm: DailyNorm; onClose: ()
 }
 
 export function DailyNormShare({ day }: { day: DayView }) {
+  const { token } = useAuth();
   const [snapshot, setSnapshot] = useState<DailyNorm | null>(null);
   const [attempt, setAttempt] = useState(0);
   const norm = dailyNorm(day);
-  if (!norm) return null;
+  if (!norm || !token) return null;
   return <>
     <Pressable accessibilityRole="button" onPress={() => setSnapshot(norm)} style={({ pressed }) => [s.entry, pressed && s.pressed]}>
       <Icon name="share" size={18} color={colors.accentDark} />
       <Text style={s.entryText}>Поделиться нормой</Text>
     </Pressable>
-    {snapshot ? <SharePreview key={attempt} norm={snapshot} onClose={() => setSnapshot(null)} onRetry={() => setAttempt(value => value + 1)} /> : null}
+    {snapshot ? <SharePreview key={attempt} norm={snapshot} token={token} onClose={() => setSnapshot(null)} onRetry={() => setAttempt(value => value + 1)} /> : null}
   </>;
 }
 
@@ -123,8 +107,8 @@ const s = StyleSheet.create({
   title: { flex: 1, color: colors.text, fontSize: 20, fontWeight: "600" },
   close: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginRight: -10, marginVertical: -8 },
   description: { fontSize: 14, lineHeight: 21, color: colors.muted },
-  card: { width: "100%", aspectRatio: 5, backgroundColor: "#fbf8eb", justifyContent: "center", overflow: "hidden", borderRadius: 8 },
-  cacheProbe: { position: "absolute", width: 1, height: 1, opacity: 0 },
+  card: { width: "100%", aspectRatio: 7.5, backgroundColor: "#fbf8eb", justifyContent: "center", overflow: "hidden", borderRadius: 8 },
+  previewImage: { width: "100%", height: "100%" },
   values: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   error: { color: "#8c6555", backgroundColor: "#f7f0e9", padding: 12, borderRadius: 12, fontSize: 13, lineHeight: 19 },
   primary: { minHeight: 48, padding: 12, borderRadius: 14, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },

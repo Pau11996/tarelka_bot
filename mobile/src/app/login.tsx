@@ -21,6 +21,8 @@ import { api, apiFailureMessage, pollLogin } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../components/Brand";
 import { LoginWelcome } from "../components/LoginWelcome";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
+import { finishGoogleSignIn, startGoogleSignIn, supportsGoogleSignIn, type GoogleAttempt } from "../googleSignIn";
 import { PasswordRecoveryForm } from "../components/PasswordRecoveryForm";
 import { EmailVerificationForm, type PendingRegistration } from "../components/EmailVerificationForm";
 import { API_URL, SITE_URL } from "../config";
@@ -35,7 +37,9 @@ export default function LoginScreen() {
   const [waiting, setWaiting] = useState(false);
   const [botUrl, setBotUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"choose" | "register" | "login" | "recover" | "verify">("choose");
+  const [mode, setMode] = useState<"choose" | "register" | "login" | "recover" | "verify" | "google-link">("choose");
+  const [googleAttempt, setGoogleAttempt] = useState<GoogleAttempt | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [registration, setRegistration] = useState<PendingRegistration | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,6 +54,7 @@ export default function LoginScreen() {
   const { height: windowHeight } = useWindowDimensions();
 
   function chooseMode(next: typeof mode) {
+    if (emailSending.current) return;
     attempt.current++;
     running.current = null;
     setWaiting(false);
@@ -59,6 +64,7 @@ export default function LoginScreen() {
     setConfirmation("");
     setShowPassword(false);
     setShowConfirmation(false);
+    setGoogleAttempt(null);
     setMode(next);
     void AsyncStorage.removeItem(PENDING_LOGIN_KEY);
   }
@@ -154,6 +160,43 @@ export default function LoginScreen() {
     }
   }
 
+  async function loginWithGoogle(confirmPassword = false) {
+    if (emailSending.current) return;
+    if (confirmPassword && !password) { setError("Введите пароль от существующего аккаунта."); return; }
+    emailSending.current = true;
+    setEmailBusy(true);
+    setGoogleBusy(true);
+    setError(null);
+    const id = ++attempt.current;
+    running.current = null;
+    setWaiting(false);
+    try {
+      await AsyncStorage.removeItem(PENDING_LOGIN_KEY);
+      const pending = confirmPassword ? googleAttempt : await startGoogleSignIn();
+      if (!pending || id !== attempt.current) return;
+      const result = await finishGoogleSignIn(pending, confirmPassword ? password : undefined);
+      if (id !== attempt.current) return;
+      if ("access_token" in result) {
+        setGoogleAttempt(null);
+        setPassword("");
+        setConfirmation("");
+        await signIn(result.access_token);
+      } else {
+        setGoogleAttempt(pending);
+        setEmail(result.email);
+        setPassword("");
+        setConfirmation("");
+        setMode("google-link");
+      }
+    } catch (e) {
+      if (id === attempt.current) setError(e instanceof Error ? e.message : "Не удалось войти через Google. Попробуйте ещё раз.");
+    } finally {
+      emailSending.current = false;
+      setEmailBusy(false);
+      setGoogleBusy(false);
+    }
+  }
+
   async function submitEmail() {
     if (emailSending.current || (mode !== "register" && mode !== "login")) return;
     setError(null);
@@ -212,6 +255,7 @@ export default function LoginScreen() {
       <SafeAreaView style={s.safe} edges={["top", "bottom"]} importantForAccessibility={mode === "choose" ? "auto" : "no-hide-descendants"}>
         <LoginWelcome>
           <View style={s.actions}>
+            {supportsGoogleSignIn ? <View style={s.googleAction}><GoogleSignInButton busy={googleBusy} disabled={emailBusy || waiting} onPress={() => void loginWithGoogle()} /></View> : null}
             <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("register")} style={({ pressed }) => [s.createButton, (pressed || emailBusy) && s.pressed]}>
               <Text style={s.createText}>Создать аккаунт</Text>
               <Icon name="arrowRight" size={18} color={colors.surface} />
@@ -240,18 +284,27 @@ export default function LoginScreen() {
           <View accessibilityViewIsModal onAccessibilityEscape={closeEmailForm} style={[s.sheet, { maxHeight: windowHeight - inset.top - 16, paddingBottom: Math.max(inset.bottom, 20) }]}>
             <View style={s.handle} />
             <View style={s.sheetHeading}>
-              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "verify" ? "Подтвердите почту" : mode === "recover" ? "Восстановление пароля" : mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
+              <Text accessibilityRole="header" style={s.sheetTitle}>{mode === "google-link" ? "Подтвердите аккаунт" : mode === "verify" ? "Подтвердите почту" : mode === "recover" ? "Восстановление пароля" : mode === "register" ? "Создать аккаунт" : "С возвращением"}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel="Закрыть форму" disabled={emailBusy} onPress={closeEmailForm} style={s.sheetClose}>
                 <Icon name="close" size={18} />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" bounces={false} contentContainerStyle={s.form}>
-              {mode === "verify" && registration ? <EmailVerificationForm key={registration.registration_id} registration={registration} onVerified={signIn}
+              {mode === "google-link" ? <>
+                <Text style={s.formIntro}>Для {email} уже есть дневник. Введите пароль от него, чтобы подключить вход через Google.</Text>
+                <PasswordField accessibilityLabel="Пароль" placeholder="Пароль от дневника" value={password} onChangeText={setPassword}
+                  visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoCapitalize="none" autoCorrect={false}
+                  autoComplete="current-password" textContentType="password" editable={!emailBusy} maxLength={128} onSubmitEditing={() => void loginWithGoogle(true)} />
+                <ErrorText message={error} />
+                <PrimaryButton label={googleBusy ? "Входим…" : "Подключить Google и войти"} disabled={emailBusy} onPress={() => void loginWithGoogle(true)} />
+                <SecondaryButton label="Войти другим способом" disabled={emailBusy} onPress={() => chooseMode("login")} />
+              </> : mode === "verify" && registration ? <EmailVerificationForm key={registration.registration_id} registration={registration} onVerified={signIn}
                 onChangeEmail={() => { setRegistration(null); chooseMode("register"); }}
                 onLogin={() => { setRegistration(null); chooseMode("login"); }}
                 onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} />
               : mode === "recover" ? <PasswordRecoveryForm email={email} onEmailChange={setEmail} onBack={() => chooseMode("login")} onBusyChange={busy => { emailSending.current = busy; setEmailBusy(busy); }} /> : <>
               <Text style={s.formIntro}>{mode === "register" ? "Начните свой дневник с чистого листа." : "Войдите в дневник, который создали по email."}</Text>
+              {supportsGoogleSignIn ? <GoogleSignInButton busy={googleBusy} disabled={emailBusy} onPress={() => void loginWithGoogle()} /> : null}
               <View style={s.tabs}>
                 {(["login", "register"] as const).map(item => (
                   <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: mode === item, disabled: emailBusy }} disabled={emailBusy} onPress={() => chooseMode(item)} style={[s.tab, mode === item && s.tabSelected]}>
@@ -259,13 +312,13 @@ export default function LoginScreen() {
                   </Pressable>
                 ))}
               </View>
-              <Field accessibilityLabel="Email" placeholder="you@example.com" value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" keyboardType="email-address" editable={!emailBusy} maxLength={254} />
+              <Field accessibilityLabel="Email" placeholder="you@example.com" placeholderTextColor={welcomeColors.inputPlaceholder} value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" keyboardType="email-address" editable={!emailBusy} maxLength={254} />
               <PasswordField accessibilityLabel="Пароль" placeholder={mode === "register" ? "Не меньше 8 символов" : "Ваш пароль"} value={password} onChangeText={setPassword} visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete={mode === "register" ? "new-password" : "current-password"} textContentType={mode === "register" ? "newPassword" : "password"} editable={!emailBusy} maxLength={128} onSubmitEditing={() => { if (mode === "login") void submitEmail(); }} />
               {mode === "register" ? <PasswordField accessibilityLabel="Повторите пароль" placeholder="Ещё раз тот же пароль" value={confirmation} onChangeText={setConfirmation} visible={showConfirmation} onToggle={() => setShowConfirmation(value => !value)} autoCapitalize="none" autoCorrect={false} autoComplete="new-password" textContentType="newPassword" editable={!emailBusy} maxLength={128} onSubmitEditing={() => void submitEmail()} /> : null}
               <View accessibilityLiveRegion="polite"><ErrorText message={error} /></View>
               <PrimaryButton label={emailBusy ? (mode === "register" ? "Отправляем код…" : "Входим…") : mode === "register" ? "Зарегистрироваться" : "Войти"} disabled={emailBusy} onPress={() => void submitEmail()} />
               {mode === "login" ? <Pressable accessibilityRole="button" disabled={emailBusy} onPress={() => chooseMode("recover")} style={s.forgotButton}><Text style={s.forgotText}>Забыли пароль?</Text></Pressable> : null}
-              <Text style={s.accountHint}>Аккаунт по email и аккаунт Telegram имеют отдельные дневники.</Text>
+              <Text style={s.accountHint}>Google и email открывают один дневник. У аккаунта Telegram — отдельный дневник.</Text>
               <LegalLinks onError={setError} />
               </>}
             </ScrollView>
@@ -280,7 +333,7 @@ function PasswordField({ visible, onToggle, ...props }: TextInputProps & { visib
   const target = props.accessibilityLabel === "Повторите пароль" ? "повтор пароля" : "пароль";
   const disabled = props.editable === false;
   return <View>
-    <Field {...props} secureTextEntry={!visible} style={[props.style, s.passwordInput]} />
+    <Field placeholderTextColor={welcomeColors.inputPlaceholder} {...props} secureTextEntry={!visible} style={[props.style, s.passwordInput]} />
     <Pressable accessibilityRole="button" accessibilityLabel={`${visible ? "Скрыть" : "Показать"} ${target}`} accessibilityState={{ selected: visible, disabled }} disabled={disabled} onPress={onToggle} style={({ pressed }) => [s.passwordEye, pressed && s.passwordEyePressed]}>
       <Icon name={visible ? "eyeOff" : "eye"} size={21} color={colors.muted} />
     </Pressable>
@@ -301,6 +354,7 @@ function LegalLinks({ onError }: { onError: (message: string) => void }) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   actions: { paddingTop: 13 },
+  googleAction: { marginBottom: 8 },
   createButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 17, borderRadius: 15, backgroundColor: colors.accent },
   createText: { fontSize: 13, lineHeight: 19, fontWeight: "600", color: colors.surface },
   telegramButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, marginTop: 8, paddingHorizontal: 12 },

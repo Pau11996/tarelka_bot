@@ -83,8 +83,8 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
-            "(telegram_id IS NOT NULL AND email IS NULL AND password_hash IS NULL) OR "
-            "(telegram_id IS NULL AND email IS NOT NULL AND password_hash IS NOT NULL)",
+            "(telegram_id IS NOT NULL AND email IS NULL AND password_hash IS NULL AND google_subject IS NULL) OR "
+            "(telegram_id IS NULL AND email IS NOT NULL AND (password_hash IS NOT NULL OR google_subject IS NOT NULL))",
             name="ck_users_login_identity",
         ),
     )
@@ -93,6 +93,7 @@ class User(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_subject: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
     auth_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
     daily_request_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -727,6 +728,13 @@ class PushDelivery(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class GoogleLoginChallenge(Base):
+    __tablename__ = "google_login_challenges"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    nonce_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class HealthConnection(Base):

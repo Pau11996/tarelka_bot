@@ -705,9 +705,6 @@ export default function ChatScreen() {
                     subtitle="Например: омлет из двух яиц"
                     onPress={() => input.current?.focus()}
                   />
-                  <Text style={s.footerNote}>
-                    Без форм и подсчётов. Просто расскажите о своём дне.
-                  </Text>
                 </View>
               ) : null}
               {history?.next_before ? (
@@ -1148,13 +1145,6 @@ const s = StyleSheet.create({
   },
   actionTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
   actionSub: { fontSize: 13, color: colors.muted, marginTop: 2 },
-  footerNote: {
-    textAlign: "center",
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 8,
-  },
   exchange: { gap: 10 },
   sender: { color: colors.muted, fontSize: 11, paddingRight: 6 },
   messageMeta: { flexDirection: "row", alignItems: "center", gap: 2 },

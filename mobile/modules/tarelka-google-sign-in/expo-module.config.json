@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["by.tarelka.google.TarelkaGoogleSignInModule"]
+  }
+}

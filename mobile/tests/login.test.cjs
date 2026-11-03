@@ -7,7 +7,7 @@ const { test } = require("node:test");
 
 const flush = () => new Promise(setImmediate);
 
-function setup({ api, pollLogin } = {}) {
+function setup({ api, pollLogin, startGoogleSignIn, finishGoogleSignIn } = {}) {
   const slots = [], requests = [], signedIn = [], links = [], storage = new Map();
   let cursor = 0;
   const element = (type, props) => ({ type, props });
@@ -33,11 +33,13 @@ function setup({ api, pollLogin } = {}) {
     "../config": { API_URL: "https://api.example.test", SITE_URL: "https://example.test" },
     "../theme": { colors: {}, welcomeColors: {} }, "../components/Brand": { Icon: "Icon" },
     "../components/LoginWelcome": { LoginWelcome: props => element("Welcome", props) },
+    "../components/GoogleSignInButton": { GoogleSignInButton: props => element("Pressable", { ...props, accessibilityLabel: "Войти через Google" }) },
+    "../googleSignIn": { supportsGoogleSignIn: true, startGoogleSignIn, finishGoogleSignIn },
     "../components/PasswordRecoveryForm": { PasswordRecoveryForm: "PasswordRecoveryForm" },
     "../components/EmailVerificationForm": { EmailVerificationForm: "EmailVerificationForm" },
     "../ui": { Field: "Field", Loading: "Loading", PrimaryButton: "PrimaryButton", SecondaryButton: "SecondaryButton", ErrorText: ({ message }) => message ? element("Text", { children: message }) : null },
   };
-  const context = { exports: {}, require: name => modules[name], setTimeout };
+  const context = { exports: {}, require: name => modules[name], setTimeout, Error };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/app/login.tsx"), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, context);
@@ -119,6 +121,68 @@ test("registration never accepts a direct token without the email verification s
   app.button("Зарегистрироваться").props.onPress(); await flush();
   assert.deepEqual(app.signedIn, []);
   assert.ok(app.render().some(node => node.props?.children === "Подтверждение почты временно недоступно. Попробуйте позже."));
+});
+
+test("Google signs in once, disables competing actions and redirects to the existing diary", async () => {
+  let finish, starts = 0;
+  const pending = { challenge_id: "challenge", id_token: "private-google-token", timezone: "Europe/Minsk" };
+  const app = setup({
+    startGoogleSignIn: async () => { starts++; return pending; },
+    finishGoogleSignIn: data => { assert.equal(data, pending); return new Promise(resolve => { finish = resolve; }); },
+  });
+  const button = app.byLabel("Войти через Google");
+  button.props.onPress(); button.props.onPress();
+  await flush();
+  assert.equal(starts, 1);
+  assert.equal(app.byLabel("Войти через Google").props.disabled, true);
+  app.button("Создать аккаунт").props.onPress();
+  assert.equal(app.byLabel("Email"), undefined);
+  finish({ access_token: "google-session" }); await flush();
+  assert.deepEqual(app.signedIn, ["google-session"]);
+  assert.equal(app.render().find(node => node.type === "Redirect").props.href, "/");
+  assert.equal(JSON.stringify([...app.storage]).includes("private-google-token"), false);
+});
+
+test("cancelled Google account selection leaves the form ready for another method", async () => {
+  let requests = 0;
+  const app = setup({ startGoogleSignIn: async () => null, finishGoogleSignIn: async () => { requests++; } });
+  app.button("Создать аккаунт").props.onPress();
+  app.byLabel("Войти через Google").props.onPress(); await flush();
+  assert.deepEqual(app.signedIn, []);
+  assert.equal(requests, 0);
+  assert.equal(app.byLabel("Войти через Google").props.disabled, false);
+  assert.equal(app.byLabel("Email").props.editable, true);
+});
+
+test("Google errors are shown and the button becomes usable again", async () => {
+  const app = setup({ startGoogleSignIn: async () => { throw Error("Вход через Google временно недоступен"); } });
+  app.byLabel("Войти через Google").props.onPress(); await flush();
+  assert.ok(app.render().some(node => node.props?.children === "Вход через Google временно недоступен"));
+  assert.equal(app.byLabel("Войти через Google").props.disabled, false);
+});
+
+test("Google linking asks for the existing password and retries without reopening the chooser", async () => {
+  const calls = [];
+  let starts = 0;
+  const app = setup({
+    startGoogleSignIn: async () => { starts++; return { challenge_id: "challenge", id_token: "id-token" }; },
+    finishGoogleSignIn: async (_data, password) => {
+      calls.push(password);
+      if (password === undefined) return { status: "password_required", email: "person@example.com" };
+      if (password !== "correct-password") throw Error("Неверный пароль от существующего аккаунта.");
+      return { access_token: "linked-session" };
+    },
+  });
+  app.byLabel("Войти через Google").props.onPress(); await flush();
+  assert.deepEqual(app.signedIn, []);
+  app.byLabel("Пароль").props.onChangeText("wrong");
+  app.button("Подключить Google и войти").props.onPress(); await flush();
+  assert.ok(app.render().some(node => node.props?.children === "Неверный пароль от существующего аккаунта."));
+  app.byLabel("Пароль").props.onChangeText("correct-password");
+  app.button("Подключить Google и войти").props.onPress(); await flush();
+  assert.equal(starts, 1);
+  assert.deepEqual(calls, [undefined, "wrong", "correct-password"]);
+  assert.deepEqual(app.signedIn, ["linked-session"]);
 });
 
 test("Telegram entry still opens the bot and cancellation ignores a late confirmation", async () => {

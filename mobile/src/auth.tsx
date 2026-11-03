@@ -82,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         else
           await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined);
         setToken(null);
+        const { clearGoogleSignIn } = await import("./googleSignIn");
+        await clearGoogleSignIn().catch(() => undefined);
       },
     }),
     [ready, token],

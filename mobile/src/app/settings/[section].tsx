@@ -260,8 +260,8 @@ export default function AccountSection() {
       {section === "data" ? (
         <>
           <Panel
-            title={settings?.auth_method === "email" ? "Аккаунт по email" : "Аккаунт Telegram"}
-            subtitle={settings?.auth_method === "email"
+            title={settings?.auth_method === "google" ? "Аккаунт Google" : settings?.auth_method === "email" ? "Аккаунт по email" : "Аккаунт Telegram"}
+            subtitle={settings?.auth_method === "email" || settings?.auth_method === "google"
               ? `${settings.email}. Самостоятельный дневник в приложении.`
               : "Общий с ботом профиль, записи и подписка."}
           >

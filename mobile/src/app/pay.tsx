@@ -16,7 +16,7 @@ export default function Pay() {
       subtitle={
         data?.active
           ? `Активна до ${data.until ? formatDay(data.until) : "—"}`
-          : "Больше понимания. Меньше рутины."
+          : undefined
       }
     >
       <State

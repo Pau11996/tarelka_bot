@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     mobile_jwt_secret: str = "dev-mobile-jwt-secret-change-me"
     mobile_login_ttl_seconds: int = 300
     mobile_token_ttl_days: int = 30
+    google_web_client_id: str = ""
 
 
 settings = Settings()

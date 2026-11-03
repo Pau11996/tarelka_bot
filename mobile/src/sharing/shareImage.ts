@@ -1,46 +1,14 @@
 import { Platform } from "react-native";
-import { Asset } from "expo-asset";
+import { api } from "../api";
+import type { DailyNorm } from "./dailyNorm";
 
 export type ShareImage = { label: string; share: () => Promise<void> };
-export type SvgCapture = { toDataURL: (callback: (base64: string) => void, options: { width: number; height: number }) => void };
-
-let cat: Promise<string> | undefined;
-export function loadShareCat(): Promise<string> {
-  if (!cat) {
-    cat = (async () => {
-      const asset = await Asset.fromModule(require("../../assets/share/meme-cat.png")).downloadAsync();
-      if (Platform.OS !== "web") {
-        const { File } = await import("expo-file-system");
-        return `data:image/png;base64,${await new File(asset.localUri ?? asset.uri).base64()}`;
-      }
-      const response = await fetch(asset.uri);
-      if (!response.ok) throw new Error("Image unavailable");
-      const blob = await response.blob();
-      return await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("Image unavailable"));
-        reader.readAsDataURL(blob);
-      });
-    })().catch(error => { cat = undefined; throw error; });
+export async function renderNorm(norm: DailyNorm, token: string, signal: AbortSignal): Promise<string> {
+  const result = await api<{ image_base64: string }>("/v1/share/daily-norm", { token, json: norm, signal });
+  if (typeof result.image_base64 !== "string" || !result.image_base64.startsWith("iVBORw0KGgo")) {
+    throw new Error("Invalid PNG");
   }
-  return cat;
-}
-
-export function captureNorm(svg: SvgCapture): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Image capture timed out")), 12000);
-    try {
-      svg.toDataURL(base64 => {
-        clearTimeout(timer);
-        if (!base64.startsWith("iVBORw0KGgo")) reject(new Error("Invalid PNG"));
-        else resolve(base64);
-      }, { width: 1080, height: 216 });
-    } catch (error) {
-      clearTimeout(timer);
-      reject(error);
-    }
-  });
+  return result.image_base64;
 }
 
 // Prepare before the click: browsers require share() during the user gesture.

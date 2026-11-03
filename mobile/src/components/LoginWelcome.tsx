@@ -30,7 +30,7 @@ export function LoginWelcome({ children }: { children: ReactNode }) {
           <Text accessibilityRole="header" style={[s.title, { fontSize: titleSize, lineHeight: titleSize + 5 }]}>
             Забота о себе.{"\n"}<Text style={s.titleAccent}>Без лишних усилий.</Text>
           </Text>
-          <Text style={s.subtitle}>Фото, голос или пара слов —{"\n"}ваш дневник уже пополняется.</Text>
+          <Text style={s.subtitle}>Фото, голос или напишите текстом —{"\n"}и завтрак уже в дневнике.</Text>
         </View>
         <View style={[s.plateStage, { minHeight: plateSize + 18 }]}>
           <View accessible={false} style={[s.halo, { width: plateSize, height: plateSize, borderRadius: plateSize / 2 }]}>
@@ -48,7 +48,7 @@ export function LoginWelcome({ children }: { children: ReactNode }) {
             <Text style={s.chipText}>Забота каждый день</Text>
           </View>
         </View>
-        <Text style={s.footnote}>Еда, вода и движение — в одном месте</Text>
+        <Text style={s.footnote}>Еда, вода и тренировки в одном месте</Text>
       </View>
       {children}
     </ScrollView>

@@ -3,8 +3,8 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { SITE_URL } from "../config";
 import { Screen, Panel, State } from "../components/Screen";
+import { HealthExplanation } from "../components/HealthExplanation";
 import { PrimaryButton, SecondaryButton } from "../ui";
 import { colors } from "../theme";
 import { getHealthModule, healthAvailability, healthReader } from "../health/native";
@@ -65,12 +65,7 @@ export default function HealthSettings() {
   return <Screen title="Устройства и здоровье" back backTo="/account" subtitle="Данные часов и фитнес-приложений через Health Connect на Android.">
     <State loading={loading} error={error} onRetry={() => void load()} />
     {connection?.available === false ? <Panel title="Подключение пока недоступно" subtitle="Интеграция ещё не включена на сервере." /> : null}
-    <Panel title="Как это работает">
-      <Text style={s.body}>Часы → приложение производителя → Health Connect → ТАРЕЛКА. Сначала разрешите приложению часов делиться данными с Health Connect.</Text>
-      <Text style={s.body}>С вашего разрешения дневные итоги, тренировки, вес и источники сохраняются в вашем аккаунте на сервере для дневника и статистики. Эти данные не передаются AI-провайдерам и не используются для рекламы.</Text>
-      <Text style={s.body}>Обновление — при открытии приложения и вручную. Калории устройств не увеличивают норму питания; вес не меняет профиль автоматически.</Text>
-      <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(`${SITE_URL}/privacy.html`)} style={s.linkButton}><Text style={s.link}>Политика конфиденциальности →</Text></Pressable>
-    </Panel>
+    <HealthExplanation />
     {availability !== "available" ? <Panel title={availability === "install" ? "Установите или обновите Health Connect" : availability === "expo_go" || availability === "rebuild" ? "Нужна Android-сборка ТАРЕЛКИ" : "Нужен Android с Health Connect"} subtitle={availability === "expo_go" || availability === "rebuild" ? "Подключение часов работает в установленном приложении. Expo Go не содержит этот модуль." : "На этом устройстве Health Connect сейчас недоступен. Уже загруженная история останется в дневнике."}>
       {availability === "install" ? <SecondaryButton label="Открыть Google Play" onPress={() => void act(async () => { await Linking.openURL("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata"); })} /> : null}
     </Panel> : null}
@@ -108,7 +103,7 @@ export default function HealthSettings() {
 }
 const s = StyleSheet.create({
   body: { fontSize: 13, lineHeight: 20, color: colors.muted }, small: { fontSize: 11, lineHeight: 17, color: colors.muted },
-  heading: { fontSize: 14, fontWeight: "600", color: colors.text }, link: { fontSize: 13, color: colors.accentDark },
+  heading: { fontSize: 14, fontWeight: "600", color: colors.text },
   linkButton: { minHeight: 44, justifyContent: "center" }, danger: { color: colors.danger, fontSize: 13 },
   sources: { gap: 10, paddingVertical: 10 }, source: { minHeight: 46, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }, selected: { borderColor: colors.accent, backgroundColor: colors.soft },
 });

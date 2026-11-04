@@ -76,7 +76,7 @@ async def test_reference_catalogue_negotiation_and_v1_history_remain_compatible(
     old = (await client.get("/v1/workouts/catalogue")).json()
     new = (await client.get("/v1/workouts/catalogue?max_version=2")).json()
     assert old == catalogue(1) and new == catalogue(2)
-    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == catalogue(3)
+    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == catalogue(4)
     assert (await client.get("/v1/workouts/catalogue?max_version=0")).status_code == 422
     reference = next(w for w in new["workouts"] if w["id"] == "body_short")
     assert [s["exercise_id"] for s in reference["steps"]] == [
@@ -230,16 +230,18 @@ def test_energy_excludes_rest_and_uses_seconds_not_total_wall_duration():
     assert {e["animation"] for e in EXERCISES} == {"march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch"}
 
 
-def course_workout(day, level="medium"):
-    return next(w for w in catalogue(3)["workouts"] if w["id"] == f"fb28_d{day:02}_{level}")
+def course_workout(day, level="medium", version=3):
+    data = catalogue(version)
+    wid = data["course"]["days"][day - 1]["workout_ids"][level]
+    return next(w for w in data["workouts"] if w["id"] == wid)
 
 
-def course_payload(day, level="medium", start=None):
-    definition = course_workout(day, level)
+def course_payload(day, level="medium", start=None, version=3):
+    definition = course_workout(day, level, version)
     start = start or datetime.now(timezone.utc) - timedelta(days=40-day)
-    return dict(workout_id=definition["id"], catalogue_version=3, status="completed",
+    return dict(workout_id=definition["id"], catalogue_version=version, status="completed",
         started_at=start.isoformat(), ended_at=(start + timedelta(seconds=definition["duration_seconds"])).isoformat(),
-        timezone="UTC", auto_log=False, steps=[dict(step_id=s["id"], active_seconds=s["duration_seconds"],
+        timezone="UTC", auto_log=False, steps=[dict(step_id=s["id"], active_seconds=s["expected_seconds"],
             rest_seconds=s["rest_seconds"], completed=True) for s in definition["steps"]])
 
 
@@ -273,12 +275,89 @@ def test_course_calendar_levels_and_benchmark():
     assert any(s["exercise_id"] == "bird_dog" for s in course_workout(15)["steps"])
 
 
-async def test_course_all_28_days_idempotent_progress_and_account_isolation(workout_api):
+def test_revised_course_is_shorter_uses_repetitions_and_preserves_published_catalogues():
+    import hashlib
+    import json
+    hashes = {
+        1: "a6bc7fa7f5a74c83eeeff012f2889ec8f8ae12a6bceb3c2367797fb10602b36d",
+        2: "b3a5824d69d68a5189e14e9843c0e36153c25511475fd62f45408b88c564d94c",
+        3: "d55d9886b6ede645d804191b9de72426076ca0d5b120ada6b77a7937f7654ed9",
+    }
+    for version, digest in hashes.items():
+        assert hashlib.sha256(json.dumps(catalogue(version), sort_keys=True, ensure_ascii=False).encode()).hexdigest() == digest
+    data = catalogue(4)
+    assert data["course"]["id"] == catalogue(3)["course"]["id"]
+    assert data["course"]["revision"] == 2
+    assert [day["kind"] for day in data["course"]["days"]] == [day["kind"] for day in catalogue(3)["course"]["days"]]
+    assert [d["walk_minutes"] for d in data["course"]["days"] if d["kind"] == "walk"] == [15, 15, 20, 20, 25, 25, 30, 30]
+    old_workouts = {w["id"]: w for w in catalogue(3)["workouts"]}
+    for w in data["workouts"]:
+        if w["id"] in old_workouts:
+            assert w == old_workouts[w["id"]]
+    exercises = {ex["id"]: ex for ex in data["exercises"]}
+    forbidden = {"chair_dip", "plank_pike", "seated_knee_tuck", "squat_kick"}
+    for day in data["course"]["days"]:
+        if not day["workout_ids"]:
+            continue
+        for level, reps in (("light", 6), ("medium", 8), ("intense", 10)):
+            w = course_workout(day["day"], level, 4)
+            assert w["id"] not in old_workouts
+            assert not forbidden.intersection(s["exercise_id"] for s in w["steps"])
+            assert all(15 <= s["rest_seconds"] <= 30 for s in w["steps"])
+            assert w["duration_seconds"] == sum(s["expected_seconds"] + s["rest_seconds"] for s in w["steps"])
+            if day["kind"] == "strength":
+                main = [s for s in w["steps"] if s["section"] == "main"]
+                assert 5 <= len(main) <= 6
+                assert len(w["steps"]) <= 11
+                assert all(s["duration_seconds"] is None and s["repetitions"] == reps for s in main)
+                assert all(exercises[s["exercise_id"]]["easier"] for s in main)
+                assert any(s["exercise_id"] == "glute_bridge" for s in main)
+                assert sum(s["expected_seconds"] for s in w["steps"] if s["section"] == "warmup") == 300
+                assert sum(s["expected_seconds"] for s in w["steps"] if s["section"] == "cooldown") == 300
+            else:
+                assert len(w["steps"]) == 6
+                assert w["duration_seconds"] + 15 == 375
+    for level in ("light", "medium", "intense"):
+        one, last = course_workout(1, level, 4), course_workout(26, level, 4)
+        assert [dict(s, id="") for s in one["steps"]] == [dict(s, id="") for s in last["steps"]]
+    assert any(s["exercise_id"] == "quadruped_leg" for s in course_workout(8, "medium", 4)["steps"])
+    assert any(s["exercise_id"] == "bird_dog" for s in course_workout(8, "intense", 4)["steps"])
+
+
+async def test_upgrade_keeps_completed_days_and_accepts_old_queued_sessions(workout_api):
+    client, *_ = workout_api
+    assert (await client.get("/v1/workouts/catalogue?max_version=3")).json() == catalogue(3)
+    assert (await client.get("/v1/workouts/catalogue?max_version=4")).json() == catalogue(4)
+    first = await save(client, course_payload(1))
+    assert first["course_progress"][0]["day"] == 1
+    check = dict(course_id="full_body_28_v1", completed_at=(datetime.now(timezone.utc) - timedelta(days=38)).isoformat(), timezone="UTC")
+    assert (await client.put("/v1/workouts/course/days/2", json=check)).status_code == 200
+    third = await save(client, course_payload(3, version=4))
+    assert [p["day"] for p in third["course_progress"]] == [1, 2, 3]
+    assert third["catalogue_version"] == 4
+    history = (await client.get("/v1/workouts/history")).json()["items"]
+    assert {item["catalogue_version"] for item in history} == {3, 4}
+
+
+async def test_revised_course_rejects_skipped_main_step_and_preserves_rest_calculation(workout_api):
+    client, *_ = workout_api
+    body = course_payload(1, version=4)
+    main = next(i for i, step in enumerate(course_workout(1, version=4)["steps"]) if step["section"] == "main")
+    body["steps"][main]["completed"] = False
+    await save(client, body, expected=422)
+    body["status"] = "interrupted"
+    saved = await save(client, body)
+    assert saved["course_progress"] == []
+    assert saved["rest_seconds"] == sum(step["rest_seconds"] for step in body["steps"])
+
+
+@pytest.mark.parametrize("version", [3, 4])
+async def test_course_all_28_days_idempotent_progress_and_account_isolation(workout_api, version):
     client, factory, owner, other = workout_api
-    for day in catalogue(3)["course"]["days"]:
+    for day in catalogue(version)["course"]["days"]:
         number = day["day"]
         if day["workout_ids"]:
-            body, id = course_payload(number, "light" if number < 15 else "intense"), str(uuid4())
+            body, id = course_payload(number, "light" if number < 15 else "intense", version=version), str(uuid4())
             await save(client, body, id)
             await save(client, body, id)
         else:

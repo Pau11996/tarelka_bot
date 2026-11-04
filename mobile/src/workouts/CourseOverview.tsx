@@ -7,6 +7,7 @@ import { Icon } from "../components/Brand";
 import { useWorkouts } from "./context";
 import { activityLevels, courseState, courseSummary, courseWorkout } from "./course";
 import { CourseFacts, CoursePhoto } from "./CourseCard";
+import { workoutSeconds } from "./timing";
 import { s } from "./ui";
 
 export function useCourseClock() {
@@ -16,7 +17,8 @@ export function useCourseClock() {
 }
 
 export function ActivityPicker({ compact = false }: { compact?: boolean }) {
-  const { store, settings, draft } = useWorkouts();
+  const { store, settings, draft, catalogue } = useWorkouts();
+  const revised = catalogue?.course?.revision === 2;
   const [error, setError] = useState<string | null>(null);
   return <View style={{ gap: 10 }}>
     <Text style={s.title}>Нагрузка</Text>
@@ -26,10 +28,9 @@ export function ActivityPicker({ compact = false }: { compact?: boolean }) {
         setError(null); void store.setSettings({ ...settings, activity_level: level.id }).catch(e => setError(e.message));
       }} style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 16, alignItems: "center", gap: 5, backgroundColor: selected ? c.soft : c.surface, borderColor: selected ? c.accent : c.border, borderWidth: 1 }}>
         <Text style={[s.body, { fontSize: 12, fontWeight: "600", color: selected ? c.accentDark : c.text }]}>{level.title}</Text>
-        <Text style={s.small}>{level.seconds} сек</Text>
       </Pressable>;
     })}</View>
-    {!compact ? <Text style={s.small}>Меняется только время основной части. С третьей недели +5 секунд у знакомых движений; в день 26 — исходное время. Отдых — 30 секунд, его можно продлить. Разминка, растяжка и восстановление одинаковые.</Text> : null}
+    {!compact ? <Text style={s.small}>{revised ? "Нагрузка меняет число повторов и вариант упражнения на четвереньках. Выполняйте движения плавно. После занятия можно оценить усилие и выбрать уровень на следующий раз." : "Нагрузка меняет длительность основной части. Разминка, растяжка и восстановление одинаковые."}</Text> : null}
     {draft ? <Text style={s.small}>Выбор применится к следующему занятию. Текущее сохранит свою нагрузку.</Text> : null}
     <ErrorText message={error} />
   </View>;
@@ -39,8 +40,10 @@ export function CourseOverview() {
   const data = useWorkouts(), now = useCourseClock();
   const progress = courseState(data, now), course = data.catalogue!.course!;
   const summary = courseSummary(data)!;
+  const revised = course.revision === 2;
   const [week, setWeek] = useState<number | null>(null);
   const [about, setAbout] = useState(false);
+  const [programExpanded, setProgramExpanded] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const starting = useRef(false);
   const visibleWeek = week ?? Math.min(4, Math.ceil(progress.day / 7));
@@ -69,7 +72,7 @@ export function CourseOverview() {
       <CoursePhoto days={summary.days} />
       <View style={{ padding: 20, gap: 18 }}>
         <View style={{ gap: 8 }}><Text accessibilityRole="header" style={[s.title, { fontSize: 30 }]}>{summary.title}</Text>
-          <Text style={s.muted}>Тренировки для всего тела, прогулки и восстановление — в своём темпе.</Text></View>
+          <Text style={s.muted}>{revised ? "5–6 основных упражнений, прогулки и восстановление. Осваиваем движения и выбираем посильную нагрузку." : "Тренировки для всего тела, прогулки и восстановление — в своём темпе."}</Text></View>
         <CourseFacts data={data} />
         {progress.completed.length ? <View style={{ gap: 8 }}>
           <Text style={s.link}>{progress.completed.length} из {summary.days} дней завершено</Text>
@@ -89,20 +92,29 @@ export function CourseOverview() {
         <Text style={[s.link, { flex: 1 }]}>Что понадобится и как заниматься</Text><View style={{ transform: [{ rotate: about ? "180deg" : "0deg" }] }}><Icon name="down" size={17} color={c.accentDark} /></View>
       </Pressable>
       {about ? <View style={{ gap: 10 }}>
-        <Text style={s.muted}>Коврик, свободная стена и устойчивый стул без колёс. Все занятия можно выполнять дома.</Text>
-        <Text style={s.muted}>Силовые занятия чередуются с прогулками, подвижностью и отдыхом. Нагрузка меняет время упражнений; отдых можно продлить.</Text>
-        <Text style={s.muted}>После пропуска продолжайте с текущего дня. Не нужно выполнять два дня за один. Дополнительные подходы необязательны.</Text>
+        <Text style={s.muted}>{revised ? "Коврик и свободная стена. Устойчивая опора — по необходимости для равновесия. Все занятия можно выполнять дома." : "Коврик, свободная стена и устойчивый стул без колёс. Все занятия можно выполнять дома."}</Text>
+        <Text style={s.muted}>{revised ? "Один подход каждого упражнения. Повторы завершаются кнопкой, без гонки с таймером. Разминка и спокойная ходьба в конце — по 5 минут. В описании упражнений есть облегчения." : "Силовые занятия чередуются с прогулками, подвижностью и отдыхом. Нагрузка меняет время упражнений; отдых можно продлить."}</Text>
+        <Text style={s.muted}>Перед началом — 15 секунд на подготовку. После каждого упражнения — 15–30 секунд отдыха. Кнопка «+20 сек» продлевает ожидание, «Пауза» останавливает таймер.</Text>
+        <Text style={s.muted}>{revised ? "Календарь не повышает нагрузку автоматически. После тренировки оцените усилие. Повышайте уровень только при уверенной технике и нормальном восстановлении." : "Дополнительные подходы необязательны."}</Text>
+        <Text style={s.muted}>После пропуска продолжайте с текущего дня. Не нужно выполнять два дня за один.</Text>
+        {revised ? <Text style={s.muted}>Прогулки постепенно растут от 15 до 30 минут. Добавляйте посильную ходьбу в другие дни, приближаясь к 150 минутам умеренной активности в неделю. Упражнение лёжа для спины развивает контроль движения; тяги с сопротивлением в этом курсе нет.</Text> : null}
       </View> : null}
     </View>
-    <Text accessibilityRole="header" style={s.title}>Программа курса</Text>
-    <View style={[s.row, { gap: 6 }]}>{[1, 2, 3, 4].map(n => <Pressable key={n} accessibilityRole="tab" accessibilityState={{ selected: visibleWeek === n }} onPress={() => setWeek(n)} style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 12, backgroundColor: visibleWeek === n ? c.soft : c.surface }}><Text style={[s.small, { color: visibleWeek === n ? c.accentDark : c.muted }]}>{n} неделя</Text></Pressable>)}</View>
-    {course.days.filter(day => day.week === visibleWeek).map(day => {
-      const done = progress.completed.some(p => p.day === day.day), workout = courseWorkout(data, day.day);
-      const label = day.kind === "strength" ? "Тренировка" : day.kind === "mobility" ? "Подвижность" : day.kind === "walk" ? "Прогулка" : "Отдых";
-      return <Pressable key={day.day} accessibilityRole="button" accessibilityLabel={`День ${day.day}. ${day.title}. ${done ? "Завершён" : "Открыть"}`} onPress={() => open(day.day)} style={[s.card, { borderColor: day.day === progress.day ? c.accent : c.border }]}>
-        <View style={s.row}><Text style={[s.link, { width: 30 }]}>{done ? "✓" : String(day.day).padStart(2, "0")}</Text><View style={{ flex: 1, gap: 4 }}><Text style={s.title}>{day.title}</Text><Text style={s.small}>{label}{workout ? ` · ${Math.round(workout.duration_seconds / 60)} мин` : day.walk_minutes ? ` · около ${day.walk_minutes} мин` : ""}</Text></View><Text style={s.small}>{done ? "Готово" : day.day === progress.day ? "Текущий" : ""}</Text></View>
-      </Pressable>;
-    })}
+    <Pressable accessibilityRole="button" accessibilityLabel="Программа курса" accessibilityState={{ expanded: programExpanded }} onPress={() => setProgramExpanded(value => !value)} style={[s.row, { minHeight: 48 }]}>
+      <Text style={[s.title, { flex: 1 }]}>Программа курса</Text>
+      <Text style={s.small}>{programExpanded ? "Свернуть" : "Развернуть"}</Text>
+      <View style={{ transform: [{ rotate: programExpanded ? "180deg" : "0deg" }] }}><Icon name="down" size={17} color={c.accentDark} /></View>
+    </Pressable>
+    {programExpanded ? <>
+      <View style={[s.row, { gap: 6 }]}>{[1, 2, 3, 4].map(n => <Pressable key={n} accessibilityRole="tab" accessibilityState={{ selected: visibleWeek === n }} onPress={() => setWeek(n)} style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 12, backgroundColor: visibleWeek === n ? c.soft : c.surface }}><Text style={[s.small, { color: visibleWeek === n ? c.accentDark : c.muted }]}>{n} неделя</Text></Pressable>)}</View>
+      {course.days.filter(day => day.week === visibleWeek).map(day => {
+        const done = progress.completed.some(p => p.day === day.day), workout = courseWorkout(data, day.day);
+        const label = day.kind === "strength" ? "Тренировка" : day.kind === "mobility" ? "Подвижность" : day.kind === "walk" ? "Прогулка" : "Отдых";
+        return <Pressable key={day.day} accessibilityRole="button" accessibilityLabel={`День ${day.day}. ${day.title}. ${done ? "Завершён" : "Открыть"}`} onPress={() => open(day.day)} style={[s.card, { borderColor: day.day === progress.day ? c.accent : c.border }]}>
+          <View style={s.row}><Text style={[s.link, { width: 30 }]}>{done ? "✓" : String(day.day).padStart(2, "0")}</Text><View style={{ flex: 1, gap: 4 }}><Text style={s.title}>{day.title}</Text><Text style={s.small}>{label}{workout ? ` · ${Math.round(workoutSeconds(workout) / 60)} мин` : day.walk_minutes ? ` · около ${day.walk_minutes} мин` : ""}</Text></View><Text style={s.small}>{done ? "Готово" : day.day === progress.day ? "Текущий" : ""}</Text></View>
+        </Pressable>;
+      })}
+    </> : null}
     {data.course_queue?.filter(item => item.blocked).map(item => <ErrorText key={item.day} message={`День ${item.day}: ${item.error}`} />)}
   </View>;
 }

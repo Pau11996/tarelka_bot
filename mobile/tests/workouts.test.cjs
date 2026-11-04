@@ -22,23 +22,56 @@ const catalogue = { version: 1, exercises: [{ id: 'march', animation: 'march' },
 ] }] };
 const wall = ms => new Date(Date.parse('2026-10-30T10:00:00Z') + ms).toISOString();
 const draft = () => engine.createDraft('id', catalogue.workouts[0], catalogue, { auto_log: false, sound: true }, 'Europe/Minsk', 0, wall(0));
+const exercising = () => engine.act(draft(), 'skip', 0, wall(0));
+
+test('preparation can be extended and paused, survives restart and never counts as exercise', () => {
+  let d = draft();
+  assert.equal(d.phase, 'prepare'); assert.equal(engine.remaining(d), 15);
+  d = engine.tick(d, 5000, wall(5000));
+  assert.equal(engine.remaining(d), 10);
+  d = engine.act(d, 'more_rest', 5000, wall(5000));
+  assert.equal(engine.remaining(d), 30);
+  d = engine.act(d, 'pause', 7000, wall(7000));
+  d = engine.restoreDraft(clone(d), 0);
+  d = engine.tick(d, 60000, wall(67000));
+  assert.equal(d.paused, true); assert.equal(engine.remaining(d), 28);
+  d = engine.act(d, 'more_rest', 60000, wall(67000));
+  assert.equal(d.paused, true); assert.equal(engine.remaining(d), 48);
+  d = engine.act(d, 'resume', 60000, wall(67000));
+  d = engine.tick(d, 160000, wall(167000));
+  assert.equal(d.phase, 'exercise'); assert.equal(d.index, 0);
+  assert.equal(d.results[0].active_seconds, 0); assert.equal(d.results[0].rest_seconds, 0);
+  assert.equal(d.results[0].completed, false);
+  d = engine.tick(d, 162000, wall(169000));
+  assert.equal(d.results[0].active_seconds, 2);
+});
+
+test('starting immediately skips preparation only; stopping during it creates no active time', () => {
+  const d = exercising();
+  assert.equal(d.phase, 'exercise'); assert.equal(d.index, 0);
+  assert.equal(d.results[0].completed, false); assert.equal(d.results[0].active_seconds, 0);
+  const payload = engine.sessionInput(engine.act(draft(), 'stop', 7000, wall(7000)));
+  assert.equal(payload.status, 'interrupted'); assert.equal(payload.steps[0].active_seconds, 0);
+});
 
 test('timer finishes only the current phase, counts rest separately and requires rep confirmation', () => {
-  let d = engine.tick(draft(), 20000, wall(20000));
+  let d = engine.tick(exercising(), 20000, wall(20000));
   assert.equal(d.phase, 'rest'); assert.equal(d.index, 0); assert.equal(d.results[0].active_seconds, 10);
-  d = engine.tick(d, 25000, wall(25000));
-  assert.equal(d.phase, 'exercise'); assert.equal(d.index, 1); assert.equal(d.results[0].rest_seconds, 5);
-  d = engine.tick(d, 30000, wall(30000));
+  d = engine.tick(d, 35000, wall(35000));
+  assert.equal(d.phase, 'exercise'); assert.equal(d.index, 1); assert.equal(d.results[0].rest_seconds, 15);
+  d = engine.tick(d, 40000, wall(40000));
   assert.equal(d.phase, 'exercise'); assert.equal(d.results[1].completed, false);
-  d = engine.act(d, 'complete_reps', 30000, wall(30000));
+  d = engine.act(d, 'complete_reps', 40000, wall(40000));
+  assert.equal(d.phase, 'rest'); assert.equal(engine.remaining(d), 15);
+  d = engine.tick(d, 55000, wall(55000));
   assert.equal(d.phase, 'finished'); assert.equal(d.status, 'completed');
   const payload = engine.sessionInput(d);
   assert.equal(payload.steps.reduce((sum, s) => sum + s.active_seconds, 0), 15);
-  assert.equal(payload.steps.reduce((sum, s) => sum + s.rest_seconds, 0), 5);
+  assert.equal(payload.steps.reduce((sum, s) => sum + s.rest_seconds, 0), 30);
 });
 
 test('pause, process restart and resume never count time spent outside the workout', () => {
-  let d = engine.act(draft(), 'pause', 3000, wall(3000));
+  let d = engine.act(exercising(), 'pause', 3000, wall(3000));
   d = engine.tick(d, 500000, wall(500000));
   assert.equal(d.results[0].active_seconds, 3);
   d = engine.restoreDraft(d, 2);
@@ -49,9 +82,9 @@ test('pause, process restart and resume never count time spent outside the worko
 });
 
 test('extra rest and skip do not add exercise calories or falsely complete skipped steps', () => {
-  let d = engine.tick(draft(), 10000, wall(10000));
+  let d = engine.tick(exercising(), 10000, wall(10000));
   d = engine.act(d, 'more_rest', 11000, wall(11000));
-  assert.equal(d.rest_target, 20); assert.equal(d.results[0].rest_seconds, 1);
+  assert.equal(d.rest_target, 35); assert.equal(d.results[0].rest_seconds, 1);
   d = engine.act(d, 'skip', 15000, wall(15000));
   assert.equal(d.index, 1); assert.equal(d.results[0].active_seconds, 10); assert.equal(d.results[0].rest_seconds, 5);
   d = engine.act(d, 'skip', 17000, wall(17000));
@@ -59,20 +92,69 @@ test('extra rest and skip do not add exercise calories or falsely complete skipp
 });
 
 test('skipping every exercise produces interrupted result and a timer/tap race cannot skip the next step', () => {
-  let d = engine.act(draft(), 'skip', 0, wall(0));
+  let d = engine.act(exercising(), 'skip', 0, wall(0));
+  d = engine.act(d, 'skip', 0, wall(0));
   d = engine.act(d, 'skip', 0, wall(0));
   d = engine.act(d, 'skip', 0, wall(0));
   assert.equal(d.status, 'interrupted');
-  const boundary = engine.act(draft(), 'skip', 10000, wall(10000));
+  const boundary = engine.act(exercising(), 'skip', 10000, wall(10000));
   assert.equal(boundary.phase, 'rest'); assert.equal(boundary.results[0].completed, true);
 });
 
 test('repetition time has a cap and stopping a partial step preserves actual seconds', () => {
-  let d = engine.act(engine.tick(draft(), 10000, wall(10000)), 'skip', 10000, wall(10000));
+  let d = engine.act(engine.tick(exercising(), 10000, wall(10000)), 'skip', 10000, wall(10000));
   d = engine.tick(d, 1000000, wall(1000000));
   assert.equal(d.paused, true); assert.equal(d.results[1].active_seconds, 48); assert.equal(d.results[1].completed, false);
   d = engine.act(d, 'stop', 1000001, wall(1000001));
   assert.equal(engine.sessionInput(d).status, 'interrupted');
+});
+
+test('rest pause freezes the countdown and extension stays paused, including after the final exercise', () => {
+  let d = engine.tick(exercising(), 10000, wall(10000));
+  d = engine.act(d, 'skip', 10000, wall(10000));
+  d = engine.act(d, 'complete_reps', 15000, wall(15000));
+  assert.equal(d.phase, 'rest'); assert.equal(d.index, 1);
+  d = engine.act(d, 'pause', 20000, wall(20000));
+  d = engine.tick(d, 80000, wall(80000));
+  assert.equal(engine.remaining(d), 10);
+  d = engine.act(d, 'more_rest', 80000, wall(80000));
+  assert.equal(d.paused, true); assert.equal(engine.remaining(d), 30);
+  d = engine.act(d, 'resume', 80000, wall(80000));
+  d = engine.tick(d, 100000, wall(100000));
+  assert.equal(d.phase, 'rest'); assert.equal(engine.remaining(d), 10);
+  d = engine.act(d, 'skip', 100000, wall(100000));
+  assert.equal(d.phase, 'finished'); assert.equal(d.status, 'completed');
+  const payload = engine.sessionInput(d);
+  assert.equal(payload.steps[1].rest_seconds, 25); assert.equal(payload.steps[1].active_seconds, 5);
+});
+
+test('phase-boundary taps do not skip or extend a new phase and waiting never completes repetitions', () => {
+  for (const action of ['skip', 'complete_reps', 'more_rest']) {
+    const prepared = engine.act(draft(), action, 15000, wall(15000));
+    assert.equal(prepared.phase, 'exercise'); assert.equal(prepared.index, 0);
+    assert.equal(prepared.results[0].active_seconds, 0); assert.equal(prepared.results[0].completed, false);
+    const resting = engine.act(exercising(), action, 10000, wall(10000));
+    assert.equal(resting.phase, 'rest'); assert.equal(engine.remaining(resting), 15);
+    const next = engine.act(resting, action, 25000, wall(25000));
+    assert.equal(next.phase, 'exercise'); assert.equal(next.index, 1); assert.equal(next.results[1].active_seconds, 0);
+  }
+  const d = engine.act(draft(), 'complete_reps', 1000, wall(1000));
+  assert.equal(d.phase, 'prepare'); assert.equal(d.results[0].completed, false);
+});
+
+test('waiting extension respects the server rest limit and legacy drafts resume without preparation', () => {
+  for (const initial of [draft(), engine.tick(exercising(), 10000, wall(10000))]) {
+    let d = { ...initial, paused: true, rest_target: 3590 };
+    d = engine.act(d, 'more_rest', 10000, wall(10000));
+    assert.equal(d.rest_target, 3600);
+    d = engine.act(d, 'more_rest', 10000, wall(10000));
+    assert.equal(d.rest_target, 3600);
+  }
+  const legacy = clone(exercising()); delete legacy.preparation_seconds;
+  const restored = engine.restoreDraft(legacy, 0);
+  assert.equal(restored.phase, 'exercise'); assert.equal(restored.paused, true);
+  const resumed = engine.tick(engine.act(restored, 'resume', 0, wall(0)), 1000, wall(1000));
+  assert.equal(resumed.results[0].active_seconds, 1);
 });
 
 test('namespace survives renewed tokens but separates accounts and revoked sessions', () => {
@@ -99,7 +181,7 @@ function fixture() {
     async request(url, options) {
       requests.push([url, clone({ ...options, signal: undefined })]);
       if (config.offline) throw Object.assign(Error('offline'), { status: 0 });
-      if (url === '/v1/workouts/catalogue?max_version=3') return clone(config.serverCatalogue);
+      if (url === '/v1/workouts/catalogue?max_version=4') return clone(config.serverCatalogue);
       if (url === '/v1/workouts/course/progress') return [];
       if (url === '/v1/me') return { timezone: 'Europe/Minsk' };
       if (url === '/v1/settings/workouts') { if (options.method === 'PUT') config.serverSettings = options.json; return clone(config.serverSettings); }
@@ -117,7 +199,7 @@ function fixture() {
   return { deps, config, remote, requests, get saved() { return saved; }, advance(value) { ms += value; } };
 }
 async function initialize(f) { const store = new WorkoutStore(f.deps); await store.initialize(); await store.refresh(); return store; }
-async function complete(store, f) { await store.start('test'); f.advance(10000); store.tick(); await store.action('skip'); f.advance(12000); await store.action('complete_reps'); await store.refresh(); }
+async function complete(store, f) { await store.start('test'); await store.action('skip'); f.advance(10000); store.tick(); await store.action('skip'); f.advance(12000); await store.action('complete_reps'); await store.action('skip'); await store.refresh(); }
 
 test('offline completion is durable and a restarted store safely retries a lost response', async () => {
   const f = fixture(); f.config.offline = true;
@@ -136,7 +218,7 @@ test('offline completion is durable and a restarted store safely retries a lost 
 
 test('draft restores paused with settings frozen at its start; subsequent settings affect the next workout', async () => {
   const f = fixture(), store = await initialize(f);
-  await store.start('test'); f.advance(2000); store.tick();
+  await store.start('test'); await store.action('skip'); f.advance(2000); store.tick();
   await store.setSettings({ auto_log: true, sound: false }); await store.refresh();
   assert.equal(store.getSnapshot().draft.auto_log, false);
   await store.close(); f.advance(60000);
@@ -178,7 +260,7 @@ test('disk errors pause the player and cannot silently start or discard a workou
   assert.equal(store.getSnapshot().storage_error, true);
   await assert.rejects(store.action('resume'));
   f.config.diskFull = false;
-  await store.action('resume'); f.advance(1000); store.tick();
+  await store.action('resume'); await store.action('skip'); f.advance(1000); store.tick();
   assert.equal(store.getSnapshot().storage_error, false);
   assert.equal(store.getSnapshot().draft.results[0].active_seconds, 1);
   await store.close();

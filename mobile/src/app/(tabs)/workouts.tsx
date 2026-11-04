@@ -10,6 +10,7 @@ import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { availableWorkouts } from "../../workouts/catalogue";
 import { CourseCard } from "../../workouts/CourseCard";
 import { dateLabel, s, statsFor, WorkoutHeader } from "../../workouts/ui";
+import { workoutSeconds } from "../../workouts/timing";
 
 export default function WorkoutsScreen() {
   const data = useWorkouts();
@@ -37,9 +38,9 @@ export default function WorkoutsScreen() {
           <ExerciseFigure exercise={preview} size={120} />
         </View> : null}
         <View style={s.row}><Text style={[s.title, { flex: 1 }]}>Ваш комплекс</Text><View style={s.chip}><Text style={s.chipText}>Бесплатно</Text></View></View>
-        {workouts.map(workout => <Pressable key={workout.id} accessibilityRole="button" accessibilityLabel={`${workout.title}, около ${Math.round(workout.duration_seconds / 60)} минут`} onPress={() => router.push({ pathname: "/workout/[id]", params: { id: workout.id } })} style={({ pressed }) => [s.card, local.workoutCard, pressed && { opacity: .75 }]}>
+        {workouts.map(workout => <Pressable key={workout.id} accessibilityRole="button" accessibilityLabel={`${workout.title}, около ${Math.round(workoutSeconds(workout) / 60)} минут`} onPress={() => router.push({ pathname: "/workout/[id]", params: { id: workout.id } })} style={({ pressed }) => [s.card, local.workoutCard, pressed && { opacity: .75 }]}>
           <View style={local.thumb}><ExerciseFigure exercise={catalogue!.exercises.find(e => e.id === workout.preview_exercise_id)!} size={76} /></View>
-          <View style={{ flex: 1, gap: 7 }}><Text style={s.title}>{workout.title}</Text><Text style={s.small}>{workout.subtitle}</Text><Text style={s.link}>{Math.round(workout.duration_seconds / 60)} мин · {workout.steps.length} упражнений</Text></View><Icon name="chevron" size={16} color={c.muted} />
+          <View style={{ flex: 1, gap: 7 }}><Text style={s.title}>{workout.title}</Text><Text style={s.small}>{workout.subtitle}</Text><Text style={s.link}>{Math.round(workoutSeconds(workout) / 60)} мин · {workout.steps.length} упражнений</Text></View><Icon name="chevron" size={16} color={c.muted} />
         </Pressable>)}
         {primaryWorkout ? <Text style={s.small}>Для комплекса нужны коврик, свободная стена и устойчивый стул. Подробности — в карточке занятия.</Text> : catalogue ? <View style={s.notice}><Text style={s.muted}>Обновите каталог, чтобы загрузить комплекс «Всё тело».</Text><SecondaryButton label="Обновить каталог" onPress={() => void store.refresh()} /></View> : null}
       </> : <>

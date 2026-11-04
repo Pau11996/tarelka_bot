@@ -143,6 +143,38 @@ COURSE, COURSE_WORKOUTS = build_course(COURSE_EXERCISES)
 CATALOGS[3] = dict(version=3, exercises=COURSE_EXERCISES,
                    workouts=deepcopy(CATALOGS[2]["workouts"]) + COURSE_WORKOUTS, course=COURSE)
 
+# Revise the curriculum without changing any published workout or exercise.
+from src.shared.workout_course_v2 import build_course as build_course_v2
+
+BEGINNER_EXERCISES = deepcopy(COURSE_EXERCISES) + [
+    exercise("quadruped_leg", "Вытягивание ноги на четвереньках", "Обе ладони на коврике. Чередуйте ноги.",
+             "Встаньте на четвереньки: ладони под плечами, колени под тазом. Плавно вытяните одну ногу назад, не выше линии корпуса. "
+             "Верните колено под таз и смените ногу. Не разворачивайте таз и не прогибайте поясницу. "
+             "Каждая сторона считается одним повтором.", "quadruped_leg", 3.0, equipment=["Коврик"]),
+]
+_adaptations = {
+    "squat": "Сделайте приседание менее глубоким. Если нужно, придерживайтесь за устойчивую опору.",
+    "wall_push": "Встаньте ближе к стене и уменьшите сгибание локтей. Опора не должна скользить.",
+    "calf_raise": "Придерживайтесь за стену и поднимайте пятки невысоко.",
+    "leg_left": "Придерживайтесь за стену. Отводите ногу совсем немного, сохраняя таз неподвижным.",
+    "leg_right": "Придерживайтесь за стену. Отводите ногу совсем немного, сохраняя таз неподвижным.",
+    "prone_pull": "Уменьшите подъём груди и амплитуду рук. Движение тренирует контроль спины и не заменяет тягу с сопротивлением.",
+    "glute_bridge": "Поднимайте таз невысоко. Остановите подъём до прогиба в пояснице.",
+    "quadruped_leg": "Скользите носком назад по коврику, не поднимая стопу. Обе ладони остаются на опоре.",
+    "bird_dog": "Поднимайте только ногу, оставляя обе ладони на коврике. Каждая сторона — один повтор.",
+}
+for _ex in BEGINNER_EXERCISES:
+    if _ex["id"] in _adaptations:
+        # Extra guidance is additive; legacy titles/instructions/MET stay unchanged.
+        _ex["easier"] = _adaptations[_ex["id"]]
+    if _ex["id"] == "bird_dog":
+        _ex["repetition_note"] = "Чередуйте стороны. Каждая сторона — один повтор."
+    elif _ex["id"] == "quadruped_leg":
+        _ex["repetition_note"] = "Чередуйте ноги. Каждая нога — один повтор."
+BEGINNER_COURSE, BEGINNER_WORKOUTS = build_course_v2(BEGINNER_EXERCISES)
+CATALOGS[4] = dict(version=4, exercises=BEGINNER_EXERCISES,
+                   workouts=deepcopy(CATALOGS[3]["workouts"]) + BEGINNER_WORKOUTS, course=BEGINNER_COURSE)
+
 
 def catalogue(version: int = 1):
     return deepcopy(CATALOGS[version])

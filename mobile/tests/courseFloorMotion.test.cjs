@@ -2,7 +2,7 @@ const { test } = require('node:test'), assert = require('node:assert/strict');
 const { floorFrame, render } = require('../scripts/render-course-floor.cjs');
 const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
 test('floor motions keep limb lengths, joints and loop endpoints continuous', () => {
-  for (const name of ['glute_bridge','bird_dog']) {
+  for (const name of ['glute_bridge','bird_dog','quadruped_leg']) {
     assert.deepEqual(floorFrame(name,0),floorFrame(name,1));
     const initial = floorFrame(name,0), reference = [...initial.arms, ...initial.legs];
     for (let i=0;i<=200;i++) {
@@ -21,6 +21,16 @@ test('floor motions keep limb lengths, joints and loop endpoints continuous', ()
       }
       assert.doesNotMatch(render(name,i/200), /NaN|undefined/);
     }
+  }
+});
+test('beginner quadruped leg movement keeps both hands down and alternates one leg at a time', () => {
+  const initial = floorFrame('quadruped_leg', 0);
+  for (const [phase, leg] of [[.25, 1], [.75, 0]]) {
+    const frame = floorFrame('quadruped_leg', phase);
+    assert.deepEqual(frame.arms, initial.arms);
+    assert.equal(frame.lift[leg], 1); assert.equal(frame.lift[1-leg], 0);
+    assert.deepEqual(frame.legs[1-leg], initial.legs[1-leg]);
+    assert.ok(distance(frame.legs[leg].end, initial.legs[leg].end) > 30);
   }
 });
 test('bridge finishes with shoulder hip and knee aligned without lumbar overextension', () => {

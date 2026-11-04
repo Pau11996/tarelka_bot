@@ -4,6 +4,9 @@ import type { Workout, WorkoutCatalogue } from "./types";
  * versioned catalogue in storage for previous results and unfinished sessions. */
 export function availableWorkouts(catalogue: WorkoutCatalogue | null): Workout[] {
   if (!catalogue || catalogue.version < 2) return [];
-  if (catalogue.course) return catalogue.workouts.filter(workout => workout.course_id === catalogue.course!.id);
+  if (catalogue.course) {
+    const ids = new Set(catalogue.course.days.flatMap(day => Object.values(day.workout_ids)));
+    return catalogue.workouts.filter(workout => ids.has(workout.id));
+  }
   return catalogue.workouts.filter(workout => workout.id === "body_short");
 }

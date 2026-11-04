@@ -28,7 +28,7 @@ function MorningFigure({ exercise, movement, playing = false, size = 240, showGu
   </View>;
 }
 export const ExerciseFigure = memo(function ExerciseFigure(props: Props) {
-  return props.exercise.animation === "glute_bridge" || props.exercise.animation === "bird_dog"
+  return props.exercise.animation === "glute_bridge" || props.exercise.animation === "bird_dog" || props.exercise.animation === "quadruped_leg"
     ? <CourseFloorFigure {...props} movement={props.exercise.animation} />
     : isFullBodyMovement(props.exercise.animation)
     ? <FullBodyFigure {...props} movement={props.exercise.animation} />

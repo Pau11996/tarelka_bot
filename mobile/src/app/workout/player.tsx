@@ -15,6 +15,7 @@ import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { ExerciseInfo, s } from "../../workouts/ui";
 import type { Exercise } from "../../workouts/types";
 import { sectionLabels } from "../../workouts/course";
+import { MAX_REST_SECONDS } from "../../workouts/timing";
 
 function Awake({ id }: { id: string }) {
   useEffect(() => {
@@ -74,7 +75,11 @@ export default function WorkoutPlayer() {
   const nextStep = draft?.workout.steps[(draft?.index ?? 0) + 1];
   const nextExercise = draft?.exercises.find(e => e.id === nextStep?.exercise_id);
   const rest = draft?.phase === "rest";
+  const preparing = draft?.phase === "prepare";
+  const waiting = rest || preparing;
+  const finalRest = rest && !nextStep;
   const figure = rest ? nextExercise : exercise;
+  const displayStep = rest ? nextStep : step;
   const current = draft?.results[draft.index];
   if (!ready) return <Loading />;
   if (!draft || !step || !exercise || !current) return <SafeAreaView style={s.page}><View style={[s.content, { paddingTop: 40 }]}><Text style={s.title}>Занятие сохранено</Text><SecondaryButton label="К тренировкам" onPress={() => router.replace("/(tabs)/workouts")} /></View></SafeAreaView>;
@@ -82,24 +87,25 @@ export default function WorkoutPlayer() {
     {!draft.paused ? <Awake id={draft.id} /> : null}
     <View style={s.header}>
       <Pressable accessibilityRole="button" accessibilityLabel="Выйти из занятия" onPress={() => { repeatExit.current = null; void action("pause"); setExit(true); }} style={s.iconButton}><Icon name="close" /></Pressable>
-      <View style={{ flex: 1, gap: 3 }}><Text style={s.small}>{draft.workout.title}</Text><Text style={s.link}>Упражнение {draft.index + 1} из {draft.workout.steps.length}</Text></View>
+      <View style={{ flex: 1, gap: 3 }}><Text style={s.small}>{draft.workout.title}</Text><Text style={s.link}>{finalRest ? "Отдых после занятия" : `Упражнение ${draft.index + (rest ? 2 : 1)} из ${draft.workout.steps.length}`}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel={settings.sound ? "Выключить звуки" : "Включить звуки"} onPress={() => void store.setSettings({ ...settings, sound: !settings.sound }).catch(e => setLocalError(e.message))} style={s.iconButton}><Text style={s.link}>{settings.sound ? "Звук" : "Тихо"}</Text></Pressable>
     </View>
-    <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: draft.workout.steps.length, now: draft.index }} style={local.track}><View style={[local.progress, { width: `${draft.index / draft.workout.steps.length * 100}%` }]} /></View>
+    <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: draft.workout.steps.length, now: draft.index + (rest ? 1 : 0) }} style={local.track}><View style={[local.progress, { width: `${(draft.index + (rest ? 1 : 0)) / draft.workout.steps.length * 100}%` }]} /></View>
     <ScrollView contentContainerStyle={[s.content, { paddingTop: 16, alignItems: "stretch" }]} showsVerticalScrollIndicator={false}>
-      {step.section ? <Text style={[s.link, { textAlign: "center" }]}>{sectionLabels[step.section]}{step.optional ? " · дополнительный подход, можно пропустить" : ""}</Text> : null}
-      <View style={{ alignItems: "center", gap: 6 }}><Text style={local.eyebrow}>{draft.paused ? "НА ПАУЗЕ" : rest ? "ВРЕМЯ ОТДОХНУТЬ" : "ДВИГАЕМСЯ"}</Text><Text accessibilityRole="header" style={local.exerciseTitle}>{rest ? "Спокойно подышите" : exercise.title}</Text></View>
-      <View style={s.figure}>{figure ? <ExerciseFigure key={`${draft.id}:${draft.index}:${rest ? "rest" : "exercise"}`} exercise={figure} playing={!draft.paused && !rest && !info} showGuide={!rest} size={Math.min(300, width - 60)} /> : null}{rest && nextExercise ? <Text style={[s.small, { paddingBottom: 10 }]}>Далее: {nextExercise.title}</Text> : null}</View>
+      {displayStep?.section ? <Text style={[s.link, { textAlign: "center" }]}>{sectionLabels[displayStep.section]}{displayStep.optional ? " · дополнительный подход, можно пропустить" : ""}</Text> : null}
+      <View style={{ alignItems: "center", gap: 6 }}><Text style={local.eyebrow}>{draft.paused ? "НА ПАУЗЕ" : preparing ? "ПОДГОТОВКА" : rest ? "ВРЕМЯ ОТДОХНУТЬ" : "ДВИГАЕМСЯ"}</Text><Text accessibilityRole="header" style={local.exerciseTitle}>{preparing ? "Приготовьтесь к занятию" : rest ? "Спокойно подышите" : exercise.title}</Text></View>
+      <View style={s.figure}>{figure ? <ExerciseFigure key={`${draft.id}:${draft.index}:${draft.phase}`} exercise={figure} playing={!draft.paused && !waiting && !info} showGuide={!waiting} size={Math.min(300, width - 60)} /> : <View style={{ padding: 36 }}><Icon name="check" size={64} color={c.accentDark} /></View>}{waiting && figure ? <Text style={[s.small, { paddingBottom: 10, paddingHorizontal: 12, textAlign: "center" }]}>{preparing ? "Начнём с" : "Далее"}: {figure.title}</Text> : null}</View>
       <View style={{ alignItems: "center", gap: 4 }}>
-        <Text style={local.counter}>{rest ? clock(remaining(draft)) : step.repetitions ? `${step.repetitions}` : clock(remaining(draft))}<Text style={local.counterUnit}>{!rest && step.repetitions ? " повторов" : ""}</Text></Text>
-        <Text style={[s.muted, { textAlign: "center" }]}>{rest ? "Можно продлить отдых или перейти дальше" : step.repetitions ? `В своём темпе · прошло ${clock(current.active_seconds)}` : exercise.cue}</Text>
+        <Text style={local.counter}>{!waiting && step.repetitions ? `${step.repetitions}` : clock(remaining(draft))}<Text style={local.counterUnit}>{!waiting && step.repetitions ? " повторов" : ""}</Text></Text>
+        <Text style={[s.muted, { textAlign: "center" }]}>{preparing ? "Займите исходное положение. Можно добавить время или начать сразу" : finalRest ? "Отдохните перед просмотром результата" : rest ? "Отдохните и приготовьтесь к следующему упражнению" : step.repetitions ? `В своём темпе · прошло ${clock(current.active_seconds)}` : exercise.cue}</Text>
+        {!waiting && step.repetitions && exercise.repetition_note ? <Text style={[s.small, { textAlign: "center" }]}>{exercise.repetition_note}</Text> : null}
       </View>
-      {!rest ? <Pressable accessibilityRole="button" style={{ alignSelf: "center", padding: 10 }} onPress={() => { void action("pause"); setInfo(exercise); }}><Text style={s.link}>Как выполнять упражнение</Text></Pressable> : null}
+      {figure ? <Pressable accessibilityRole="button" style={{ alignSelf: "center", padding: 10 }} onPress={() => { void action("pause"); setInfo(figure); }}><Text style={s.link}>Как выполнять упражнение</Text></Pressable> : null}
       <ErrorText message={localError ?? error} />
-      {draft.paused ? <PrimaryButton label="Продолжить" onPress={() => void action("resume")} /> : !rest && step.repetitions ? <PrimaryButton label="Повторы выполнены" onPress={() => void action("complete_reps")} /> : <PrimaryButton label="Пауза" onPress={() => void action("pause")} />}
+      {draft.paused ? <PrimaryButton label="Продолжить" onPress={() => void action("resume")} /> : !waiting && step.repetitions ? <PrimaryButton label="Повторы выполнены" disabled={current.active_seconds <= 0} onPress={() => void action("complete_reps")} /> : <PrimaryButton label="Пауза" onPress={() => void action("pause")} />}
       <View style={s.row}>
-        {rest ? <View style={{ flex: 1 }}><SecondaryButton label="+15 секунд" disabled={draft.rest_target >= 3600} onPress={() => void action("more_rest")} /></View> : step.repetitions && !draft.paused ? <View style={{ flex: 1 }}><SecondaryButton label="Пауза" onPress={() => void action("pause")} /></View> : null}
-        <View style={{ flex: 1 }}><SecondaryButton label={rest ? "Далее" : "Пропустить"} onPress={() => void action("skip")} /></View>
+        {waiting ? <View style={{ flex: 1 }}><SecondaryButton label="+20 сек" disabled={draft.rest_target >= MAX_REST_SECONDS} onPress={() => void action("more_rest")} /></View> : step.repetitions ? <View style={{ flex: 1 }}><SecondaryButton label={draft.paused ? "Повторы выполнены" : "Пауза"} disabled={draft.paused && current.active_seconds <= 0} onPress={() => void action(draft.paused ? "complete_reps" : "pause")} /></View> : null}
+        <View style={{ flex: 1 }}><SecondaryButton label={preparing ? "Начать" : finalRest ? "К результатам" : rest ? "Далее" : "Пропустить"} onPress={() => void action("skip")} /></View>
       </View>
       <Text style={[s.small, { textAlign: "center" }]}>При сворачивании приложения занятие встаёт на паузу.</Text>
     </ScrollView>

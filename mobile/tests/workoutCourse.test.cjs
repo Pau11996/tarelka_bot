@@ -11,10 +11,13 @@ function load(file) {
 const { WorkoutStore, supportedCatalogue } = load(path.join(root, 'store.ts'));
 const { courseState, courseWorkout } = load(path.join(root, 'course.ts'));
 const engine = load(path.join(root, 'engine.ts'));
-const catalogue = JSON.parse(execFileSync(path.resolve(__dirname, '../../.venv/bin/python'), ['-c', 'import json; from src.shared.workouts import catalogue; print(json.dumps(catalogue(3)))'], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' }));
+const { effortSuggestion } = load(path.join(root, 'effort.ts'));
+const { availableWorkouts } = load(path.join(root, 'catalogue.ts'));
+const catalogue = JSON.parse(execFileSync(path.resolve(__dirname, '../../.venv/bin/python'), ['-c', 'import json; from src.shared.workouts import catalogue; print(json.dumps(catalogue(4)))'], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' }));
+const legacyCatalogue = JSON.parse(execFileSync(path.resolve(__dirname, '../../.venv/bin/python'), ['-c', 'import json; from src.shared.workouts import catalogue; print(json.dumps(catalogue(3)))'], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' }));
 const clone = value => JSON.parse(JSON.stringify(value));
-function fixture() {
-  let elapsed = 0, serial = 0, saved = { catalogue, settings: { auto_log: false, sound: true, activity_level: 'medium' }, settings_dirty: false, timezone: 'UTC', records: [], draft: null, course_progress: [], course_queue: [] };
+function fixture(initialCatalogue = catalogue) {
+  let elapsed = 0, serial = 0, saved = { catalogue: initialCatalogue, settings: { auto_log: false, sound: true, activity_level: 'medium' }, settings_dirty: false, timezone: 'UTC', records: [], draft: null, course_progress: [], course_queue: [] };
   const config = { offline: true, loseAck: false, diskFull: false }, remote = new Map(), progress = [], calls = [];
   const wall = () => new Date(Date.parse('2026-01-01T10:00:00Z') + elapsed).toISOString();
   function credit(day, time, id) {
@@ -50,22 +53,93 @@ async function initialize(f) { const store = new WorkoutStore(f.deps); await sto
 async function complete(store, f, day) {
   const workout = courseWorkout(store.getSnapshot(), day);
   await store.start(workout.id);
+  await store.action('skip'); // Start immediately instead of waiting through preparation.
   for (const step of workout.steps) {
     if (step.optional) await store.action('skip');
-    else { f.advance(step.duration_seconds * 1000); store.tick(); }
+    else { f.advance(step.expected_seconds * 1000); store.tick(); if (step.repetitions) await store.action('complete_reps'); }
     if (store.getSnapshot().draft?.phase === 'rest') await store.action('skip');
   }
   await store.refresh();
 }
 
-test('real v3 catalogue is accepted and future/incomplete courses are rejected', () => {
+test('real v4 catalogue is accepted and future/incomplete courses are rejected', () => {
   assert.equal(supportedCatalogue(catalogue), true);
-  assert.equal(supportedCatalogue({ ...catalogue, version: 4 }), false);
+  assert.equal(supportedCatalogue(legacyCatalogue), true);
+  assert.equal(supportedCatalogue({ ...catalogue, version: 5 }), false);
   const bad = clone(catalogue); bad.course.days[0].workout_ids.intense = 'missing';
   assert.equal(supportedCatalogue(bad), false);
 });
 
-test('duration choice changes only the next draft; restart retains its exact sequence and timing', async () => {
+test('only revised workouts are offered; old drafts and queued completions survive the catalogue update', async () => {
+  const offered = availableWorkouts(catalogue);
+  assert.equal(offered.length, 48);
+  assert.ok(offered.every(w => w.curriculum_revision === 2));
+  const f = fixture(legacyCatalogue), store = await initialize(f);
+  await store.start(courseWorkout(store.getSnapshot(), 1).id);
+  const draft = clone(store.getSnapshot().draft);
+  f.config.offline = false; await store.refresh();
+  assert.equal(store.getSnapshot().catalogue.version, 4);
+  assert.deepEqual(clone(store.getSnapshot().draft), draft);
+  await store.action('stop');
+  await assert.rejects(store.start('fb28_d01_medium'), /обновилась/);
+  await store.close();
+
+  const queuedFixture = fixture(legacyCatalogue), queued = await initialize(queuedFixture);
+  await complete(queued, queuedFixture, 1);
+  assert.equal(queued.getSnapshot().records[0].payload.catalogue_version, 3);
+  // Simulate a refreshed catalogue while the old offline completion is still queued.
+  const updated = { ...queued.getSnapshot(), catalogue };
+  assert.equal(courseState(updated, queuedFixture.deps.wall()).day, 2);
+  queuedFixture.config.offline = false; await queued.refresh();
+  assert.equal(courseState(queued.getSnapshot(), queuedFixture.deps.wall()).day, 2);
+  assert.equal(queuedFixture.progress.length, 1);
+  await queued.close();
+});
+
+test('effort feedback is durable, stays local after sync and never changes the chosen load automatically', async () => {
+  const f = fixture(), store = await initialize(f);
+  await complete(store, f, 1);
+  let record = store.getSnapshot().records[0];
+  await store.rateWorkout(record.id, 'easy');
+  record = store.getSnapshot().records[0];
+  assert.equal(effortSuggestion(store.getSnapshot(), record).level, 'medium');
+  f.advance(86400000); await store.completeCourseDay(2); f.advance(86400000); await complete(store, f, 3);
+  const id = store.getSnapshot().records[0].id;
+  await store.rateWorkout(id, 'easy');
+  record = store.getSnapshot().records[0];
+  assert.equal(effortSuggestion(store.getSnapshot(), record).level, 'intense');
+  assert.equal(store.getSnapshot().settings.activity_level, 'medium');
+  assert.equal(effortSuggestion(store.getSnapshot(), store.getSnapshot().records[1]), null);
+  await store.close();
+  const restored = await initialize(f);
+  assert.equal(restored.getSnapshot().records[0].effort, 'easy');
+  f.config.offline = false; await restored.refresh();
+  assert.equal(restored.getSnapshot().records[0].effort, 'easy');
+  assert.equal(f.remote.get(id).effort, undefined);
+  await restored.rateWorkout(id, 'hard');
+  assert.equal(effortSuggestion(restored.getSnapshot(), restored.getSnapshot().records[0]).level, 'light');
+  assert.equal(restored.getSnapshot().settings.activity_level, 'medium');
+  await assert.rejects(restored.rateWorkout(id, 'unknown'));
+  await restored.close();
+});
+
+test('mobility and interrupted workouts cannot drive load recommendations, and light never drops below light', async () => {
+  const f = fixture(), store = await initialize(f);
+  await store.setSettings({ ...store.getSnapshot().settings, activity_level: 'light' });
+  await complete(store, f, 1);
+  await store.rateWorkout(store.getSnapshot().records[0].id, 'hard');
+  assert.equal(effortSuggestion(store.getSnapshot(), store.getSnapshot().records[0]).level, 'light');
+  f.advance(86400000); await store.completeCourseDay(2); f.advance(86400000); await complete(store, f, 3);
+  await store.rateWorkout(store.getSnapshot().records[0].id, 'easy');
+  assert.equal(effortSuggestion(store.getSnapshot(), store.getSnapshot().records[0]).level, 'light');
+  f.advance(86400000); await complete(store, f, 4);
+  await assert.rejects(store.rateWorkout(store.getSnapshot().records[0].id, 'easy'));
+  f.advance(86400000); await store.start(courseWorkout(store.getSnapshot(), 5).id); await store.action('stop');
+  await assert.rejects(store.rateWorkout(store.getSnapshot().records[0].id, 'easy'));
+  await store.close();
+});
+
+test('load choice changes only the next draft; restart retains its exact sequence and repetitions', async () => {
   const f = fixture(), store = await initialize(f);
   await store.setSettings({ ...store.getSnapshot().settings, activity_level: 'light' });
   await store.start(courseWorkout(store.getSnapshot(), 1).id);

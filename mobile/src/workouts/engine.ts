@@ -1,15 +1,19 @@
 import type { SessionInput, Workout, WorkoutCatalogue, WorkoutDraft, WorkoutSettings } from "./types";
+import { MAX_REST_SECONDS, PREPARATION_SECONDS, REST_EXTENSION_SECONDS, restSeconds } from "./timing";
 
 export const monotonicNow = () => performance.now();
 export function createDraft(id: string, workout: Workout, catalogue: WorkoutCatalogue, settings: WorkoutSettings, timezone: string, now: number, wall: string): WorkoutDraft {
   return { id, workout, exercises: catalogue.exercises, catalogue_version: catalogue.version,
-    started_at: wall, timezone, auto_log: settings.auto_log, index: 0, phase: "exercise", paused: false,
-    tick_at: now, rest_target: 0, results: workout.steps.map(step => ({ step_id: step.id, active_seconds: 0, rest_seconds: 0, completed: false })) };
+    started_at: wall, timezone, auto_log: settings.auto_log, index: 0, phase: "prepare", paused: false,
+    tick_at: now, rest_target: PREPARATION_SECONDS, preparation_seconds: 0,
+    results: workout.steps.map(step => ({ step_id: step.id, active_seconds: 0, rest_seconds: 0, completed: false })) };
 }
 export function restoreDraft(draft: WorkoutDraft, now: number): WorkoutDraft {
   return { ...draft, paused: true, tick_at: now };
 }
 export function remaining(draft: WorkoutDraft) {
+  if (draft.phase === "finished") return 0;
+  if (draft.phase === "prepare") return Math.max(0, draft.rest_target - (draft.preparation_seconds ?? 0));
   const step = draft.workout.steps[draft.index], result = draft.results[draft.index];
   return Math.max(0, draft.phase === "rest" ? draft.rest_target - result.rest_seconds : (step.duration_seconds ?? step.expected_seconds * 4) - result.active_seconds);
 }
@@ -23,9 +27,11 @@ function afterRest(draft: WorkoutDraft, wall: string): WorkoutDraft {
   if (draft.index === draft.workout.steps.length - 1) return finish(draft, "completed", wall);
   return { ...draft, index: draft.index + 1, phase: "exercise", rest_target: 0 };
 }
-function afterExercise(draft: WorkoutDraft, wall: string): WorkoutDraft {
-  const rest = draft.workout.steps[draft.index].rest_seconds;
-  return rest > 0 ? { ...draft, phase: "rest", rest_target: rest } : afterRest(draft, wall);
+function afterPreparation(draft: WorkoutDraft): WorkoutDraft {
+  return { ...draft, phase: "exercise", rest_target: 0 };
+}
+function afterExercise(draft: WorkoutDraft): WorkoutDraft {
+  return { ...draft, phase: "rest", rest_target: restSeconds(draft.workout.steps[draft.index]) };
 }
 /** A delayed callback can finish one phase, never silently perform the next exercise. */
 export function tick(draft: WorkoutDraft, now: number, wall: string): WorkoutDraft {
@@ -34,6 +40,10 @@ export function tick(draft: WorkoutDraft, now: number, wall: string): WorkoutDra
   const results = draft.results.map(r => ({ ...r }));
   const current = results[draft.index], step = draft.workout.steps[draft.index];
   const next = { ...draft, results, tick_at: now };
+  if (draft.phase === "prepare") {
+    next.preparation_seconds = Math.min(draft.rest_target, (draft.preparation_seconds ?? 0) + delta);
+    return next.preparation_seconds >= draft.rest_target ? afterPreparation(next) : next;
+  }
   if (draft.phase === "rest") {
     current.rest_seconds = Math.min(draft.rest_target, current.rest_seconds + delta);
     return current.rest_seconds >= draft.rest_target ? afterRest(next, wall) : next;
@@ -43,7 +53,7 @@ export function tick(draft: WorkoutDraft, now: number, wall: string): WorkoutDra
   if (current.active_seconds >= maximum) {
     if (step.duration_seconds != null) {
       current.completed = true;
-      return afterExercise(next, wall);
+      return afterExercise(next);
     }
     return { ...next, paused: true }; // Repetitions always require user confirmation.
   }
@@ -55,16 +65,18 @@ export function act(draft: WorkoutDraft, action: WorkoutAction, now: number, wal
   const updated = tick(draft, now, wall);
   if (updated.phase === "finished") return updated;
   // A timer transition wins over a simultaneous tap on the old phase.
-  if ((action === "skip" || action === "complete_reps") && (updated.phase !== draft.phase || updated.index !== draft.index)) return updated;
+  if ((action === "skip" || action === "complete_reps" || action === "more_rest") && (updated.phase !== draft.phase || updated.index !== draft.index)) return updated;
   if (action === "stop") return finish(updated, "interrupted", wall);
   if (action === "pause") return { ...updated, paused: true };
   if (action === "resume") return { ...updated, paused: false, tick_at: now };
-  if (action === "more_rest") return updated.phase === "rest" ? { ...updated, rest_target: Math.min(3600, updated.rest_target + 15) } : updated;
+  if (action === "more_rest") return updated.phase === "rest" || updated.phase === "prepare"
+    ? { ...updated, rest_target: Math.min(MAX_REST_SECONDS, updated.rest_target + REST_EXTENSION_SECONDS) } : updated;
+  if (updated.phase === "prepare") return action === "skip" ? afterPreparation(updated) : updated;
   if (updated.phase === "rest") return action === "skip" ? afterRest(updated, wall) : updated;
   if (action === "complete_reps" && updated.workout.steps[updated.index].repetitions == null) return updated;
   const results = updated.results.map(r => ({ ...r }));
   results[updated.index].completed = action === "complete_reps" && results[updated.index].active_seconds > 0;
-  return afterExercise({ ...updated, results }, wall);
+  return afterExercise({ ...updated, results });
 }
 export function sessionInput(draft: WorkoutDraft): SessionInput {
   if (draft.phase !== "finished" || !draft.ended_at || !draft.status) throw new Error("Занятие ещё идёт");

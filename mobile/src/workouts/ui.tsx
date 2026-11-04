@@ -16,6 +16,8 @@ export function ExerciseInfo({ exercise, onClose }: { exercise: Exercise | null;
       <View style={s.row}><Text accessibilityRole="header" style={[s.heading, { flex: 1 }]}>{exercise.title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Закрыть описание" style={s.iconButton} onPress={onClose}><Icon name="close" /></Pressable></View>
       <View style={s.figure}><ExerciseFigure exercise={exercise} playing showGuide size={Math.min(260, width - 96)} /></View>
       <Text style={s.body}>{exercise.instruction}</Text>
+      {exercise.repetition_note ? <Text style={s.link}>{exercise.repetition_note}</Text> : null}
+      {exercise.easier ? <View style={s.notice}><Text style={s.title}>Как облегчить</Text><Text style={s.body}>{exercise.easier}</Text></View> : null}
       {exercise.equipment.length ? <Text style={s.muted}>{exercise.equipment.join(" · ")}</Text> : null}
       <Text style={s.small}>Двигайтесь в удобной амплитуде. Если появляется боль, остановите упражнение.</Text>
     </ScrollView> : null}</View></View>

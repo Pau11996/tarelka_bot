@@ -13,6 +13,7 @@ import { ExerciseInfo, s, WorkoutHeader } from "../../workouts/ui";
 import type { Exercise } from "../../workouts/types";
 import { ActivityPicker, useCourseClock } from "../../workouts/CourseOverview";
 import { courseState, courseWorkout, sectionLabels } from "../../workouts/course";
+import { restSeconds, workoutSeconds } from "../../workouts/timing";
 
 export default function WorkoutDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,17 +36,19 @@ export default function WorkoutDetail() {
     {workout && catalogue ? <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
       <View style={s.figure}><ExerciseFigure exercise={catalogue.exercises.find(e => e.id === workout.preview_exercise_id)!} playing={focused && !info} size={210} /></View>
       <View style={{ gap: 10 }}><View style={s.chip}><Text style={s.chipText}>{workout.focus} · {workout.level}</Text></View><Text accessibilityRole="header" style={[s.heading, { flex: undefined, fontSize: 28 }]}>{workout.title}</Text><Text style={s.muted}>{workout.subtitle}</Text></View>
-      <View style={s.row}><Icon name="clock" color={colors.accent} /><Text style={s.body}>Около {Math.round(workout.duration_seconds / 60)} минут · {workout.steps.length} упражнений</Text></View>
+      <View style={s.row}><Icon name="clock" color={colors.accent} /><Text style={s.body}>Около {Math.round(workoutSeconds(workout) / 60)} минут · {workout.steps.length} упражнений</Text></View>
       <View style={s.notice}><Text style={s.muted}>{workout.space}.</Text><Text style={s.muted}>{workout.equipment.length ? workout.equipment.join(". ") : "Дополнительные предметы не нужны"}.</Text></View>
       <ErrorText message={error} />
       {workout.course_id ? <ActivityPicker /> : null}
+      {workout.curriculum_revision === 2 ? <Text style={s.muted}>{catalogue.course?.days.find(day => day.day === workout.course_day)?.description}</Text> : null}
       {workout.course_day === 26 ? <Text style={s.muted}>Для сравнения со стартом выберите ту же нагрузку и высоту опоры, что в день 1.</Text> : null}
       {draft ? <View style={{ gap: 10 }}><Text style={s.muted}>У вас уже есть незавершённое занятие: {draft.workout.title}.</Text><PrimaryButton label="Продолжить занятие" onPress={() => router.push("/workout/player")} /></View> : <PrimaryButton label={busy ? "Подготовка…" : "Начать занятие"} disabled={busy || !available} onPress={() => void start()} />}
       {!available ? <Text style={s.muted}>{(workout.course_day ?? 0) < progress.day ? "Этот день курса уже завершён." : workout.course_day === progress.day ? "Следующий день откроется завтра. Сегодня — восстановление." : `Сейчас доступен день ${Math.min(progress.day, 28)}. Здесь можно заранее посмотреть упражнения.`}</Text> : null}
       <Text style={s.small}>Выполняйте движения без боли. В любой момент можно сделать паузу или пропустить упражнение.</Text>
+      <Text style={s.small}>Перед началом — 15 секунд на подготовку, после упражнений — 15–30 секунд отдыха. Ожидание можно продлить кнопкой «+20 сек» или остановить паузой.</Text>
       <Text style={s.title}>Что будем делать</Text>
       {workout.steps.map((step, i) => { const exercise = catalogue.exercises.find(e => e.id === step.exercise_id)!; return <Pressable key={step.id} accessibilityRole="button" accessibilityLabel={`Техника: ${exercise.title}`} onPress={() => setInfo(exercise)} style={[s.card, s.row, { padding: 14 }]}>
-        <Text style={[s.small, { width: 20 }]}>{String(i + 1).padStart(2, "0")}</Text><ExerciseFigure exercise={exercise} size={44} /><View style={{ flex: 1, gap: 4 }}>{step.section ? <Text style={s.small}>{sectionLabels[step.section]}{step.optional ? " · необязательно" : ""}</Text> : null}<Text style={[s.title, { fontSize: 15 }]}>{exercise.title}</Text><Text style={s.small}>{step.repetitions ? `${step.repetitions} повторов` : `${step.duration_seconds} секунд`}{step.rest_seconds ? ` · отдых ${step.rest_seconds} с` : ""}</Text></View><Icon name="chevron" size={15} color={colors.muted} />
+        <Text style={[s.small, { width: 20 }]}>{String(i + 1).padStart(2, "0")}</Text><ExerciseFigure exercise={exercise} size={44} /><View style={{ flex: 1, gap: 4 }}>{step.section ? <Text style={s.small}>{sectionLabels[step.section]}{step.optional ? " · необязательно" : ""}</Text> : null}<Text style={[s.title, { fontSize: 15 }]}>{exercise.title}</Text><Text style={s.small}>{step.repetitions ? `${step.repetitions} повторов` : `${step.duration_seconds} секунд`}{` · отдых ${restSeconds(step)} с`}</Text></View><Icon name="chevron" size={15} color={colors.muted} />
       </Pressable>; })}
     </ScrollView> : <View style={s.content}><Text style={s.muted}>Занятие сейчас недоступно. Выберите комплекс в каталоге.</Text><SecondaryButton label="К каталогу" onPress={() => router.replace("/(tabs)/workouts")} /></View>}
     <ExerciseInfo exercise={info} onClose={() => setInfo(null)} />

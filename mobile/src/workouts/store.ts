@@ -1,15 +1,15 @@
 import { act, createDraft, restoreDraft, sessionInput, tick, type WorkoutAction } from "./engine";
 import { courseState } from "./course";
-import type { CourseCompletion, LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
+import type { CourseCompletion, LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutEffort, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
 
 type Request = <T>(path: string, options: { method?: string; json?: unknown; signal: AbortSignal }) => Promise<T>;
 export type WorkoutDependencies = { read(): Promise<WorkoutData | null>; write(data: WorkoutData): Promise<void>; remove(): Promise<void>; request: Request; uuid(): string; now(): number; wall(): string; updated(): void };
 const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true, activity_level: "medium" }, settings_dirty: false, timezone: "UTC", draft: null, records: [], course_progress: [], course_queue: [] });
 const animationNames = new Set(["march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch",
-  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "glute_bridge", "bird_dog"]);
+  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "glute_bridge", "bird_dog", "quadruped_leg"]);
 export function supportedCatalogue(value: WorkoutCatalogue): boolean {
-  if (!value || ![1, 2, 3].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
-  if (value.version === 3 && (!value.course || value.course.id !== "full_body_28_v1" || value.course.days.length !== 28 || value.course.days.some((day, index) => day.day !== index + 1 ||
+  if (!value || ![1, 2, 3, 4].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
+  if (value.version >= 3 && (!value.course || value.course.id !== "full_body_28_v1" || value.course.days.length !== 28 || value.course.days.some((day, index) => day.day !== index + 1 ||
     (["strength", "mobility"].includes(day.kind) && ["light", "medium", "intense"].some(level => !value.workouts.some(w => w.id === day.workout_ids[level as "light"] && w.course_day === day.day && w.activity_level === level && w.course_id === value.course!.id)))))) return false;
   const ids = new Set(value.exercises.map(ex => ex.id));
   return value.exercises.every(ex => animationNames.has(ex.animation)) && value.workouts.every(w => w.steps.length > 0 && w.steps.every(s => ids.has(s.exercise_id)));
@@ -78,6 +78,8 @@ export class WorkoutStore {
     if (workout.course_id) {
       const progress = courseState(this.state, this.deps.wall());
       if (workout.course_day !== progress.day || !progress.available) throw Error("Начните с текущего дня курса. Между днями сохраняется время для восстановления.");
+      const day = catalogue.course?.days.find(item => item.day === workout.course_day);
+      if (!day || !Object.values(day.workout_ids).includes(workout.id)) throw Error("Программа обновилась. Откройте текущий день курса заново.");
     }
     const draft = createDraft(this.deps.uuid(), workout, catalogue, this.state.settings, this.state.timezone, this.deps.now(), this.deps.wall());
     // Starting is durable before the player opens. Disk failures leave a paused draft.
@@ -138,6 +140,15 @@ export class WorkoutStore {
     this.replaceRecord(id, { diary_requested: true, error: undefined, blocked: false });
     await this.persist();
     await this.syncMutation();
+  }
+  async rateWorkout(id: string, effort: WorkoutEffort) {
+    if (this.closed) return;
+    const record = this.state.records.find(item => item.id === id);
+    const session = record?.server ?? record?.payload;
+    const definition = this.state.catalogue?.workouts.find(item => item.id === session?.workout_id);
+    if (!record || session?.status !== "completed" || definition?.curriculum_revision !== 2 || definition.kind !== "strength" || !["easy", "comfortable", "hard"].includes(effort)) throw Error("Оценка доступна после завершённой тренировки курса");
+    this.replaceRecord(id, { effort });
+    await this.persist();
   }
   private replaceRecord(id: string, changes: Partial<LocalWorkout>) {
     this.patch({ records: this.state.records.map(r => r.id === id ? { ...r, ...changes } : r) });
@@ -232,7 +243,7 @@ export class WorkoutStore {
       }
       const revision = this.settingsRevision;
       const [catalogue, settings, me, history, progress] = await Promise.allSettled([
-        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=3", { signal: controller.signal }),
+        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=4", { signal: controller.signal }),
         request<WorkoutSettings>("/v1/settings/workouts", { signal: controller.signal }),
         request<{ timezone: string }>("/v1/me", { signal: controller.signal }),
         request<{ items: WorkoutSession[]; next_offset: number | null }>("/v1/workouts/history", { signal: controller.signal }),

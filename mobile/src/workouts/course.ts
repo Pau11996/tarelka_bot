@@ -1,8 +1,9 @@
 import { sessionDate } from "./engine";
+import { workoutSeconds } from "./timing";
 import type { ActivityLevel, CourseCompletion, WorkoutData } from "./types";
 
-export const activityLevels: { id: ActivityLevel; title: string; seconds: number }[] = [
-  { id: "light", title: "Лёгкий", seconds: 20 }, { id: "medium", title: "Средний", seconds: 30 }, { id: "intense", title: "Интенсивный", seconds: 40 },
+export const activityLevels: { id: ActivityLevel; title: string }[] = [
+  { id: "light", title: "Лёгкий" }, { id: "medium", title: "Средний" }, { id: "intense", title: "Интенсивный" },
 ];
 export const sectionLabels = { warmup: "Разминка", main: "Основная часть", cooldown: "Спокойные шаги", stretch: "Растяжка", mobility: "Подвижность" };
 export function courseCompletions(data: WorkoutData): CourseCompletion[] {
@@ -48,7 +49,10 @@ export function courseSummary(data: WorkoutData) {
   return {
     title: course.title.replace(/\s*[—–]\s*\d+\s*д(?:ень|ня|ней)$/u, ""),
     days: course.days.length,
-    minutes: range(workouts.map(workout => Math.round(workout.duration_seconds / 60))),
-    exercises: range(workouts.map(workout => workout.steps.length)),
+    minutes: range(workouts.map(workout => Math.round(workoutSeconds(workout) / 60))),
+    exercises: course.revision === 2
+      ? range(workouts.filter(workout => workout.kind === "strength").map(workout => workout.steps.filter(step => step.section === "main").length))
+      : range(workouts.map(workout => workout.steps.length)),
+    exerciseLabel: course.revision === 2 ? "в основной части" : "упражнений в занятии",
   };
 }

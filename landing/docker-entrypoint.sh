@@ -6,7 +6,6 @@ set -eu
 : "${LANDING_TITLE:=ТАРЕЛКА}"
 : "${SUPPORT_EMAIL:=help.4posts@gmail.com}"
 : "${LEGAL_OPERATOR_NAME:=Администратор сервиса ТАРЕЛКА}"
-: "${LEGAL_OPERATOR_STATUS:=Самозанятый}"
 : "${LEGAL_OPERATOR_UNP:=}"
 : "${LEGAL_OPERATOR_ADDRESS:=}"
 : "${LEGAL_OPERATOR_PHONE:=}"
@@ -31,10 +30,8 @@ html_escape() {
 }
 LEGAL_OPERATOR_NAME=$(html_escape "$LEGAL_OPERATOR_NAME")
 LEGAL_DETAILS_HTML=$(cat <<EOF
-<section class="legal-details" id="requisites" aria-labelledby="requisites-title">
-    <h2 id="requisites-title">Контакты и реквизиты</h2>
+<section class="legal-details" id="requisites" aria-label="Реквизиты">
     <p class="legal-details-name">${LEGAL_OPERATOR_NAME}</p>
-    <p>$(html_escape "$LEGAL_OPERATOR_STATUS")</p>
     <dl>
 EOF
 )
@@ -48,7 +45,7 @@ if [ -n "$LEGAL_OPERATOR_PHONE" ]; then
     LEGAL_PHONE_HREF=$(printf '%s' "$LEGAL_OPERATOR_PHONE" | tr -cd '+0-9')
     LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>Телефон</dt><dd><a href=\"tel:${LEGAL_PHONE_HREF}\">$(html_escape "$LEGAL_OPERATOR_PHONE")</a></dd></div>"
 fi
-LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>Электронная почта</dt><dd><a href=\"mailto:$(html_escape "$SUPPORT_EMAIL")\">$(html_escape "$SUPPORT_EMAIL")</a></dd></div></dl></section>"
+LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}</dl></section>"
 export LEGAL_DETAILS_HTML
 
 if [ -n "$TELEGRAM_FEEDBACK_CHAT" ]; then

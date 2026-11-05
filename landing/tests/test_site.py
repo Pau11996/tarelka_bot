@@ -182,7 +182,7 @@ class StaticSiteTests(unittest.TestCase):
             with self.subTest(page=path.relative_to(self.site)):
                 html = path.read_text()
                 self.assertIn('Тестовый Исполнитель &amp; Партнёр', html)
-                self.assertIn('Самозанятый, плательщик НПД', html)
+                self.assertNotRegex(html, r'(?i)самозанят')
                 self.assertIn('<dt>УНП</dt><dd>000000000</dd>', html)
                 self.assertIn('Тестовый адрес, дом 1, офис «Пример»', html)
                 self.assertIn('tel:+375290000000', page.links)
@@ -192,6 +192,8 @@ class StaticSiteTests(unittest.TestCase):
                 self.assertIn('/privacy.html', page.links)
                 self.assertIn('Публичная оферта', html)
                 self.assertIn('Политика конфиденциальности', html)
+                if path.name not in ('terms.html', 'privacy.html'):
+                    self.assertRegex(html, r'(?s)<div class="lp-footer-column">(?:(?!</div>).)*<section class="legal-details"')
 
     def test_calculator_progressive_enhancement_and_diary_csv(self):
         recipe = (self.site / 'blog/kalorijnost-gotovogo-blyuda/index.html').read_text()

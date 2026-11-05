@@ -27,7 +27,7 @@ export function CourseFacts({ data }: { data: WorkoutData }) {
       <View style={styles.factText}><Text style={styles.value}>{summary.minutes} мин</Text><Text style={styles.label}>одно занятие</Text></View>
     </View>
     <View style={styles.fact}>
-      <Icon name="dumbbell" size={19} color={c.accentDark} />
+      <Icon name="kettlebell" size={19} color={c.accentDark} />
       <View style={styles.factText}><Text style={styles.value}>{summary.exercises}</Text><Text style={styles.label}>{summary.exerciseLabel}</Text></View>
     </View>
   </View>;

@@ -57,7 +57,7 @@ class StaticSiteTests(unittest.TestCase):
         cls.site = Path(cls.temp.name) / 'site'
         shutil.copytree(LANDING / 'public', cls.site)
         env = {**os.environ, 'LANDING_RENDER_ONLY':'1', 'LANDING_PUBLIC_DIR':str(cls.site),
-               'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'ТАРЕЛКА',
+               'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'TARELKA',
                'FREE_PHOTO_DAILY_LIMIT':'7', 'FREE_TEXT_DAILY_LIMIT':'61', 'FREE_VOICE_DAILY_LIMIT':'11',
                'TELEGRAM_BOT_USERNAME':'example_test_bot', 'LANDING_BOT_USERNAME':'example_public_bot',
                'TELEGRAM_FEEDBACK_CHAT':'example_support', 'GA_MEASUREMENT_ID':'G-TESTMEASURE1'}
@@ -71,8 +71,8 @@ class StaticSiteTests(unittest.TestCase):
 
     def test_android_download_requires_a_nonempty_release_apk(self):
         home = (self.site / 'index.html').read_text()
-        self.assertLess(home.index('id="faq"'), home.index('id="android"'))
-        self.assertLess(home.index('id="android"'), home.index('class="lp-final"'))
+        self.assertLess(home.index('id="download"'), home.index('id="faq"'))
+        self.assertLess(home.index('id="faq"'), home.index('class="lp-final"'))
         with tempfile.TemporaryDirectory() as directory:
             site = Path(directory) / 'site'
             shutil.copytree(LANDING / 'public', site)
@@ -89,9 +89,13 @@ class StaticSiteTests(unittest.TestCase):
                     page = Page(html)
                     self.assertEqual('/downloads/tarelka.apk' in page.links, bool(content))
                     self.assertEqual('APK скоро появится' in html, not bool(content))
+                    hero_actions = html.split('<div class="lp-hero-actions">', 1)[1].split('</div>', 1)[0]
+                    self.assertEqual('href="/downloads/tarelka.apk"' in hero_actions, bool(content))
+                    self.assertEqual('disabled' in hero_actions, not bool(content))
+                    self.assertNotIn('https://t.me/', hero_actions)
                     if content:
                         self.assertIn('download="tarelka.apk"', html)
-                        self.assertIn('Как установить APK', html)
+                        self.assertIn('Как установить TARELKA?', html)
 
     def test_canonicals_sitemap_and_unique_metadata(self):
         titles, descriptions, canonicals = [], [], []

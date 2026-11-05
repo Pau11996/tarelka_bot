@@ -3,7 +3,7 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { colors } from "../theme";
 
 const paths = {
-  dumbbell: "M6 4v16 M3 7v10 M18 4v16 M21 7v10 M6 10h12 M6 14h12 M2 10v4 M22 10v4",
+  kettlebell: "M8 9V7a4 4 0 0 1 8 0v2 M8 9h8l2.5 4.3A5 5 0 0 1 14.2 21H9.8a5 5 0 0 1-4.3-7.7L8 9Z",
   share: "M12 16V3 M7 8l5-5 5 5 M5 13v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7",
   bowl: "M3 10h18a9 9 0 0 1-18 0Z M6 21h12 M7 3v3 M12 3v3 M17 3v3",
   search: "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 1 0 0-15 M16 16l5 5",

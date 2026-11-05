@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     free_text_daily_limit: int = 60
     free_voice_daily_limit: int = 10
     subscription_price_stars: int = 150
+    # Display only until ruble checkout is connected; Stars invoices stay in XTR.
+    subscription_price_rub: int = 399
     subscription_daily_request_limit: int = 30
     subscription_text_daily_limit: int = 100
     subscription_voice_daily_limit: int = 30

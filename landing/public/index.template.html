@@ -221,14 +221,14 @@
             <div class="lp-container">
                 <div class="lp-section-heading">
                     <span class="lp-eyebrow">Выберите свой формат</span>
-                    <h2 id="pricing-title">Дневник доступен бесплатно</h2>
+                    <h2 id="pricing-title">Тарифы «Тарелки»</h2>
                     <p>Подключите подписку, когда захотите получать разборы питания и рекомендации по своим записям.</p>
                 </div>
                 <div class="lp-price-grid">
                     <article class="lp-price-card">
                         <span class="lp-price-label">Для ежедневного учёта питания</span>
                         <h3>Бесплатно</h3>
-                        <div class="lp-price">0 <span>Stars</span></div>
+                        <div class="lp-price">0 <span>₽</span></div>
                         <p>${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстов и ${FREE_VOICE_DAILY_LIMIT} голосовых в день</p>
                         <ul>
                             <li>Дневник питания и дневной баланс</li>
@@ -240,8 +240,8 @@
                     </article>
                     <article class="lp-price-card lp-price-premium">
                         <span class="lp-price-label">Для разбора питания и привычек</span>
-                        <h3>С подпиской <svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></h3>
-                        <div class="lp-price">${SUBSCRIPTION_PRICE_STARS} <span>Stars / ${SUBSCRIPTION_DURATION_DAYS} дней</span></div>
+                        <h3>На месяц <svg class="lp-icon" aria-hidden="true"><use href="#i-spark"/></svg></h3>
+                        <div class="lp-price">${SUBSCRIPTION_PRICE_RUB} <span>₽ / месяц</span></div>
                         <p>${SUBSCRIPTION_DAILY_LIMIT} фото, безлимит текста, ${SUBSCRIPTION_VOICE_DAILY_LIMIT} голосовых в день</p>
                         <ul>
                             <li>Всё, что есть в бесплатной версии</li>
@@ -252,7 +252,7 @@
                         <a class="lp-button" href="https://t.me/${LANDING_BOT_USERNAME}?start=premium" target="_blank" rel="noopener noreferrer">Открыть подписку <svg class="lp-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
                     </article>
                 </div>
-                <p class="lp-price-note">Оплата подписки через Telegram Stars. Без автоматического продления.<br>Фото, текст и голос считаются отдельно. AI-правки расходуют текстовые запросы.<br>Пригласите ${REFERRAL_MONTHLY_GOAL} друзей за календарный месяц командой /invite — после их первого разбора получите месяц подписки.</p>
+                <p class="lp-price-note">Месяц подписки — ${SUBSCRIPTION_DURATION_DAYS} дней. Без автоматического продления.<br>Оплата в рублях пока недоступна. Сейчас подписку можно оформить в боте за ${SUBSCRIPTION_PRICE_STARS} Stars.<br>Фото, текст и голос считаются отдельно. AI-правки расходуют текстовые запросы.<br>Пригласите ${REFERRAL_MONTHLY_GOAL} друзей за календарный месяц командой /invite — после их первого разбора получите месяц подписки.</p>
             </div>
         </section>
 
@@ -277,7 +277,7 @@
                 <details><summary>Что входит в бесплатную версию?<span aria-hidden="true">+</span></summary><p>Бесплатным дневником можно пользоваться каждый день: доступны баланс, базовая статистика, история веса, персональная норма калорий и избранное. Лимиты на день: ${FREE_PHOTO_DAILY_LIMIT} фото, ${FREE_TEXT_DAILY_LIMIT} текстовых и ${FREE_VOICE_DAILY_LIMIT} голосовых запросов. AI-правки расходуют текстовые запросы. Добавление сохранённых блюд из избранного не тратит лимит.</p></details>
                 <details><summary>Что добавляет подписка?<span aria-hidden="true">+</span></summary><p>ИИ-помощник по питанию в бета-версии: разбор недели с рекомендациями по вашим записям и отчёт об активности. В статистике появляются сравнение БЖУ с целями и подробные сводки приёмов пищи и воды. Для ежедневных записей доступны ${SUBSCRIPTION_DAILY_LIMIT} фото, безлимит текста и ${SUBSCRIPTION_VOICE_DAILY_LIMIT} голосовых в день.</p></details>
                 <details><summary>Как работает разбор недели?<span aria-hidden="true">+</span></summary><p>ИИ-помощник входит в подписку и пока работает в бета-версии. Откройте /ai и выберите разбор пищевых привычек. Бот использует записи за последние 7 дней и вашу цель, отмечает, что получилось, и предлагает 2–3 действия на следующую неделю. Нужны хотя бы 2 дня с записями еды. Готовый разбор можно перечитать и один раз обновить в течение недели. По воскресеньям он приходит автоматически, если включены напоминания.</p></details>
-                <details><summary>Как оплачивается подписка?<span aria-hidden="true">+</span></summary><p>Через Telegram Stars внутри бота: ${SUBSCRIPTION_PRICE_STARS} Stars за ${SUBSCRIPTION_DURATION_DAYS} дней. Подписка не продлевается автоматически. После её окончания можно продолжить пользоваться бесплатным дневником. По вопросам оплаты используйте /paysupport.</p></details>
+                <details><summary>Как оплачивается подписка?<span aria-hidden="true">+</span></summary><p>Стоимость месячной подписки — ${SUBSCRIPTION_PRICE_RUB} ₽ за ${SUBSCRIPTION_DURATION_DAYS} дней; оплата в рублях пока недоступна. Сейчас можно оформить подписку через Telegram Stars внутри бота: ${SUBSCRIPTION_PRICE_STARS} Stars за тот же срок. Подписка не продлевается автоматически. После её окончания можно продолжить пользоваться бесплатным дневником. По вопросам оплаты используйте /paysupport.</p></details>
                 <details><summary>Как отключить напоминания?<span aria-hidden="true">+</span></summary><p>Отправьте боту /notifications_off. Чтобы включить напоминания снова — /notifications_on. Сервисные сообщения об оплате могут приходить отдельно.</p></details>
                 <details><summary>Какие данные хранит «Тарелка»?<span aria-hidden="true">+</span></summary><p>Telegram ID, профиль, записи дневника, результаты анализа, историю веса, использование лимитов и сведения об оплате. Подробнее о данных и их удалении — в <a href="/privacy.html">политике конфиденциальности</a>.</p></details>
             </div></div>

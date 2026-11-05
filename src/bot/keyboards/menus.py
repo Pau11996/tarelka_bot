@@ -212,7 +212,15 @@ def subscription_keyboard(*, is_active: bool = False) -> InlineKeyboardMarkup:
         else f"Оформить за {settings.subscription_price_stars}⭐"
     )
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=button_text, callback_data="sub:buy")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text=button_text, callback_data="sub:buy")],
+            [InlineKeyboardButton(
+                text=f"{'Продлить' if is_active else 'Оформить'} за {settings.subscription_price_rub} ₽",
+                # Bot API 10.3 DisabledButton is not modeled by pinned aiogram yet.
+                # No callback or payment action until ruble checkout is available.
+                disabled={},
+            )],
+        ]
     )
 
 

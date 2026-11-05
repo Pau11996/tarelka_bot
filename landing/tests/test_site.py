@@ -59,6 +59,7 @@ class StaticSiteTests(unittest.TestCase):
         env = {**os.environ, 'LANDING_RENDER_ONLY':'1', 'LANDING_PUBLIC_DIR':str(cls.site),
                'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'ТАРЕЛКА',
                'FREE_PHOTO_DAILY_LIMIT':'7', 'FREE_TEXT_DAILY_LIMIT':'61', 'FREE_VOICE_DAILY_LIMIT':'11',
+               'SUBSCRIPTION_PRICE_RUB':'499', 'SUBSCRIPTION_PRICE_STARS':'175',
                'TELEGRAM_BOT_USERNAME':'example_test_bot', 'LANDING_BOT_USERNAME':'example_public_bot',
                'TELEGRAM_FEEDBACK_CHAT':'example_support', 'GA_MEASUREMENT_ID':'G-TESTMEASURE1'}
         subprocess.run(['sh', str(LANDING / 'docker-entrypoint.sh')], env=env, check=True)
@@ -156,6 +157,17 @@ class StaticSiteTests(unittest.TestCase):
         self.assertIn('data-bot-username="example_test_bot"', (self.site / 'admin.html').read_text())
         self.assertIn('7 фото, 61 текстов и 11 голосовых', home)
         self.assertIn('https://t.me/example_support', home)
+
+    def test_monthly_ruble_price_and_available_payment_method(self):
+        home = (self.site / 'index.html').read_text()
+        pricing = home.split('id="pricing"', 1)[1].split('</section>', 1)[0]
+        self.assertEqual(pricing.count('<article '), 2)
+        self.assertIn('499 <span>₽ / месяц</span>', pricing)
+        self.assertNotIn('На год', pricing)
+        self.assertIn('Оплата в рублях пока недоступна', pricing)
+        self.assertIn('175 Stars', pricing)
+        self.assertIn('https://t.me/example_public_bot?start=premium', pricing)
+        self.assertIn('499 ₽ за 30 дней', home)
 
     def test_calculator_progressive_enhancement_and_diary_csv(self):
         recipe = (self.site / 'blog/kalorijnost-gotovogo-blyuda/index.html').read_text()

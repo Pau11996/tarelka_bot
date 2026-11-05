@@ -1,5 +1,6 @@
 """Release walkthrough through the real dispatcher, SQLite and offline Telegram."""
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from itertools import count
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -158,6 +159,32 @@ async def test_commands_escape_open_forms(actor, state):
         await actor.send(command)
         assert expected.lower() in actor.last().text.lower(), (state, command, actor.last().text)
     actor.ai.analyze_text.assert_not_awaited()
+
+
+@pytest.mark.parametrize("active", [False, True])
+async def test_subscription_shows_disabled_ruble_price_and_keeps_stars_invoice(actor, monkeypatch, active):
+    monkeypatch.setattr(subscription.settings, "subscription_price_rub", 499)
+    monkeypatch.setattr(subscription.settings, "subscription_price_stars", 175)
+    if active:
+        async with actor.factory() as session:
+            user = await UserRepository(session).get_user_by_telegram_id(actor.uid)
+            user.subscription_until = datetime.now(timezone.utc) + timedelta(days=10)
+            await session.commit()
+    await actor.send("/premium")
+    # Check the actual API payload, including the field unknown to pinned aiogram.
+    payload = json.loads(actor.bot.session.prepare_value(
+        actor.last().reply_markup, bot=actor.bot, files={},
+    ))
+    stars, rubles = [row[0] for row in payload["inline_keyboard"]]
+    action = "Продлить" if active else "Оформить"
+    assert stars["text"] == f"{action} за 175⭐"
+    assert stars["callback_data"] == "sub:buy"
+    assert rubles == {"text": f"{action} за 499 ₽", "disabled": {}}
+    await actor.click(stars["callback_data"])
+    invoice = next(call for call in reversed(actor.transport.calls) if call.__api_method__ == "sendInvoice")
+    assert invoice.currency == "XTR"
+    assert invoice.prices[0].amount == 175
+    assert await actor.rows(Payment) == []
 
 
 async def test_payment_during_form_is_not_lost_and_replay_does_not_extend_twice(actor):

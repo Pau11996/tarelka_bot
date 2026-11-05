@@ -6,6 +6,10 @@ set -eu
 : "${LANDING_TITLE:=ТАРЕЛКА}"
 : "${SUPPORT_EMAIL:=help.4posts@gmail.com}"
 : "${LEGAL_OPERATOR_NAME:=Администратор сервиса ТАРЕЛКА}"
+: "${LEGAL_OPERATOR_STATUS:=Самозанятый}"
+: "${LEGAL_OPERATOR_UNP:=}"
+: "${LEGAL_OPERATOR_ADDRESS:=}"
+: "${LEGAL_OPERATOR_PHONE:=}"
 : "${FREE_PHOTO_DAILY_LIMIT:=3}"
 : "${FREE_TEXT_DAILY_LIMIT:=60}"
 : "${FREE_VOICE_DAILY_LIMIT:=10}"
@@ -20,6 +24,32 @@ LANDING_ORIGIN="${LANDING_ORIGIN:-https://${LANDING_HOST}}"
 LANDING_ORIGIN="${LANDING_ORIGIN%/}"
 
 : "${TELEGRAM_FEEDBACK_CHAT:=}"
+
+# Public contact details are plain text, never executable HTML.
+html_escape() {
+    printf '%s' "$1" | sed 's/\&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
+}
+LEGAL_OPERATOR_NAME=$(html_escape "$LEGAL_OPERATOR_NAME")
+LEGAL_DETAILS_HTML=$(cat <<EOF
+<section class="legal-details" id="requisites" aria-labelledby="requisites-title">
+    <h2 id="requisites-title">Контакты и реквизиты</h2>
+    <p class="legal-details-name">${LEGAL_OPERATOR_NAME}</p>
+    <p>$(html_escape "$LEGAL_OPERATOR_STATUS")</p>
+    <dl>
+EOF
+)
+if [ -n "$LEGAL_OPERATOR_UNP" ]; then
+    LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>УНП</dt><dd>$(html_escape "$LEGAL_OPERATOR_UNP")</dd></div>"
+fi
+if [ -n "$LEGAL_OPERATOR_ADDRESS" ]; then
+    LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>Почтовый адрес</dt><dd>$(html_escape "$LEGAL_OPERATOR_ADDRESS")</dd></div>"
+fi
+if [ -n "$LEGAL_OPERATOR_PHONE" ]; then
+    LEGAL_PHONE_HREF=$(printf '%s' "$LEGAL_OPERATOR_PHONE" | tr -cd '+0-9')
+    LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>Телефон</dt><dd><a href=\"tel:${LEGAL_PHONE_HREF}\">$(html_escape "$LEGAL_OPERATOR_PHONE")</a></dd></div>"
+fi
+LEGAL_DETAILS_HTML="${LEGAL_DETAILS_HTML}<div><dt>Электронная почта</dt><dd><a href=\"mailto:$(html_escape "$SUPPORT_EMAIL")\">$(html_escape "$SUPPORT_EMAIL")</a></dd></div></dl></section>"
+export LEGAL_DETAILS_HTML
 
 if [ -n "$TELEGRAM_FEEDBACK_CHAT" ]; then
     case "$TELEGRAM_FEEDBACK_CHAT" in
@@ -66,7 +96,7 @@ GA_TAG_HTML="<link rel=\"stylesheet\" href=\"/analytics.css?v=20261013\">
     <script src=\"/analytics.js?v=20261013\" data-measurement-id=\"${GA_MEASUREMENT_ID}\" data-site-origin=\"${LANDING_ORIGIN}\" data-bot-username=\"${LANDING_BOT_USERNAME}\" defer></script>"
 export GA_TAG_HTML
 
-TEMPLATE_VARIABLES='${LANDING_BOT_USERNAME} ${LANDING_TITLE} ${LANDING_ORIGIN} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME} ${FREE_PHOTO_DAILY_LIMIT} ${FREE_TEXT_DAILY_LIMIT} ${FREE_VOICE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_VOICE_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_PRICE_RUB} ${SUBSCRIPTION_DURATION_DAYS} ${REFERRAL_MONTHLY_GOAL} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML} ${ANDROID_DOWNLOAD_HTML} ${GA_TAG_HTML}'
+TEMPLATE_VARIABLES='${LANDING_BOT_USERNAME} ${LANDING_TITLE} ${LANDING_ORIGIN} ${SUPPORT_EMAIL} ${LEGAL_OPERATOR_NAME} ${LEGAL_DETAILS_HTML} ${FREE_PHOTO_DAILY_LIMIT} ${FREE_TEXT_DAILY_LIMIT} ${FREE_VOICE_DAILY_LIMIT} ${SUBSCRIPTION_DAILY_LIMIT} ${SUBSCRIPTION_VOICE_DAILY_LIMIT} ${SUBSCRIPTION_PRICE_STARS} ${SUBSCRIPTION_PRICE_RUB} ${SUBSCRIPTION_DURATION_DAYS} ${REFERRAL_MONTHLY_GOAL} ${FEEDBACK_LINK_HTML} ${FEEDBACK_NAV_HTML} ${FEEDBACK_FAQ_HTML} ${ANDROID_DOWNLOAD_HTML} ${GA_TAG_HTML}'
 
 # Render nested blog/about pages as well as the homepage and legal pages.
 find "$PUBLIC_DIR" -type f -name '*.template.html' | sort | while IFS= read -r template; do

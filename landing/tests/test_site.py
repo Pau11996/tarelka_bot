@@ -60,6 +60,12 @@ class StaticSiteTests(unittest.TestCase):
                'LANDING_ORIGIN':ORIGIN, 'LANDING_TITLE':'ТАРЕЛКА',
                'FREE_PHOTO_DAILY_LIMIT':'7', 'FREE_TEXT_DAILY_LIMIT':'61', 'FREE_VOICE_DAILY_LIMIT':'11',
                'SUBSCRIPTION_PRICE_RUB':'499', 'SUBSCRIPTION_PRICE_STARS':'175',
+               'LEGAL_OPERATOR_NAME':'Тестовый Исполнитель & Партнёр',
+               'LEGAL_OPERATOR_STATUS':'Самозанятый, плательщик НПД',
+               'LEGAL_OPERATOR_UNP':'000000000',
+               'LEGAL_OPERATOR_ADDRESS':'Тестовый адрес, дом 1, офис «Пример»',
+               'LEGAL_OPERATOR_PHONE':'+375 (29) 000-00-00',
+               'SUPPORT_EMAIL':'test@example.com',
                'TELEGRAM_BOT_USERNAME':'example_test_bot', 'LANDING_BOT_USERNAME':'example_public_bot',
                'TELEGRAM_FEEDBACK_CHAT':'example_support', 'GA_MEASUREMENT_ID':'G-TESTMEASURE1'}
         subprocess.run(['sh', str(LANDING / 'docker-entrypoint.sh')], env=env, check=True)
@@ -166,8 +172,26 @@ class StaticSiteTests(unittest.TestCase):
         self.assertNotIn('На год', pricing)
         self.assertIn('Оплата в рублях пока недоступна', pricing)
         self.assertIn('175 Stars', pricing)
-        self.assertIn('https://t.me/example_public_bot?start=premium', pricing)
+        self.assertNotIn('start=premium', home)
+        self.assertNotIn('Открыть подписку', home)
+        self.assertIn('https://t.me/example_public_bot?start=landing_free', pricing)
         self.assertIn('499 ₽ за 30 дней', home)
+
+    def test_public_legal_details_render_consistently_and_escape_text(self):
+        for path, page in self.pages.items():
+            with self.subTest(page=path.relative_to(self.site)):
+                html = path.read_text()
+                self.assertIn('Тестовый Исполнитель &amp; Партнёр', html)
+                self.assertIn('Самозанятый, плательщик НПД', html)
+                self.assertIn('<dt>УНП</dt><dd>000000000</dd>', html)
+                self.assertIn('Тестовый адрес, дом 1, офис «Пример»', html)
+                self.assertIn('tel:+375290000000', page.links)
+                self.assertIn('mailto:test@example.com', page.links)
+                self.assertEqual(page.ids.count('requisites'), 1)
+                self.assertIn('/terms.html', page.links)
+                self.assertIn('/privacy.html', page.links)
+                self.assertIn('Публичная оферта', html)
+                self.assertIn('Политика конфиденциальности', html)
 
     def test_calculator_progressive_enhancement_and_diary_csv(self):
         recipe = (self.site / 'blog/kalorijnost-gotovogo-blyuda/index.html').read_text()

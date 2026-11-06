@@ -649,6 +649,7 @@ img {
 .legal-shell h2 {
     margin: 2rem 0 0.65rem;
     font-size: 1.35rem;
+    scroll-margin-top: 7rem;
 }
 
 .legal-shell p,

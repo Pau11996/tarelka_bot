@@ -9,6 +9,7 @@ import { useWorkouts } from "../../workouts/context";
 import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { availableWorkouts } from "../../workouts/catalogue";
 import { CourseCard } from "../../workouts/CourseCard";
+import { catalogueCourses } from "../../workouts/course";
 import { dateLabel, s, statsFor, WorkoutHeader } from "../../workouts/ui";
 import { workoutSeconds } from "../../workouts/timing";
 
@@ -21,7 +22,8 @@ export default function WorkoutsScreen() {
   useEffect(() => { if (params.view === "history") setView("history"); }, [params.view]);
   useFocusEffect(useCallback(() => { void store.refresh(); }, [store]));
   if (!ready) return <Loading />;
-  const workouts = availableWorkouts(catalogue);
+  const workouts = availableWorkouts(catalogue, data.profile_sex);
+  const courses = catalogueCourses(catalogue, data.profile_sex);
   const primaryWorkout = workouts[0];
   const preview = catalogue?.exercises.find(exercise => exercise.id === primaryWorkout?.preview_exercise_id);
   const total = records.filter(r => statsFor(r).status === "completed");
@@ -32,7 +34,7 @@ export default function WorkoutsScreen() {
       <View style={local.tabs}>{(["catalogue", "history"] as const).map(key => <Pressable key={key} accessibilityRole="tab" accessibilityState={{ selected: view === key }} onPress={() => setView(key)} style={[local.tab, view === key && local.selected]}><Text style={[local.tabText, view === key && { color: c.accentDark }]}>{key === "catalogue" ? "Курсы" : "Моя история"}</Text></Pressable>)}</View>
       {error ? <View style={s.notice}><Text style={s.muted}>{catalogue ? "Сохранённые занятия доступны. Синхронизацию можно повторить." : "Для первой загрузки каталога нужен интернет."}</Text><ErrorText message={error} /><Pressable accessibilityRole="button" style={{ paddingVertical: 6 }} onPress={() => void store.retry().catch(e => setLocalError(e.message))}><Text style={s.link}>Повторить</Text></Pressable></View> : null}
       <ErrorText message={localError} />
-      {view === "catalogue" ? catalogue?.course ? <CourseCard data={data} /> : <>
+      {view === "catalogue" ? courses.length ? courses.map(course => <CourseCard key={course.id} data={data} courseId={course.id} />) : <>
         {preview ? <View style={local.hero}>
           <View style={{ flex: 1, gap: 10 }}><Text style={local.eyebrow}>В СВОЁМ ТЕМПЕ</Text><Text style={local.heroTitle}>Движение —{`\n`}тоже забота</Text><Text style={s.muted}>Комплекс для всего тела.{`\n`}В удобном темпе.</Text></View>
           <ExerciseFigure exercise={preview} size={120} />

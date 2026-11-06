@@ -3,8 +3,9 @@ const fs = require("node:fs"), path = require("node:path"), vm = require("node:v
 const ts = require("typescript");
 const root = path.resolve(__dirname, "../src");
 const catalogue = JSON.parse(execFileSync(path.resolve(__dirname, "../../.venv/bin/python"), ["-c", "import json; from src.shared.workouts import catalogue; print(json.dumps(catalogue(4)))"], { cwd: path.resolve(root, "../.."), encoding: "utf8" }));
+const personalCatalogue = JSON.parse(execFileSync(path.resolve(__dirname, "../../.venv/bin/python"), ["-c", "import json; from src.shared.workouts import catalogue; print(json.dumps(catalogue(5),ensure_ascii=False))"], { cwd: path.resolve(root, "../.."), encoding: "utf8", maxBuffer: 8 * 1024 * 1024 }));
 
-function setup() {
+function setup(params = {}) {
   const pushes = [], starts = [], slots = [];
   let cursor = 0;
   const data = { catalogue, ready: true, settings: { activity_level: "medium" }, timezone: "UTC", records: [], course_progress: [], course_queue: [], draft: null,
@@ -22,8 +23,8 @@ function setup() {
       if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: "Fragment" };
       if (name === "react-native") return new Proxy({ StyleSheet: { create: v => v, absoluteFill: {} }, AppState: { currentState: "active" }, useWindowDimensions: () => ({ width: 360 }) }, { get: (v, key) => v[key] ?? key });
       if (name === "react-native-safe-area-context") return { SafeAreaView: "SafeAreaView" };
-      if (name === "expo-router") return { router: { push: value => pushes.push(value) }, useLocalSearchParams: () => ({}), useFocusEffect() {} };
-      if (name === "expo-router/react-navigation") return { usePreventRemove: () => () => {} };
+      if (name === "expo-router") return { router: { push: value => pushes.push(value), replace: value => pushes.push(value) }, useLocalSearchParams: () => params, useFocusEffect() {} };
+      if (name === "expo-router/react-navigation") return { usePreventRemove: () => () => {}, useIsFocused: () => true };
       if (name === "expo-keep-awake") return {};
       if (name === "expo-audio") return { useAudioPlayer: () => ({}) };
       if (name.endsWith("/AssistantAccess")) return { useAssistantHidden() {} };
@@ -33,7 +34,7 @@ function setup() {
       if (name.endsWith("/ExerciseFigure")) return { ExerciseFigure: "ExerciseFigure" };
       if (name.endsWith("/ui") || name === "./ui") return { s: {}, WorkoutHeader: "WorkoutHeader", ErrorText: "ErrorText", Loading: "Loading", PrimaryButton: "PrimaryButton", SecondaryButton: "SecondaryButton", statsFor: () => ({}), dateLabel: s => s };
       if (name === "./engine") return { sessionDate: value => value.slice(0, 10) };
-      if (name.endsWith(".png")) return "bundled-course-photo";
+      if (name.endsWith(".png")) return name;
       if (name.endsWith(".wav")) return "bundled-transition-cue";
       const target = path.resolve(path.dirname(file), name);
       return load(fs.existsSync(target + ".ts") ? target + ".ts" : target + ".tsx");
@@ -49,6 +50,62 @@ function nodes(tree) {
   return [tree, ...nodes(tree.props?.children)];
 }
 
+test('both personal courses show matching bundled covers on their cards and overview, with no gender labels', () => {
+  for (const sex of [null, 'female', 'male']) {
+    const app = setup(); app.data.catalogue = personalCatalogue; app.data.profile_sex = sex;
+    const { CourseCard, CoursePhoto } = app.load('workouts/CourseCard.tsx');
+    const { CourseOverview } = app.load('workouts/CourseOverview.tsx');
+    const tree = app.render(app.load('app/(tabs)/workouts.tsx').default);
+    const cards = nodes(tree).filter(node => node.type === CourseCard);
+    assert.deepEqual(cards.map(card => card.props.courseId), ['full_body_home_28_v1', 'full_body_28_v1']);
+    cards.forEach((card, i) => {
+      const rendered = CourseCard(card.props), photo = nodes(rendered).find(node => node.type === CoursePhoto);
+      assert.equal(photo.props.title, i ? 'Всё тело + прогулки' : 'Всё тело');
+      const source = nodes(CoursePhoto(photo.props)).find(node => node.type === 'Image').props.source;
+      assert.ok(source.endsWith(`full-body-${i ? 'walk' : 'home'}-${sex ?? 'female'}.png`));
+      const image = nodes(CoursePhoto(photo.props)).find(node => node.type === 'Image');
+      assert.match(image.props.accessibilityLabel, i ? /на прогулке в парке$/ : /дома$/);
+      const overview = app.render(() => CourseOverview({ courseId: card.props.courseId }));
+      const overviewPhoto = nodes(overview).find(node => node.type === CoursePhoto);
+      assert.equal(nodes(CoursePhoto(overviewPhoto.props)).find(node => node.type === 'Image').props.source, source);
+      assert.doesNotMatch(JSON.stringify([rendered, overview]), /Для мужчин|Для женщин/);
+      rendered.props.onPress(); assert.equal(app.pushes.at(-1).params.courseId, card.props.courseId);
+    });
+    app.data.profile_sex = sex === 'male' ? 'female' : 'male';
+    const updated = CourseCard(cards[0].props);
+    assert.equal(nodes(updated).find(node => node.type === CoursePhoto).props.variant, app.data.profile_sex);
+  }
+});
+
+test('home calendar displays six sessions and no walks and starts the selected variant/load', () => {
+  const app = setup(), home = 'full_body_home_28_v1';
+  app.data.catalogue = personalCatalogue; app.data.profile_sex = 'male'; app.data.settings.activity_level = 'intense';
+  const { CourseOverview } = app.load('workouts/CourseOverview.tsx');
+  let tree = app.render(() => CourseOverview({ courseId: home }));
+  nodes(tree).find(node => node.props?.accessibilityLabel === 'Программа курса').props.onPress();
+  tree = app.render(() => CourseOverview({ courseId: home }));
+  const days = nodes(tree).filter(node => /^День \d+\./.test(node.props?.accessibilityLabel ?? ''));
+  assert.equal(days.length, 7);
+  const visibleText = nodes(tree).filter(node => node.type === 'Text').map(node => node.props.children).flat().join(' ');
+  assert.doesNotMatch(visibleText, /Прогулк|улиц/);
+  days[6].props.onPress(); assert.equal(app.pushes.at(-1).params.courseId, home);
+  nodes(tree).find(node => node.type === 'PrimaryButton').props.onPress();
+  assert.equal(app.starts[0], personalCatalogue.courses[0].variants.male.days[0].workout_ids.intense);
+});
+
+test('personal player labels each round and keeps the original variant after profile changes', () => {
+  const app = setup(), engine = app.load('workouts/engine.ts');
+  app.data.catalogue = personalCatalogue; app.data.profile_sex = 'female';
+  const workout = personalCatalogue.workouts.find(w => w.id === personalCatalogue.courses[0].variants.male.days[0].workout_ids.intense);
+  app.data.draft = engine.createDraft('one', workout, personalCatalogue, app.data.settings, 'UTC', 0, '2026-01-01T10:00:00Z');
+  for (const round of [1, 2]) {
+    app.data.draft = { ...app.data.draft, index: workout.steps.findIndex(step => step.round === round), phase: 'exercise' };
+    const tree = app.render(app.load('app/workout/player.tsx').default);
+    assert.match(JSON.stringify(tree), new RegExp(`круг ${round}`));
+    assert.equal(nodes(tree).find(node => node.type === 'ExerciseFigure').props.exercise.id, 'push_up');
+  }
+});
+
 test("workout catalogue shows one course card; opening it does not start a session", () => {
   const app = setup();
   const { CourseCard } = app.load("workouts/CourseCard.tsx");
@@ -59,7 +116,7 @@ test("workout catalogue shows one course card; opening it does not start a sessi
   const card = CourseCard(cards[0].props);
   assert.match(card.props.accessibilityLabel, /Всё тело.*28 дней/);
   card.props.onPress();
-  assert.deepEqual(app.pushes, ["/workout/course"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.pushes)), [{ pathname: "/workout/course", params: { courseId: "full_body_28_v1" } }]);
   assert.equal(app.starts.length, 0);
 });
 

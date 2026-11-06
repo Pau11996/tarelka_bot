@@ -3,14 +3,17 @@ import type { ActivityLevel, LocalWorkout, Workout, WorkoutData } from "./types"
 export function ratedWorkout(data: WorkoutData, record: LocalWorkout): Workout | undefined {
   const session = record.server ?? record.payload;
   const workout = data.catalogue?.workouts.find(item => item.id === session?.workout_id);
-  return session?.status === "completed" && workout?.curriculum_revision === 2 && workout.kind === "strength" ? workout : undefined;
+  return session?.status === "completed" && workout?.course_id && workout.kind === "strength" && workout.steps.some(step => step.section === "main" && step.repetitions) ? workout : undefined;
 }
 
 /** Offer a choice for the next workout. Never increase load automatically. */
 export function effortSuggestion(data: WorkoutData, record: LocalWorkout) {
   const workout = ratedWorkout(data, record);
   if (!record.effort || !workout?.activity_level) return null;
-  const history = data.records.filter(item => ratedWorkout(data, item)).sort((a, b) =>
+  const history = data.records.filter(item => {
+    const other = ratedWorkout(data, item);
+    return other && other.course_id === workout.course_id && other.course_variant === workout.course_variant;
+  }).sort((a, b) =>
     (b.server?.started_at ?? b.payload?.started_at ?? "").localeCompare(a.server?.started_at ?? a.payload?.started_at ?? ""));
   if (history[0]?.id !== record.id) return null;
   const levels: ActivityLevel[] = ["light", "medium", "intense"], index = levels.indexOf(workout.activity_level);

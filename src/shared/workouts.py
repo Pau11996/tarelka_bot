@@ -175,6 +175,37 @@ BEGINNER_COURSE, BEGINNER_WORKOUTS = build_course_v2(BEGINNER_EXERCISES)
 CATALOGS[4] = dict(version=4, exercises=BEGINNER_EXERCISES,
                    workouts=deepcopy(CATALOGS[3]["workouts"]) + BEGINNER_WORKOUTS, course=BEGINNER_COURSE)
 
+# Catalogue 5 adds independent courses and profile-selected programmes. History
+# and offline drafts continue to resolve their original immutable definitions.
+from src.shared.workout_courses import build_courses
+
+PERSONAL_EXERCISES = deepcopy(BEGINNER_EXERCISES) + [
+    exercise("push_up", "Отжимания от пола", "Корпус ровный. Опускайтесь и поднимайтесь плавно.",
+             "Поставьте ладони примерно на ширине плеч, обопритесь на носки. Держите голову, корпус и ноги на одной линии. "
+             "Согните локти и плавно опустите грудь к коврику до удобной глубины. На выдохе выпрямите руки. "
+             "Не проваливайте поясницу и не поднимайте таз отдельно от плеч. Закончите подход до потери техники.",
+             "push_up", 3.0, equipment=["Коврик"]),
+    exercise("knee_push_up", "Отжимания с колен", "Опора на ладони и колени. Таз и плечи движутся вместе.",
+             "Поставьте ладони примерно на ширине плеч, колени — на коврик. Отведите колени назад, выстроив прямую линию от головы до колен. "
+             "Согните локти и плавно опустите грудь до удобной глубины. На выдохе выпрямите руки. "
+             "Сохраняйте корпус ровным; не садитесь тазом на пятки. Закончите подход до потери техники.",
+             "knee_push_up", 3.0, equipment=["Коврик"]),
+]
+for _ex in PERSONAL_EXERCISES:
+    if _ex["id"] in ("push_up", "knee_push_up"):
+        _ex["easier"] = ("Выберите лёгкую нагрузку для отжиманий от стены. Также можно отжиматься от устойчивой, нескользящей опоры перед собой. "
+                         + ("На среднем уровне доступны отжимания с колен." if _ex["id"] == "push_up" else "Уменьшите глубину движения."))
+    elif _ex["id"] == "standing_knee_elbow":
+        _ex["repetition_note"] = "Чередуйте стороны. Каждая сторона считается одним повтором."
+    elif _ex["id"] == "sumo_squat":
+        _ex["easier"] = "Уменьшите глубину приседания; при необходимости придерживайтесь за устойчивую опору."
+    elif _ex["id"] == "crunch_reach":
+        _ex["easier"] = "Приподнимайте лопатки совсем немного. Не тяните голову вперёд и сохраняйте спокойное дыхание."
+PERSONAL_COURSES, PERSONAL_WORKOUTS = build_courses(PERSONAL_EXERCISES, BEGINNER_COURSE, BEGINNER_WORKOUTS)
+COURSES = {course["id"]: course for course in PERSONAL_COURSES}
+CATALOGS[5] = dict(version=5, exercises=PERSONAL_EXERCISES,
+                   workouts=deepcopy(CATALOGS[4]["workouts"]) + PERSONAL_WORKOUTS, courses=PERSONAL_COURSES)
+
 
 def catalogue(version: int = 1):
     return deepcopy(CATALOGS[version])

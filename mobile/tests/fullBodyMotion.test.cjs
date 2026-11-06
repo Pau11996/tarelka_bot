@@ -17,9 +17,9 @@ test('every full-body exercise has a renderable recorded pose, timing and guide'
   }
 });
 
-test('the twelve exercise illustrations have independent SVG clip identifiers', () => {
+test('all detailed exercise illustrations have independent SVG clip identifiers', () => {
   const svg = [...fullBodyMovements.map(name=>render(name,fullBodyTiming[name].preview)),render('quad_stretch',.4,true)].join('');
   const ids = [...svg.matchAll(/<clipPath id="([^"]+)"/g)].map(match=>match[1]);
-  assert.equal(ids.length,8);
+  assert.equal(ids.length,10);
   assert.equal(new Set(ids).size,ids.length,'one exercise must not clip another illustration');
 });

@@ -1,18 +1,34 @@
 import { act, createDraft, restoreDraft, sessionInput, tick, type WorkoutAction } from "./engine";
-import { courseState } from "./course";
-import type { CourseCompletion, LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutEffort, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
+import { catalogueCourses, courseState, HOME_COURSE_ID, LEGACY_COURSE_ID, selectedCourse } from "./course";
+import { ratedWorkout } from "./effort";
+import type { CourseCompletion, CourseProgram, CourseVariant, LocalWorkout, WorkoutCatalogue, WorkoutData, WorkoutEffort, WorkoutSession, WorkoutSettings, WorkoutSnapshot } from "./types";
 
 type Request = <T>(path: string, options: { method?: string; json?: unknown; signal: AbortSignal }) => Promise<T>;
 export type WorkoutDependencies = { read(): Promise<WorkoutData | null>; write(data: WorkoutData): Promise<void>; remove(): Promise<void>; request: Request; uuid(): string; now(): number; wall(): string; updated(): void };
-const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true, activity_level: "medium" }, settings_dirty: false, timezone: "UTC", draft: null, records: [], course_progress: [], course_queue: [] });
+const defaults = (): WorkoutData => ({ catalogue: null, settings: { auto_log: false, sound: true, activity_level: "medium" }, settings_dirty: false, timezone: "UTC", draft: null, records: [], profile_sex: null, course_progress_by_id: {}, course_progress: [], course_queue: [] });
 const animationNames = new Set(["march", "side_step", "shoulders", "arm_raise", "squat", "wall_push", "calf_raise", "leg_side", "chest", "side_bend", "calf_stretch",
-  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "glute_bridge", "bird_dog", "quadruped_leg"]);
+  "standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "glute_bridge", "bird_dog", "quadruped_leg", "push_up", "knee_push_up"]);
 export function supportedCatalogue(value: WorkoutCatalogue): boolean {
-  if (!value || ![1, 2, 3, 4].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
-  if (value.version >= 3 && (!value.course || value.course.id !== "full_body_28_v1" || value.course.days.length !== 28 || value.course.days.some((day, index) => day.day !== index + 1 ||
-    (["strength", "mobility"].includes(day.kind) && ["light", "medium", "intense"].some(level => !value.workouts.some(w => w.id === day.workout_ids[level as "light"] && w.course_day === day.day && w.activity_level === level && w.course_id === value.course!.id)))))) return false;
-  const ids = new Set(value.exercises.map(ex => ex.id));
-  return value.exercises.every(ex => animationNames.has(ex.animation)) && value.workouts.every(w => w.steps.length > 0 && w.steps.every(s => ids.has(s.exercise_id)));
+  try {
+    if (!value || ![1, 2, 3, 4, 5].includes(value.version) || !Array.isArray(value.workouts) || !Array.isArray(value.exercises)) return false;
+    const definitions = new Map(value.workouts.map(workout => [workout.id, workout]));
+    const validProgram = (courseId: string, program: CourseProgram, variant?: CourseVariant) =>
+      Array.isArray(program?.days) && program.days.length === 28 && program.days.every((day, index) =>
+        day.day === index + 1 && day.week === Math.floor(index / 7) + 1 && ["strength", "mobility", "walk", "rest"].includes(day.kind) &&
+        (!["strength", "mobility"].includes(day.kind) || (["light", "medium", "intense"] as const).every(level => {
+          const workout = definitions.get(day.workout_ids[level]!);
+          return workout?.course_id === courseId && workout.course_day === day.day && workout.activity_level === level && workout.kind === day.kind && (!variant || workout.course_variant === variant);
+        })));
+    if (value.version === 5) {
+      if (!Array.isArray(value.courses) || value.courses.length !== 2 || new Set(value.courses.map(course => course.id)).size !== 2) return false;
+      if (!value.courses.every(course => [LEGACY_COURSE_ID, HOME_COURSE_ID].includes(course.id) &&
+        (["female", "male"] as const).every(variant => validProgram(course.id, course.variants[variant], variant)) &&
+        course.variants.female.days.every((day, index) => day.kind === course.variants.male.days[index].kind))) return false;
+    } else if (value.version >= 3 && (!value.course || value.course.id !== LEGACY_COURSE_ID || !validProgram(value.course.id, value.course))) return false;
+    const ids = new Set(value.exercises.map(ex => ex.id));
+    return definitions.size === value.workouts.length && ids.size === value.exercises.length &&
+      value.exercises.every(ex => animationNames.has(ex.animation)) && value.workouts.every(w => w.steps.length > 0 && w.steps.every(s => ids.has(s.exercise_id)));
+  } catch { return false; }
 }
 const message = (error: unknown) => error && typeof error === "object" && "status" in error && error.status === 0
   ? "Не удалось подключиться. Проверьте интернет и повторите синхронизацию."
@@ -41,8 +57,8 @@ export class WorkoutStore {
     for (const listener of this.listeners) listener();
   }
   private persist() {
-    const { catalogue, settings, settings_dirty, timezone, draft, records, course_progress, course_queue } = this.state;
-    const data = { catalogue, settings, settings_dirty, timezone, draft, records, course_progress, course_queue };
+    const { catalogue, settings, settings_dirty, timezone, draft, records, profile_sex, course_progress_by_id, course_progress, course_queue } = this.state;
+    const data = { catalogue, settings, settings_dirty, timezone, draft, records, profile_sex, course_progress_by_id, course_progress, course_queue };
     const write = this.writes.catch(() => undefined).then(() => this.deps.write(data));
     this.writes = write;
     void write.then(() => {
@@ -62,7 +78,9 @@ export class WorkoutStore {
       if (this.closed) return;
       if (saved) {
         if (!Array.isArray(saved.records) || !saved.settings || typeof saved.settings.auto_log !== "boolean" || (saved.catalogue && !supportedCatalogue(saved.catalogue))) throw Error("Сохранённые данные тренировок повреждены");
-        this.patch({ ...saved, draft: saved.draft ? restoreDraft(saved.draft, this.deps.now()) : null });
+        this.patch({ ...saved,
+          course_progress_by_id: { [LEGACY_COURSE_ID]: saved.course_progress ?? [], ...saved.course_progress_by_id },
+          draft: saved.draft ? restoreDraft(saved.draft, this.deps.now()) : null });
         if (saved.draft?.phase === "finished") await this.finalize();
       }
       this.patch({ ready: true });
@@ -76,9 +94,9 @@ export class WorkoutStore {
     const workout = catalogue?.workouts.find(w => w.id === workoutId);
     if (!catalogue || !workout) throw Error("Подключитесь к интернету, чтобы загрузить каталог");
     if (workout.course_id) {
-      const progress = courseState(this.state, this.deps.wall());
+      const progress = courseState(this.state, this.deps.wall(), workout.course_id);
       if (workout.course_day !== progress.day || !progress.available) throw Error("Начните с текущего дня курса. Между днями сохраняется время для восстановления.");
-      const day = catalogue.course?.days.find(item => item.day === workout.course_day);
+      const day = selectedCourse(this.state, workout.course_id)?.days.find(item => item.day === workout.course_day);
       if (!day || !Object.values(day.workout_ids).includes(workout.id)) throw Error("Программа обновилась. Откройте текущий день курса заново.");
     }
     const draft = createDraft(this.deps.uuid(), workout, catalogue, this.state.settings, this.state.timezone, this.deps.now(), this.deps.wall());
@@ -125,9 +143,9 @@ export class WorkoutStore {
     await this.persist();
     void this.syncMutation();
   }
-  async completeCourseDay(day: number) {
+  async completeCourseDay(day: number, courseId = LEGACY_COURSE_ID) {
     if (this.closed || !this.state.ready || this.state.draft) throw Error("Сначала завершите текущее занятие");
-    const course = this.state.catalogue?.course, progress = courseState(this.state, this.deps.wall());
+    const course = selectedCourse(this.state, courseId), progress = courseState(this.state, this.deps.wall(), courseId);
     const definition = course?.days.find(item => item.day === day);
     if (!course || !definition || !["walk", "rest"].includes(definition.kind) || progress.day !== day || !progress.available) throw Error("Этот день пока недоступен");
     this.patch({ course_queue: [...(this.state.course_queue ?? []), { day, course_id: course.id, completed_at: this.deps.wall(), timezone: this.state.timezone }], error: null });
@@ -144,14 +162,17 @@ export class WorkoutStore {
   async rateWorkout(id: string, effort: WorkoutEffort) {
     if (this.closed) return;
     const record = this.state.records.find(item => item.id === id);
-    const session = record?.server ?? record?.payload;
-    const definition = this.state.catalogue?.workouts.find(item => item.id === session?.workout_id);
-    if (!record || session?.status !== "completed" || definition?.curriculum_revision !== 2 || definition.kind !== "strength" || !["easy", "comfortable", "hard"].includes(effort)) throw Error("Оценка доступна после завершённой тренировки курса");
+    if (!record || !ratedWorkout(this.state, record) || !["easy", "comfortable", "hard"].includes(effort)) throw Error("Оценка доступна после завершённой тренировки курса");
     this.replaceRecord(id, { effort });
     await this.persist();
   }
   private replaceRecord(id: string, changes: Partial<LocalWorkout>) {
     this.patch({ records: this.state.records.map(r => r.id === id ? { ...r, ...changes } : r) });
+  }
+  private acceptProgress(courseId: string, progress: CourseCompletion[]) {
+    this.patch({ course_progress_by_id: { ...this.state.course_progress_by_id, [courseId]: progress },
+      ...(courseId === LEGACY_COURSE_ID ? { course_progress: progress } : {}),
+      course_queue: this.state.course_queue?.filter(item => item.course_id !== courseId || !progress.some(p => p.day === item.day)) });
   }
   async retry() {
     await this.persist(); this.diskError = false;
@@ -195,7 +216,7 @@ export class WorkoutStore {
     try {
       if (this.state.settings_dirty) {
         const revision = this.settingsRevision;
-        const settings = this.state.catalogue?.course ? this.state.settings : { auto_log: this.state.settings.auto_log, sound: this.state.settings.sound };
+        const settings = catalogueCourses(this.state.catalogue).length ? this.state.settings : { auto_log: this.state.settings.auto_log, sound: this.state.settings.sound };
         await request("/v1/settings/workouts", { method: "PUT", json: settings, signal: controller.signal });
         if (revision === this.settingsRevision) this.patch({ settings_dirty: false });
         await this.persist(); guard();
@@ -210,12 +231,12 @@ export class WorkoutStore {
           const { day, course_id, completed_at, timezone } = job.item;
           try {
             const progress = await request<CourseCompletion[]>(`/v1/workouts/course/days/${day}`, { method: "PUT", json: { course_id, completed_at, timezone }, signal: controller.signal });
-            this.patch({ course_progress: progress, course_queue: this.state.course_queue?.filter(item => item.day !== day) });
+            this.acceptProgress(course_id, progress);
             await this.persist(); guard();
           } catch (error) {
             guard();
             if ([409, 422].includes(status(error))) {
-              this.patch({ course_queue: this.state.course_queue?.map(item => item.day === day ? { ...item, blocked: true, error: message(error) } : item), error: message(error) });
+              this.patch({ course_queue: this.state.course_queue?.map(item => item.day === day && item.course_id === course_id ? { ...item, blocked: true, error: message(error) } : item), error: message(error) });
               await this.persist();
             } else throw error;
           }
@@ -226,7 +247,8 @@ export class WorkoutStore {
           if (!item.server && item.payload) {
             const server = await request<WorkoutSession>(`/v1/workouts/sessions/${item.id}`, { method: "PUT", json: item.payload, signal: controller.signal });
             this.replaceRecord(item.id, { server, error: undefined });
-            if (server.course_progress) this.patch({ course_progress: server.course_progress });
+            const courseId = server.course_id ?? this.state.catalogue?.workouts.find(workout => workout.id === item.payload?.workout_id)?.course_id;
+            if (server.course_progress && courseId) this.acceptProgress(courseId, server.course_progress);
             await this.persist(); guard(); this.deps.updated();
           }
           if (this.state.records.find(r => r.id === item.id)?.diary_requested) {
@@ -242,24 +264,31 @@ export class WorkoutStore {
         }
       }
       const revision = this.settingsRevision;
-      const [catalogue, settings, me, history, progress] = await Promise.allSettled([
-        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=4", { signal: controller.signal }),
+      const [catalogue, settings, me, history, progress, profile] = await Promise.allSettled([
+        request<WorkoutCatalogue>("/v1/workouts/catalogue?max_version=5", { signal: controller.signal }),
         request<WorkoutSettings>("/v1/settings/workouts", { signal: controller.signal }),
         request<{ timezone: string }>("/v1/me", { signal: controller.signal }),
         request<{ items: WorkoutSession[]; next_offset: number | null }>("/v1/workouts/history", { signal: controller.signal }),
         request<CourseCompletion[]>("/v1/workouts/course/progress", { signal: controller.signal }),
+        request<{ sex: CourseVariant | null }>("/v1/profile", { signal: controller.signal }),
       ]);
       guard();
+      if (catalogue.status === "fulfilled" && !supportedCatalogue(catalogue.value)) throw Error("Обновите приложение для нового каталога тренировок");
+      const currentCatalogue = catalogue.status === "fulfilled" ? catalogue.value : this.state.catalogue;
+      const extraCourseIds = catalogueCourses(currentCatalogue).map(course => course.id).filter(id => id !== LEGACY_COURSE_ID);
+      const extraProgress = await Promise.allSettled(extraCourseIds.map(id => request<CourseCompletion[]>(`/v1/workouts/course/progress?course_id=${encodeURIComponent(id)}`, { signal: controller.signal })));
+      guard();
       if (catalogue.status === "fulfilled") {
-        if (!supportedCatalogue(catalogue.value)) throw Error("Обновите приложение для нового каталога тренировок");
         this.patch({ catalogue: catalogue.value });
       }
+      // A failed profile request must never replace a cached male selection.
+      if (profile.status === "fulfilled" && [null, "male", "female"].includes(profile.value.sex)) this.patch({ profile_sex: profile.value.sex });
       if (settings.status === "fulfilled" && revision === this.settingsRevision && !this.state.settings_dirty) this.patch({ settings: settings.value });
       if (me.status === "fulfilled") this.patch({ timezone: me.value.timezone });
       if (history.status === "fulfilled") this.mergeHistory(history.value);
-      if (progress.status === "fulfilled") this.patch({ course_progress: progress.value,
-        course_queue: this.state.course_queue?.filter(item => !progress.value.some(p => p.day === item.day)) });
-      const failure = [catalogue, settings, me, history, ...(this.state.catalogue?.course ? [progress] : [])].find(r => r.status === "rejected");
+      if (progress.status === "fulfilled") this.acceptProgress(LEGACY_COURSE_ID, progress.value);
+      extraProgress.forEach((result, index) => { if (result.status === "fulfilled") this.acceptProgress(extraCourseIds[index], result.value); });
+      const failure = [catalogue, settings, me, history, ...(catalogueCourses(this.state.catalogue).length ? [progress, ...extraProgress] : [])].find(r => r.status === "rejected");
       if (failure?.status === "rejected") this.patch({ error: message(failure.reason) });
       await this.persist();
     } catch (error) {

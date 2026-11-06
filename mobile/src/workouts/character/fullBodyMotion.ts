@@ -5,8 +5,8 @@ import { squatKickFrame, squatKickTiming, type SquatKickFrame } from "./squatKic
 import { sumoSquatFrame, sumoSquatTiming, type SumoSquatFrame } from "./sumoSquatMotion";
 import { recordedWorkoutFrame, recordedWorkoutTiming, type RecordedWorkoutFrame } from "./recordedWorkoutMotion";
 
-export type FullBodyMovement = "standing_knee_elbow" | "sumo_squat" | "squat_kick" | "incline_pushup" | "chair_dip" | "prone_pull" | "plank_pike" | "seated_knee_tuck" | "crunch_reach" | "hands_behind" | "quad_stretch";
-export const fullBodyMovements: FullBodyMovement[] = ["standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch"];
+export type FullBodyMovement = "standing_knee_elbow" | "sumo_squat" | "squat_kick" | "incline_pushup" | "chair_dip" | "prone_pull" | "plank_pike" | "seated_knee_tuck" | "crunch_reach" | "hands_behind" | "quad_stretch" | "squat" | "wall_push";
+export const fullBodyMovements: FullBodyMovement[] = ["standing_knee_elbow", "sumo_squat", "squat_kick", "incline_pushup", "chair_dip", "prone_pull", "plank_pike", "seated_knee_tuck", "crunch_reach", "hands_behind", "quad_stretch", "squat", "wall_push"];
 export const isFullBodyMovement = (name: AnimationName): name is FullBodyMovement => fullBodyMovements.includes(name as FullBodyMovement);
 export const fullBodyTiming: Record<FullBodyMovement, { duration: number; preview: number }> = {
   standing_knee_elbow: kneeElbowTiming, sumo_squat: sumoSquatTiming,
@@ -15,6 +15,8 @@ export const fullBodyTiming: Record<FullBodyMovement, { duration: number; previe
   plank_pike: recordedWorkoutTiming("plank_pike"), seated_knee_tuck: recordedWorkoutTiming("seated_knee_tuck"),
   crunch_reach: recordedWorkoutTiming("crunch_reach"), hands_behind: recordedWorkoutTiming("hands_behind"),
   quad_stretch: recordedWorkoutTiming("quad_stretch"),
+  squat: recordedWorkoutTiming("squat"),
+  wall_push: recordedWorkoutTiming("wall_push"),
 };
 export type FullBodyFrame = KneeElbowFrame | InclinePushupFrame | SquatKickFrame | SumoSquatFrame | RecordedWorkoutFrame;
 

@@ -1,11 +1,13 @@
-import type { Workout, WorkoutCatalogue } from "./types";
+import { catalogueCourses } from "./course";
+import type { CourseVariant, Workout, WorkoutCatalogue } from "./types";
 
-/** Temporarily offer only the reviewed full-body routine. Keep the complete
- * versioned catalogue in storage for previous results and unfinished sessions. */
-export function availableWorkouts(catalogue: WorkoutCatalogue | null): Workout[] {
+/** Offer only current days of the selected programmes. Preserve all old
+ * definitions in the catalogue for historical results and offline drafts. */
+export function availableWorkouts(catalogue: WorkoutCatalogue | null, sex?: CourseVariant | null): Workout[] {
   if (!catalogue || catalogue.version < 2) return [];
-  if (catalogue.course) {
-    const ids = new Set(catalogue.course.days.flatMap(day => Object.values(day.workout_ids)));
+  const courses = catalogueCourses(catalogue, sex);
+  if (courses.length) {
+    const ids = new Set(courses.flatMap(course => course.days.flatMap(day => Object.values(day.workout_ids))));
     return catalogue.workouts.filter(workout => ids.has(workout.id));
   }
   return catalogue.workouts.filter(workout => workout.id === "body_short");

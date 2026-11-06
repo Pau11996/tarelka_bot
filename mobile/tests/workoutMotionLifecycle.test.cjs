@@ -84,3 +84,15 @@ test('a recorded four-second cycle uses its timing and freezes on the exact curr
   assert.equal(h.value.cycle, .25); assert.equal(h.frames, 0);
   h.unmount();
 });
+
+test('both push-ups pause in place and use a still bottom pose with reduced motion', async () => {
+  for (const movement of ['push_up', 'knee_push_up']) {
+    const h = await mount(true, false, { duration: 4, preview: .5 });
+    h.update({ 0: movement, 1: movement }); h.frame(100); h.frame(150);
+    const before = h.value.cycle;
+    h.update({ 2: false }); h.frame(10000); assert.equal(h.value.cycle, before);
+    h.update({ 2: true }); h.frame(11000); assert.equal(h.value.cycle, before);
+    h.event('reduceMotionChanged', true);
+    assert.equal(h.value.cycle, .5); assert.equal(h.frames, 0); h.unmount();
+  }
+});

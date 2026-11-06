@@ -76,7 +76,7 @@ async def test_reference_catalogue_negotiation_and_v1_history_remain_compatible(
     old = (await client.get("/v1/workouts/catalogue")).json()
     new = (await client.get("/v1/workouts/catalogue?max_version=2")).json()
     assert old == catalogue(1) and new == catalogue(2)
-    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == catalogue(4)
+    assert (await client.get("/v1/workouts/catalogue?max_version=999")).json() == catalogue(5)
     assert (await client.get("/v1/workouts/catalogue?max_version=0")).status_code == 422
     reference = next(w for w in new["workouts"] if w["id"] == "body_short")
     assert [s["exercise_id"] for s in reference["steps"]] == [
@@ -282,6 +282,7 @@ def test_revised_course_is_shorter_uses_repetitions_and_preserves_published_cata
         1: "a6bc7fa7f5a74c83eeeff012f2889ec8f8ae12a6bceb3c2367797fb10602b36d",
         2: "b3a5824d69d68a5189e14e9843c0e36153c25511475fd62f45408b88c564d94c",
         3: "d55d9886b6ede645d804191b9de72426076ca0d5b120ada6b77a7937f7654ed9",
+        4: "e45bd8c0ae3612b915ef8663d565977de541f1c7c06c80a7fe765b8daec1ee87",
     }
     for version, digest in hashes.items():
         assert hashlib.sha256(json.dumps(catalogue(version), sort_keys=True, ensure_ascii=False).encode()).hexdigest() == digest
@@ -471,3 +472,169 @@ def test_course_migration_preserves_preferences_and_cascades_account_deletion():
         assert "workout_course_days" not in inspect(conn).get_table_names()
         assert conn.execute(text("SELECT * FROM workout_preferences")).all() == [(2, 0, 1)]
     engine.dispose()
+
+
+HOME_COURSE = "full_body_home_28_v1"
+WALK_COURSE = "full_body_28_v1"
+
+
+def personal_workout(course_id, variant, day=1, level="medium"):
+    data = catalogue(5)
+    course = next(c for c in data["courses"] if c["id"] == course_id)
+    wid = course["variants"][variant]["days"][day - 1]["workout_ids"][level]
+    return next(w for w in data["workouts"] if w["id"] == wid)
+
+
+def personal_payload(course_id=HOME_COURSE, variant="female", day=1, level="medium"):
+    workout = personal_workout(course_id, variant, day, level)
+    start = datetime.now(timezone.utc) - timedelta(days=40 - day)
+    return dict(workout_id=workout["id"], catalogue_version=5, status="completed",
+                started_at=start.isoformat(), ended_at=(start + timedelta(seconds=workout["duration_seconds"])).isoformat(),
+                timezone="UTC", auto_log=False,
+                steps=[dict(step_id=s["id"], active_seconds=s["expected_seconds"], rest_seconds=s["rest_seconds"], completed=True)
+                       for s in workout["steps"]])
+
+
+def test_personal_courses_cover_all_days_levels_and_home_timing():
+    data = catalogue(5)
+    assert [c["title"] for c in data["courses"]] == ["Всё тело", "Всё тело + прогулки"]
+    definitions = {w["id"]: w for w in data["workouts"]}
+    assert len(definitions) == len(data["workouts"])
+    assert all(definitions[w["id"]] == w for w in catalogue(4)["workouts"])
+    ids = {e["id"] for e in data["exercises"]}
+    assert {"push_up", "knee_push_up"} <= ids
+    home_durations = []
+    for course in data["courses"]:
+        assert set(course["variants"]) == {"female", "male"}
+        assert [d["kind"] for d in course["variants"]["female"]["days"]] == [d["kind"] for d in course["variants"]["male"]["days"]]
+        for variant, program in course["variants"].items():
+            assert len(program["days"]) == 28
+            assert sum(d["kind"] == "rest" for d in program["days"]) == 4
+            if course["id"] == HOME_COURSE:
+                assert sum(bool(d["workout_ids"]) for d in program["days"]) == 24
+                text = str(program).lower()
+                assert not any(word in text for word in ("прогул", "улиц", "выходы"))
+            for day in program["days"]:
+                weekday = (day["day"] - 1) % 7
+                expected_kinds = ("strength", "mobility", "strength", "mobility", "strength", "mobility", "rest") if course["id"] == HOME_COURSE else ("strength", "walk", "strength", "mobility", "strength", "walk", "rest")
+                assert day["kind"] == expected_kinds[weekday]
+                if day["kind"] == "walk":
+                    assert day["walk_minutes"] == 10 + day["week"] * 5
+                if day["kind"] in ("walk", "rest"):
+                    assert day["workout_ids"] == {}
+                    continue
+                assert set(day["workout_ids"]) == {"light", "medium", "intense"}
+                for level, wid in day["workout_ids"].items():
+                    w = definitions[wid]
+                    assert (w["course_id"], w["course_variant"], w["course_day"], w["activity_level"]) == (course["id"], variant, day["day"], level)
+                    assert len({s["id"] for s in w["steps"]}) == len(w["steps"]) < 100
+                    assert all(s["exercise_id"] in ids for s in w["steps"])
+                    assert w["duration_seconds"] == sum(s["expected_seconds"] + s["rest_seconds"] for s in w["steps"])
+                    assert "муж" not in w["title"].lower() and "жен" not in w["title"].lower()
+                    if course["id"] == HOME_COURSE:
+                        home_durations.append(w["duration_seconds"] + 15)
+                        assert 900 <= w["duration_seconds"] + 15 <= 1200
+                        assert sum(s["expected_seconds"] + s["rest_seconds"] for s in w["steps"] if s["section"] == "warmup") == 180
+                        assert {s["round"] for s in w["steps"] if "round" in s} == {1, 2}
+                        if day["kind"] == "mobility":
+                            assert w["duration_seconds"] + 15 == 1050
+                            assert all(s["duration_seconds"] == 30 and s["rest_seconds"] == 15 for s in w["steps"] if s.get("round"))
+                        else:
+                            main = [s for s in w["steps"] if s["section"] == "main"]
+                            assert len(main) == 12
+                            assert all(s["repetitions"] == {"light": 6, "medium": 8, "intense": 10}[level] and s["rest_seconds"] == 30 for s in main)
+                    elif variant == "male" and day["kind"] == "mobility":
+                        assert w["duration_seconds"] + 15 == 375
+            for level in ("light", "medium", "intense"):
+                first, last = [personal_workout(course["id"], variant, day, level) for day in (1, 26)]
+                assert [dict(s, id="") for s in first["steps"]] == [dict(s, id="") for s in last["steps"]]
+    assert (min(home_durations), max(home_durations)) == (978, 1190)
+
+
+def test_home_week_rotation_and_walking_strength_days_match_the_plan():
+    # Each number references that complex's first occurrence in week one.
+    rotations = ((1, 2, 3, 4, 5, 6), (3, 4, 5, 6, 1, 2), (5, 6, 1, 2, 3, 4), (3, 2, 5, 4, 1, 6))
+    for variant in ("female", "male"):
+        for level in ("light", "medium", "intense"):
+            steps = lambda course, day: [dict(s, id="") for s in personal_workout(course, variant, day, level)["steps"]]
+            for week, rotation in enumerate(rotations):
+                for offset, reference in enumerate(rotation):
+                    day = week * 7 + offset + 1
+                    assert steps(HOME_COURSE, day) == steps(HOME_COURSE, reference)
+                    if variant == "male" and offset in (0, 2, 4):
+                        assert steps(WALK_COURSE, day) == steps(HOME_COURSE, reference)
+
+
+def test_walking_female_programme_preserves_v4_and_male_pushup_volume():
+    legacy = catalogue(4)
+    for day in legacy["course"]["days"]:
+        for level, wid in day["workout_ids"].items():
+            old = next(w for w in legacy["workouts"] if w["id"] == wid)
+            new = personal_workout(WALK_COURSE, "female", day["day"], level)
+            assert [dict(s, id="") for s in old["steps"]] == [dict(s, id="") for s in new["steps"]]
+            assert new["duration_seconds"] == old["duration_seconds"]
+    for course_id in (HOME_COURSE, WALK_COURSE):
+        for level, exercise in (("light", "wall_push"), ("medium", "knee_push_up"), ("intense", "push_up")):
+            for day, count in ((1, 4), (3, 2), (5, 4)):
+                main = [s for s in personal_workout(course_id, "male", day, level)["steps"] if s["section"] == "main"]
+                assert sum(s["exercise_id"] == exercise for s in main) == count
+                assert all(s["exercise_id"] != exercise or i == 0 or main[i-1]["exercise_id"] != exercise for i, s in enumerate(main))
+
+
+async def test_personal_courses_progress_is_independent_and_profile_changes_preserve_sessions(workout_api):
+    client, _, _, other_id = workout_api
+    session_id = str(uuid4())
+    body = personal_payload(variant="male")
+    first = await save(client, body, session_id)
+    assert first["course_id"] == HOME_COURSE and first["course_variant"] == "male"
+    assert [d["day"] for d in first["course_progress"]] == [1]
+    assert (await client.get("/v1/workouts/course/progress")).json() == []
+    # Changing the profile does not reinterpret or reject an existing snapshot.
+    assert (await client.put("/v1/profile", json={"sex": "female"})).status_code == 200
+    again = await save(client, body, session_id)
+    for key in ("id", "workout_id", "course_variant", "steps", "course_progress"):
+        assert again[key] == first[key]
+    # Another device can finish its original variant of the same day without
+    # replacing the first completion or advancing the course twice.
+    second_device = await save(client, personal_payload(variant="female"))
+    assert second_device["id"] != session_id
+    assert second_device["course_progress"] == first["course_progress"]
+    walking = await save(client, personal_payload(WALK_COURSE))
+    assert [d["day"] for d in walking["course_progress"]] == [1]
+    check = dict(course_id=WALK_COURSE, completed_at=personal_payload(day=2)["ended_at"], timezone="UTC")
+    assert (await client.put("/v1/workouts/course/days/2", json=check)).status_code == 200
+    assert (await client.put("/v1/workouts/course/days/2", json=dict(check, course_id=HOME_COURSE))).status_code == 422
+    home_second = await save(client, personal_payload(day=2))
+    assert [d["day"] for d in home_second["course_progress"]] == [1, 2]
+    for course_id in (HOME_COURSE, WALK_COURSE):
+        result = await client.get("/v1/workouts/course/progress", params={"course_id": course_id})
+        assert [d["day"] for d in result.json()] == [1, 2]
+    assert (await client.get("/v1/workouts/course/progress?course_id=missing")).status_code == 422
+    other = {"Authorization": f"Bearer {issue_access_token(other_id)}"}
+    assert (await client.get(f"/v1/workouts/course/progress?course_id={HOME_COURSE}", headers=other)).json() == []
+    historical = (await client.get("/v1/workouts/history")).json()["items"]
+    assert next(item for item in historical if item["id"] == session_id)["course_variant"] == "male"
+
+
+async def test_both_personal_courses_can_finish_with_variant_changes_and_retries(workout_api):
+    client, *_ = workout_api
+    programs = {c["id"]: c["variants"]["female"]["days"] for c in catalogue(5)["courses"]}
+    for number in range(1, 29):
+        for course_id in (HOME_COURSE, WALK_COURSE):
+            day = programs[course_id][number - 1]
+            if day["workout_ids"]:
+                body = personal_payload(course_id, "male" if number % 2 else "female", number)
+                identity = str(uuid4())
+                result = await save(client, body, identity)
+                assert len(result["course_progress"]) == number
+                if number in (1, 26):
+                    again = await save(client, body, identity)
+                    assert again["course_progress"] == result["course_progress"]
+                    assert again["steps"] == result["steps"]
+            else:
+                check = dict(course_id=course_id, completed_at=(datetime.now(timezone.utc) - timedelta(days=40-number)).isoformat(), timezone="UTC")
+                response = await client.put(f"/v1/workouts/course/days/{number}", json=check)
+                assert response.status_code == 200, response.text
+                assert len(response.json()) == number
+    assert len((await client.get(f"/v1/workouts/course/progress?course_id={HOME_COURSE}")).json()) == 28
+    assert len((await client.get("/v1/workouts/course/progress")).json()) == 28

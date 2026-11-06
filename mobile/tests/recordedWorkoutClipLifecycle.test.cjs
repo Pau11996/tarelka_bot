@@ -8,6 +8,8 @@ const { fullBodyFrame } = require('../scripts/render-full-body.cjs');
 
 const root = path.resolve(__dirname, '../src/workouts/character');
 const moving = {
+  wall_push: require('../src/workouts/character/wallPushContours.json'),
+  squat: require('../src/workouts/character/shallowSquatContours.json'),
   chair_dip: require('../src/workouts/character/recordedChairDip.json'),
   prone_pull: require('../src/workouts/character/recordedPronePull.json'),
   plank_pike: require('../src/workouts/character/recordedPlankPike.json'),
@@ -63,6 +65,7 @@ for (const [movement, data] of Object.entries(moving)) {
         const frame = fullBodyFrame(movement, cycle, mirror), tree = render(frame);
         const clip = clipOf(tree), outline = nodes(clip).find(node=>node.type==='path');
         assert.ok(clip && outline);
+        assert.equal(outline.props.clipRule,data.fillRule==='nonzero'?'nonzero':'evenodd');
         // react-native-svg 15.16 Android caches GroupView.getPath(). The
         // Path inside a definition isn't drawn, so updating d can return
         // early from VirtualView.invalidate() without clearing that cache.

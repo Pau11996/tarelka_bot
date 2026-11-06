@@ -9,17 +9,19 @@ export const RecordedWorkoutCharacter = memo(function RecordedWorkoutCharacter({
   const data = getRecordedWorkoutAsset(frame.movement, frame.mirror);
   const silhouetteId = `workout-silhouette-${frame.movement}-${frame.mirror ? "left" : "right"}-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}-pose-${frame.pose}`;
   const pose = data.poses[frame.pose];
+  // Rigged assets use overlapping, consistently wound parts as one silhouette.
+  const fillRule = data.fillRule === "nonzero" ? "nonzero" : "evenodd";
   const [width, height] = data.canvas, [x, y, scale] = data.transform;
   return <Svg width={size} height={size * height / width} viewBox={`0 0 ${width} ${height}`} fill="none">
     {/* Android can retain the definition's cached path when only its child d
         changes. Replace the clip and its reference together for each pose;
         keep the SVG, transforms and painted body mounted in the same place. */}
-    <Defs><ClipPath key={silhouetteId} id={silhouetteId}><Path d={pose[0]} fillRule="evenodd" clipRule="evenodd" /></ClipPath></Defs>
+    <Defs><ClipPath key={silhouetteId} id={silhouetteId}><Path d={pose[0]} fillRule={fillRule} clipRule={fillRule} /></ClipPath></Defs>
     <G transform={frame.mirror && !data.authoredMirror ? `translate(${width} 0) scale(-1 1)` : undefined}>
       <G transform={`translate(${x} ${y}) scale(${scale})`}>
         {backdrop ? data.support.map(([fill, path], layer) => <Path key={`support:${layer}`} d={path} fill={fill} fillRule="evenodd" />) : null}
         <G clipPath={`url(#${silhouetteId})`}>
-          {pose.map((path, layer) => <Path key={layer} d={path} fill={data.palette[layer]} fillRule="evenodd"
+          {pose.map((path, layer) => <Path key={layer} d={path} fill={data.palette[layer]} fillRule={fillRule}
             stroke={data.palette[layer]} strokeWidth={layer === 0 ? 0 : .35} strokeLinejoin="round" />)}
         </G>
         {backdrop ? data.indicators?.map((indicator, index) => {

@@ -6,11 +6,13 @@ import crunchReach from "./recordedCrunchReach.json";
 import handsBehind from "./recordedHandsBehind.json";
 import quadRight from "./recordedQuadRight.json";
 import quadLeft from "./recordedQuadLeft.json";
+import shallowSquat from "./shallowSquatContours.json";
+import wallPush from "./wallPushContours.json";
 
 export type RecordedWorkoutAsset = {
   duration: number; preview: number; canvas: number[]; transform: number[];
   timeline: number[]; poses: string[][]; palette: string[]; support: string[][];
-  phases: (number | string)[][]; cue: string; authoredMirror?: boolean;
+  phases: (number | string)[][]; cue: string; authoredMirror?: boolean; fillRule?: string;
   indicators?: {
     path: string; fill: string; samples: number[][];
     stroke?: string; strokeWidth?: number; strokeDasharray?: number[]; strokeLinecap?: string;
@@ -19,6 +21,8 @@ export type RecordedWorkoutAsset = {
 export const recordedWorkoutAssets = {
   chair_dip: chairDip, prone_pull: pronePull, plank_pike: plankPike, seated_knee_tuck: seatedKneeTuck,
   crunch_reach: crunchReach, hands_behind: handsBehind, quad_stretch: quadRight,
+  squat: shallowSquat,
+  wall_push: wallPush,
 } satisfies Record<string, RecordedWorkoutAsset>;
 export type RecordedWorkoutMovement = keyof typeof recordedWorkoutAssets;
 const mirroredAssets: Partial<Record<RecordedWorkoutMovement, RecordedWorkoutAsset>> = { quad_stretch: quadLeft };
@@ -41,7 +45,7 @@ export const recordedWorkoutTiming = (name: RecordedWorkoutMovement) => {
   return { duration: data.duration, preview: data.preview };
 };
 
-/** Source samples include the original holds, depth and independent return. */
+/** Each asset owns its authored depth, holds, return and sample timing. */
 export function recordedWorkoutFrame(movement: RecordedWorkoutMovement, cycle: number, mirror = false): RecordedWorkoutFrame {
   const data = getRecordedWorkoutAsset(movement, mirror);
   const t = ((cycle % 1) + 1) % 1;

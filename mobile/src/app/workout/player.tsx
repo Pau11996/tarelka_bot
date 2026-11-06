@@ -14,7 +14,7 @@ import { clock, remaining, type WorkoutAction } from "../../workouts/engine";
 import { ExerciseFigure } from "../../workouts/ExerciseFigure";
 import { ExerciseInfo, s } from "../../workouts/ui";
 import type { Exercise } from "../../workouts/types";
-import { sectionLabels } from "../../workouts/course";
+import { stepSectionLabel } from "../../workouts/course";
 import { MAX_REST_SECONDS } from "../../workouts/timing";
 
 function Awake({ id }: { id: string }) {
@@ -92,7 +92,7 @@ export default function WorkoutPlayer() {
     </View>
     <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: draft.workout.steps.length, now: draft.index + (rest ? 1 : 0) }} style={local.track}><View style={[local.progress, { width: `${(draft.index + (rest ? 1 : 0)) / draft.workout.steps.length * 100}%` }]} /></View>
     <ScrollView contentContainerStyle={[s.content, { paddingTop: 16, alignItems: "stretch" }]} showsVerticalScrollIndicator={false}>
-      {displayStep?.section ? <Text style={[s.link, { textAlign: "center" }]}>{sectionLabels[displayStep.section]}{displayStep.optional ? " · дополнительный подход, можно пропустить" : ""}</Text> : null}
+      {displayStep?.section ? <Text style={[s.link, { textAlign: "center" }]}>{stepSectionLabel(displayStep)}{displayStep.optional ? " · дополнительный подход, можно пропустить" : ""}</Text> : null}
       <View style={{ alignItems: "center", gap: 6 }}><Text style={local.eyebrow}>{draft.paused ? "НА ПАУЗЕ" : preparing ? "ПОДГОТОВКА" : rest ? "ВРЕМЯ ОТДОХНУТЬ" : "ДВИГАЕМСЯ"}</Text><Text accessibilityRole="header" style={local.exerciseTitle}>{preparing ? "Приготовьтесь к занятию" : rest ? "Спокойно подышите" : exercise.title}</Text></View>
       <View style={s.figure}>{figure ? <ExerciseFigure key={`${draft.id}:${draft.index}:${draft.phase}`} exercise={figure} playing={!draft.paused && !waiting && !info} showGuide={!waiting} size={Math.min(300, width - 60)} /> : <View style={{ padding: 36 }}><Icon name="check" size={64} color={c.accentDark} /></View>}{waiting && figure ? <Text style={[s.small, { paddingBottom: 10, paddingHorizontal: 12, textAlign: "center" }]}>{preparing ? "Начнём с" : "Далее"}: {figure.title}</Text> : null}</View>
       <View style={{ alignItems: "center", gap: 4 }}>

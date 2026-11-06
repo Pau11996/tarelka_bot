@@ -69,7 +69,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="workouts"
-        options={{ title: "Тренировки", tabBarIcon: tabIcon("dumbbell") }}
+        options={{ title: "Тренировки", tabBarIcon: tabIcon("kettlebell") }}
       />
     </Tabs>
   );

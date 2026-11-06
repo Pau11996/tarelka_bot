@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="214" viewBox="0 0 340 214" fill="none">
+<!-- Demonstration measurements. Geometry matches mobile/src/weightChart.ts; colors match WeightProgressChart. -->
+<title>Пример графика веса: от 74 до 72,8 кг, цель 70 кг</title>
+<defs><linearGradient id="weight-area" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#dcebd4" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity=".1"/></linearGradient></defs>
+<g stroke="#e0e7dc" stroke-dasharray="3 4">
+<path d="M44 178H330"/>
+<path d="M44 139H330"/>
+<path d="M44 100H330"/>
+<path d="M44 61H330"/>
+<path d="M44 22H330"/>
+</g>
+<g fill="#7c897b" font-family="Segoe UI,Arial,sans-serif" font-size="12" text-anchor="end">
+<text x="36" y="182">68</text>
+<text x="36" y="143">70</text>
+<text x="36" y="104">72</text>
+<text x="36" y="65">74</text>
+<text x="36" y="26">76</text>
+</g>
+<path d="M52.58,61 L90.99,68.8 L129.39,64.9 L187,74.65 L225.41,72.7 L273.41,78.55 L321.42,84.4 L321.42,178 L52.58,178 Z" fill="url(#weight-area)"/>
+<path d="M44 139H330" stroke="#8d79b6" stroke-width="1.5" stroke-dasharray="5 5"/>
+<path d="M52.58,61 L90.99,68.8 L129.39,64.9 L187,74.65 L225.41,72.7 L273.41,78.55 L321.42,84.4" stroke="#2c8152" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="#fff" stroke="#2c8152" stroke-width="1.8">
+<circle cx="52.58" cy="61" r="3"/>
+<circle cx="90.99" cy="68.8" r="3"/>
+<circle cx="129.39" cy="64.9" r="3"/>
+<circle cx="187" cy="74.65" r="3"/>
+<circle cx="225.41" cy="72.7" r="3"/>
+<circle cx="273.41" cy="78.55" r="3"/>
+<circle cx="321.42" cy="84.4" r="3"/>
+</g>
+<circle cx="321.42" cy="84.4" r="5" fill="#2c8152" stroke="#fff" stroke-width="2"/>
+<g fill="#7c897b" font-family="Segoe UI,Arial,sans-serif" font-size="11"><text x="44" y="206">1 окт</text><text x="187" y="206" text-anchor="middle">15 окт</text><text x="330" y="206" text-anchor="end">29 окт</text></g>
+</svg>

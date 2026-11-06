@@ -148,7 +148,13 @@ services:
       REFERRAL_MONTHLY_GOAL: ${REFERRAL_MONTHLY_GOAL:-5}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO /dev/null http://localhost/health
+          && wget -qO /dev/null http://localhost/styles.css
+          && wget -qO /dev/null http://localhost/home.css
+          && wget -qO /dev/null http://localhost/home.js
       interval: 30s
       timeout: 5s
       retries: 3

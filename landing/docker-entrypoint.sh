@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 022
 
 : "${TELEGRAM_BOT_USERNAME:=taarelka_bot}"
 : "${LANDING_BOT_USERNAME:=taarelka_bot}"
